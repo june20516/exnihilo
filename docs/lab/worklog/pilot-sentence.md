@@ -6,3 +6,4 @@
 | 2026-11-23 14:34 | Plan1 T2 kit/core | kit | 없음 | 없음 |
 | 2026-11-23 14:36 | Plan1 T3 kit/deck | kit | 없음 | 없음 |
 | 2026-11-23 14:39 | Plan1 T4 조사·문형 | game 엔진 | WordKind 위치(순환 import) | 없음 |
+| 2026-11-23 14:43 | Plan1 T5 콘텐츠 | game 엔진 | 없음 | 없음 |
