@@ -1,0 +1,134 @@
+import { BALANCE } from '@/game/content/balance'
+import type { WordId } from '@/game/content/words'
+import { PLAYER_ID } from '@/game/rally/combat'
+import { REJECT_MESSAGES } from '@/game/rally/text'
+import type { RunState } from '@/game/run/run'
+import { getSlot } from '@/game/sentence/board'
+import { parseCommand, type PlayCommand, renderRun, runCommand } from './textPlay'
+
+const run = (state: RunState | null, command: PlayCommand) => runCommand(state, command, BALANCE)
+const fresh = (seed = 7): RunState => {
+  const state = run(null, { type: 'new', seed }).state
+  if (!state) throw new Error('new가 런을 만들지 않았습니다')
+  return state
+}
+/** 전투 손패를 원하는 카드로 바꾼다(번호는 이 순서대로 1부터). */
+const withHand = (state: RunState, words: WordId[]): RunState => {
+  if (!state.combat) throw new Error('전투 중이 아닙니다')
+  const hand = words.map((wordId, i) => ({ instanceId: `t${i}`, wordId }))
+  return { ...state, combat: { ...state.combat, deck: { ...state.combat.deck, hand } } }
+}
+/** 1층을 바로 이긴다: 적 HP를 1로 낮추고 물어뜯는다를 낭독한다. */
+const clearFloor = (state: RunState): RunState => {
+  if (!state.combat) throw new Error('전투 중이 아닙니다')
+  const weak = { ...state.combat, entities: state.combat.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 1 } : e)) }
+  let s = withHand({ ...state, combat: weak }, ['bite'])
+  s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
+  return run(s, { type: 'cast' }).state ?? s
+}
+
+test('명령 해석: 번호는 1부터 세고, 역할은 한국어로 쓴다', () => {
+  expect(parseCommand(['place', '3', '1', '주어', '2'])).toEqual({ type: 'place', hand: 3, clause: 1, role: 'subject', modifier: 2 })
+  expect(parseCommand(['place', '1', '1', '연결어'])).toEqual({ type: 'place', hand: 1, clause: 1, role: 'connective', modifier: null })
+  expect(parseCommand(['discard', '1', '4'])).toEqual({ type: 'discard', hands: [1, 4] })
+  expect(parseCommand(['new', '42'])).toEqual({ type: 'new', seed: 42 })
+  expect(parseCommand(['new'])).toEqual({ type: 'new', seed: 1 })
+  expect(parseCommand(['buy', '2'])).toEqual({ type: 'buy', item: 2 })
+  expect(parseCommand(['place', 'x'])).toHaveProperty('error')
+  expect(parseCommand(['place', '1', '1', '형용사'])).toHaveProperty('error')
+  expect(parseCommand(['fly'])).toHaveProperty('error')
+  expect(parseCommand([])).toHaveProperty('error')
+})
+
+test('런이 없으면 new부터 하라고 한다', () => {
+  const r = run(null, { type: 'show' })
+  expect(r.state).toBeNull()
+  expect(r.output).toContain('new')
+})
+
+test('new: 1층 전투 화면에 층·HP·화폐·적 예고·손패 번호가 있다', () => {
+  const r = run(null, { type: 'new', seed: 7 })
+  expect(r.state?.floor).toBe(1)
+  expect(r.output).toContain('1/7층')
+  expect(r.output).toContain('HP 60/60')
+  expect(r.output).toContain('화폐 0')
+  expect(r.output).toContain('예고:')
+  expect(r.output).toMatch(/^ {2}1\. /m)
+})
+
+test('place: 손패 번호를 카드로 바꿔 놓는다. 틀린 자리와 없는 번호는 이유를 보여 준다', () => {
+  const s = withHand(fresh(), ['bite', 'fiercely'])
+  const placed = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null })
+  const board = placed.state?.combat?.board
+  expect(board && getSlot(board, { clause: 0, role: 'verb' }).head.wordId).toBe('bite')
+  expect(placed.output).toContain('당신이 거미를 물어뜯는다')
+
+  expect(run(s, { type: 'place', hand: 1, clause: 1, role: 'subject', modifier: null }).output).toContain(REJECT_MESSAGES.kindMismatch)
+  expect(run(s, { type: 'place', hand: 9, clause: 1, role: 'verb', modifier: null }).output).toContain('손패에 9번 카드가 없습니다')
+})
+
+test('place 연결어: 연결어 칸에 놓으면 절 2가 열린다', () => {
+  const s = withHand(fresh(), ['and', 'bite'])
+  const r = run(s, { type: 'place', hand: 1, clause: 1, role: 'connective', modifier: null })
+  expect(r.state?.combat?.connective?.wordId).toBe('and')
+  expect(r.output).toContain('절 2')
+})
+
+test('cast: 낭독 결과와 적 차례가 출력에 나온다', () => {
+  let s = withHand(fresh(), ['bite'])
+  s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
+  const r = run(s, { type: 'cast' })
+  expect(r.output).toContain('탐험가 → 거미: 피해 6')
+  expect(r.output).toContain('적 차례')
+})
+
+test('손패가 가득 차 넘친 카드는 버림 더미로 갔다고 알려 준다', () => {
+  let s = withHand(fresh(), ['bite', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend', 'fiercely'])
+  s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
+  expect(run(s, { type: 'cast' }).output).toMatch(/손패가 가득 차 .+ 버림 더미로/)
+})
+
+test('상점: 1층을 이기면 보상·값·화폐가 보이고, 사면 화폐가 줄고 남은 값이 오른다', () => {
+  const shop = clearFloor(fresh())
+  expect(shop.phase).toBe('shop')
+  const screen = renderRun(shop)
+  expect(screen).toContain('상점')
+  expect(screen).toContain(`화폐 ${shop.gold}`)
+  const items = shop.shop?.items ?? []
+  const cheapest = items.reduce((best, item, i) => (item.price < items[best].price ? i : best), 0)
+  const bought = run(shop, { type: 'buy', item: cheapest + 1 })
+  expect(bought.state?.gold).toBe(shop.gold - items[cheapest].price)
+  expect(bought.output).toContain('샀습니다')
+  const other = items.findIndex((_, i) => i !== cheapest)
+  expect(bought.state?.shop?.items[other].price).toBeGreaterThan(items[other].price)
+  expect(bought.output).toContain('팔림')
+
+  const left = run(bought.state, { type: 'leave' })
+  expect(left.state?.floor).toBe(2)
+  expect(left.output).toContain('2/7층')
+})
+
+test('지금 할 수 없는 명령은 거부 문구를 보여 준다', () => {
+  expect(run(fresh(), { type: 'buy', item: 1 }).output).toContain(REJECT_MESSAGES.notPlayerTurn)
+  const shop = clearFloor(fresh())
+  expect(run(shop, { type: 'cast' }).output).toContain(REJECT_MESSAGES.notPlayerTurn)
+})
+
+test('런 종료 화면: 결과·도달 층·최대 한 방·산 것', () => {
+  const s = fresh()
+  const lost: RunState = {
+    ...s,
+    phase: 'lost',
+    hp: 0,
+    combat: s.combat && { ...s.combat, entities: s.combat.entities.map((e) => (e.id === PLAYER_ID ? { ...e, hp: 0 } : e)) },
+  }
+  const screen = renderRun(lost)
+  expect(screen).toContain('패배')
+  expect(screen).toContain('1/7층')
+  expect(screen).toContain('최대 한 방')
+})
+
+test('런 상태는 JSON으로 저장했다 읽어도 같다', () => {
+  const s = clearFloor(fresh())
+  expect(JSON.parse(JSON.stringify(s))).toEqual(s)
+})

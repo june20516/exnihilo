@@ -1,20 +1,15 @@
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useMemo, useState } from 'react'
 import { useCombatStore } from '@/app/useCombatStore'
-import { BALANCE } from '@/game/content/balance'
 import { RALLY_ENCOUNTERS, type SlotAddress } from '@/game/content/enemies'
-import { getWord, type WordId } from '@/game/content/words'
-import type { CombatEvent, RejectReason } from '@/game/combat/events'
-import { attachParticle } from '@/game/grammar/josa'
-import { renderClause } from '@/game/grammar/render'
-import { enemyIntent, nextSealRole, type RallyAction, type RallyState } from '@/game/rally/combat'
+import type { WordId } from '@/game/content/words'
+import type { RallyAction } from '@/game/rally/combat'
 import { sentenceFormula } from '@/game/rally/formula'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
-import { enemyBoard, hasVerb, isBlank, materialize } from '@/game/rally/sentence'
-import { getSlot, type PlacedWord } from '@/game/sentence/board'
+import { hasVerb, isBlank } from '@/game/rally/sentence'
+import { intentTexts, REJECT_MESSAGES, wordNamer } from '@/game/rally/text'
 import { Battlefield } from './Battlefield'
-import { ROLE_NAMES } from './describe'
 import { CombatResult } from './CombatResult'
 import { ControlPanel } from './ControlPanel'
 import { Hand } from './Hand'
@@ -22,51 +17,11 @@ import { parseDropId } from './placement'
 import { SentenceBoard } from './SentenceBoard'
 import { SidePanel } from './SidePanel'
 
-const REJECT_MESSAGES: Partial<Record<RejectReason, string>> = {
-  kindMismatch: '그 자리에는 이 품사를 놓을 수 없습니다.',
-  modifiersFull: '수식어 칸이 가득 찼습니다. 바꿀 칸을 직접 고르세요.',
-  slotInactive: '자동사 문장에는 목적어가 없습니다.',
-  unplayable: '사용할 수 없는 단어입니다.',
-  noTarget: '대상을 고르세요.',
-  notPlayerTurn: '지금은 행동할 수 없습니다.',
-  deckEmpty: '뽑을 카드가 없습니다.',
-  noVerb: '동사가 있어야 낭독할 수 있습니다.',
-  noDiscardLeft: '이번 턴에는 더 버릴 수 없습니다.',
-}
-
 interface CombatScreenProps {
   encounterId: string
   seed: number
   deck: readonly WordId[]
   onRestart: () => void
-}
-
-/** 렌더 토큰을 한 줄 문장으로: 단어 사이는 띄우고 조사는 붙인다. */
-function joinTokens(tokens: ReturnType<typeof renderClause>): string {
-  return tokens.reduce((text, token) => (token.kind === 'particle' || text === '' ? text + token.text : `${text} ${token.text}`), '')
-}
-
-/** 적 예고 문장과, 미리보기에서 그 적이 내는 수치(피해·보호 등). */
-function intentTexts(state: RallyState, enemyEvents: readonly CombatEvent[], nameOf: (w: PlacedWord) => string): Record<string, string> {
-  const texts: Record<string, string> = {}
-  RALLY_ENCOUNTERS[state.encounterId]?.enemies.forEach((_, index) => {
-    const id = `e${index}`
-    const intent = enemyIntent(state, index)
-    if (intent.kind === 'seal') {
-      const name = state.entities.find((e) => e.id === id)?.name ?? '적'
-      texts[id] = `${attachParticle(name, 'subject')} 당신의 ${ROLE_NAMES[nextSealRole(state)]} 칸을 봉인한다`
-      return
-    }
-    const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, BALANCE.maxModifiers), 0, nameOf))
-    const numbers = enemyEvents.flatMap((e) => {
-      if (e.type === 'damaged' && e.sourceId === id) return [`피해 ${e.amount + e.blocked}`]
-      if (e.type === 'statusApplied' && e.entityId === id && e.status === 'block') return [`보호 +${e.amount}`]
-      if (e.type === 'grew' && e.entityId === id) return [`최대 HP +${e.amount}`]
-      return []
-    })
-    texts[id] = numbers.length > 0 ? `${sentence} — ${numbers.join(', ')}` : sentence
-  })
-  return texts
 }
 
 export function CombatScreen({ encounterId, seed, deck, onRestart }: CombatScreenProps) {
@@ -82,19 +37,7 @@ export function CombatScreen({ encounterId, seed, deck, onRestart }: CombatScree
   }, [encounterId])
 
   const canAct = state.phase === 'player' && !busy
-  const entityName = (id: string | null) => (id && state.entities.find((e) => e.id === id)?.name) || null
-  /** 빈칸은 낭독하면 채워질 실제 대상의 이름으로 보인다. */
-  const shown = useMemo(() => materialize(state.board, state.targetId), [state.board, state.targetId])
-  const nameOf = (word: PlacedWord) => {
-    if (word.owner === 'blank' && word.wordId !== 'blankVerb') {
-      const role = state.board.clauses[0]?.slots.find((s) => s.head === word)?.role
-      const filled = role ? getSlot(shown, { clause: 0, role }).head : word
-      const verbPlaced = hasVerb(state.board)
-      if (role === 'object' && !verbPlaced) return entityName(state.targetId) ?? '대상'
-      return entityName(filled.targetEntityId) ?? getWord(filled.wordId).text
-    }
-    return entityName(word.targetEntityId) ?? getWord(word.wordId).text
-  }
+  const nameOf = useMemo(() => wordNamer(state), [state])
 
   const selectedCard = state.deck.hand.find((c) => c.instanceId === selectedId) ?? null
   const rejected = lastEvents.find((e) => e.type === 'rejected')
@@ -167,7 +110,7 @@ export function CombatScreen({ encounterId, seed, deck, onRestart }: CombatScree
               {formula ? formula.text : verbPlaced ? '이 동사에는 계산식이 없습니다' : '동사를 놓으면 계산식이 보입니다'}
             </p>
             <p className="h-5 text-center text-sm text-error" data-testid="message">
-              {rejected && rejected.type === 'rejected' ? (REJECT_MESSAGES[rejected.reason] ?? '') : ''}
+              {rejected && rejected.type === 'rejected' ? REJECT_MESSAGES[rejected.reason] : ''}
             </p>
           </div>
           <SidePanel
