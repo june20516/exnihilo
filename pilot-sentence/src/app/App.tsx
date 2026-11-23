@@ -1,4 +1,5 @@
 import { RallySandbox } from './RallySandbox'
+import { RunScreen } from './RunScreen'
 
 const params = new URLSearchParams(window.location.search)
 
@@ -8,9 +9,15 @@ function readInitialSeed(): number {
   return Number.isFinite(parsed) ? parsed : Date.now() % 1_000_000_000
 }
 
+/** 개발 빌드에서만: 새 전투마다 적 HP를 이 값으로 만든다(e2e용). */
+function readDebugEnemyHp(): number | null {
+  if (!import.meta.env.DEV) return null
+  const parsed = Number.parseInt(params.get('debugEnemyHp') ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
 export default function App() {
   const seed = readInitialSeed()
   if (params.get('mode') === 'rally') return <RallySandbox initialSeed={seed} />
-  // 런 화면은 다음 단계에서 채운다.
-  return <div data-testid="run-screen" />
+  return <RunScreen seed={seed} debugEnemyHp={readDebugEnemyHp()} />
 }
