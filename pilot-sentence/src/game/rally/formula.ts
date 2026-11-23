@@ -1,13 +1,10 @@
-import { type Entity, scaleIncoming, scaleOutgoing } from '@/kit/core/entity'
+import { type Entity, scaleIncoming, scaleOutgoing, VULNERABLE_MULTIPLIER, WEAK_MULTIPLIER } from '@/kit/core/entity'
 import { wordLookup } from '@/game/build/build'
 import type { VerbAction } from '@/game/content/words'
 import { adjectiveCount, CHAIN_FACTOR, collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
 import { type Board, getSlot } from '@/game/sentence/board'
 import { type ClauseRun, materializeFor, type RallyState, runSentence } from './combat'
 import { isBlank } from './sentence'
-
-const WEAK_MULTIPLIER = 0.75
-const VULNERABLE_MULTIPLIER = 1.5
 
 /** 계산식 문자열을 쌓는다. 곱하기 앞에 더하기가 있으면 괄호로 묶는다. 1이나 0인 항은 생략한다. */
 class Expression {
@@ -114,15 +111,18 @@ function clauseFormula(state: RallyState, board: Board, clause: number, run: Cla
     .times(adverbs.power)
     .plus('거듭 ', bonus)
     .plus('힘 ', strength)
-    .times(weak)
+    .times(weak, '약화')
     .plus('', sourceMods.outgoingFlat)
     .times(sourceMods.outgoingMul)
     .times(sourceChain, '사슬')
-    .times(vulnerable)
+    .times(vulnerable, '취약')
     .times(targetMods.incomingMul)
     .times(targetChain, '사슬')
     .minus(targetMods.incomingFlat)
-  return { clause, text: `${text} = ${value}${repeat}`, value }
+  // 미리보기의 피해는 적의 남은 HP에서 잘린다. 계산식 값이 그 이상이면 처치임을 밝혀 두 숫자가 왜 다른지 보인다.
+  const remaining = target ? target.hp + target.statuses.block : Number.POSITIVE_INFINITY
+  const lethal = target && target.side === 'enemy' && value * adverbs.repeat >= remaining ? ` → 처치(남은 HP ${target.hp})` : ''
+  return { clause, text: `${text} = ${value}${repeat}${lethal}`, value }
 }
 
 /** 내 문장의 계산식: 동사가 놓인 절마다 한 줄(spec §2.3, 런 spec §4.1). */

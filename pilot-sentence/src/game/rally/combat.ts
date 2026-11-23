@@ -100,7 +100,8 @@ export type RallyAction =
 export const RALLY_RULES = { startHand: 6, drawPerTurn: 5 } as const
 
 /** 적 예고 문장의 수식어 칸 수(내 빌드와 무관). */
-const ENEMY_MODIFIER_SLOTS = 2
+/** 적 예고 문장의 수식어 칸 수. 예고 문장 표시(rally/text)도 이 값을 쓴다. */
+export const ENEMY_MODIFIER_SLOTS = 2
 
 export const PLAYER_ID = 'p'
 
@@ -357,13 +358,11 @@ function discard(state: RallyState, instanceIds: readonly string[]): Result {
   const chosen = new Set(instanceIds)
   const thrown = state.deck.hand.filter((c) => chosen.has(c.instanceId))
   const kept = state.deck.hand.filter((c) => !chosen.has(c.instanceId))
-  const discarded: RallyState = {
-    ...state,
-    deck: { ...state.deck, hand: kept, discardPile: [...state.deck.discardPile, ...thrown] },
-    discardsLeft: state.discardsLeft - 1,
-  }
-  const drawn = drawCards(discarded, thrown.length)
-  return { state: drawn.state, events: [{ type: 'discarded', count: thrown.length }, ...drawn.events] }
+  // 먼저 뽑고 나서 버린 카드를 버림 더미에 넣는다. 그래야 뽑을 더미가 비어 섞을 때 방금 버린 카드가 다시 나오지 않는다.
+  const withoutThrown: RallyState = { ...state, deck: { ...state.deck, hand: kept }, discardsLeft: state.discardsLeft - 1 }
+  const drawn = drawCards(withoutThrown, thrown.length)
+  const deck = { ...drawn.state.deck, discardPile: [...drawn.state.deck.discardPile, ...thrown] }
+  return { state: { ...drawn.state, deck }, events: [{ type: 'discarded', count: thrown.length }, ...drawn.events] }
 }
 
 /** 문장을 한 절의 빈칸으로 되돌리고, 놓았던 내 카드(연결어 포함)를 돌려준다. */

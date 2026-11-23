@@ -20,19 +20,19 @@ const withHand = (words: WordId[]): RallyState => ({
 const texts = (lines: readonly { text: string }[]) => lines.map((l) => l.text)
 
 test('미리보기: 내 낭독과 적의 차례가 나뉜다', () => {
-  const p = previewRound(act(withHand(['bite']), { type: 'place', instanceId: 'h0', at: V }))
+  const p = previewRound(act(withHand(['bite']), { type: 'place', instanceId: 'h0', at: V }), BALANCE)
   expect(texts(p.mine)).toEqual(['탐험가 → 거미: 피해 6'])
   expect(texts(p.enemy)).toEqual(['거미 → 탐험가: 피해 7'])
 })
 
 test('미리보기: 막으면 적의 차례 피해가 줄어 보인다', () => {
-  const p = previewRound(act(withHand(['guard']), { type: 'place', instanceId: 'h0', at: V }))
+  const p = previewRound(act(withHand(['guard']), { type: 'place', instanceId: 'h0', at: V }), BALANCE)
   expect(texts(p.mine)).toEqual(['탐험가: 보호 +6'])
   expect(texts(p.enemy)).toEqual(['거미 → 탐험가: 피해 1 (막음 6)'])
 })
 
 test('미리보기: 동사가 없으면 mine은 비고 적의 차례만', () => {
-  const p = previewRound(withHand(['fiercely']))
+  const p = previewRound(withHand(['fiercely']), BALANCE)
   expect(p.mine).toEqual([])
   expect(texts(p.enemy)).toEqual(['거미 → 탐험가: 피해 7'])
 })
@@ -120,7 +120,7 @@ test.each(['spider', 'swarm', 'slime'])('계산식의 값은 절마다 실제 �
   let checked = 0
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
     for (const state of randomStates(encounterId, seed)) {
-      const groups = eventsByClause(previewEvents(state).mine)
+      const groups = eventsByClause(previewEvents(state, BALANCE).mine)
       const runs = runSentence(state).clauses
       for (const formula of sentenceFormula(state)) {
         const firstHit = groups[formula.clause]?.find((e) => e.type === 'damaged')
@@ -176,7 +176,7 @@ test.each(['spider', 'swarm', 'slime'])('두 절: 절마다 계산식의 값이 
   let secondChecked = 0
   for (let seed = 1; seed <= 80; seed++) {
     const state = twoClauseState(encounterId, seed)
-    const groups = eventsByClause(previewEvents(state).mine)
+    const groups = eventsByClause(previewEvents(state, BALANCE).mine)
     const runs = runSentence(state).clauses
     for (const formula of sentenceFormula(state)) {
       const firstHit = groups[formula.clause]?.find((e) => e.type === 'damaged')
@@ -189,4 +189,24 @@ test.each(['spider', 'swarm', 'slime'])('두 절: 절마다 계산식의 값이 
     }
   }
   expect(secondChecked).toBeGreaterThan(15)
+})
+
+const biteWith = (edit: (s: RallyState) => RallyState) => {
+  const s = act(edit(withHand(['bite'])), { type: 'place', instanceId: 'h0', at: V })
+  return sentenceFormula(s)[0]?.text
+}
+const withStatus = (side: 'ally' | 'enemy', status: 'weak' | 'vulnerable') => (s: RallyState): RallyState => ({
+  ...s,
+  entities: s.entities.map((e) => (e.side === side ? { ...e, statuses: { ...e.statuses, [status]: 2 } } : e)),
+})
+
+test('계산식: 약화·취약 항에 이름표가 붙는다', () => {
+  expect(biteWith(withStatus('ally', 'weak'))).toBe('6 × 0.75(약화) = 4')
+  expect(biteWith(withStatus('enemy', 'vulnerable'))).toBe('6 × 1.5(취약) = 9')
+})
+
+test('계산식: 값이 적의 남은 HP 이상이면 처치와 남은 HP를 밝힌다(미리보기 피해는 남은 HP에서 잘리므로)', () => {
+  const weak = (s: RallyState): RallyState => ({ ...s, entities: s.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 3 } : e)) })
+  expect(biteWith(weak)).toBe('6 = 6 → 처치(남은 HP 3)')
+  expect(biteWith((s) => s)).toBe('6 = 6')
 })

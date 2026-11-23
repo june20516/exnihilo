@@ -19,7 +19,7 @@ const withHand = (s: RallyState, words: WordId[]): RallyState => ({
   ...s,
   deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
 })
-const intents = (s: RallyState) => intentTexts(s, previewEvents(s).enemy, wordNamer(s))
+const intents = (s: RallyState) => intentTexts(s, previewEvents(s, BALANCE).enemy, wordNamer(s))
 
 test('적 예고: 문장과 그 적이 낼 수치', () => {
   const s = startRally('test-dummy', DECK, 1, BALANCE).state
@@ -44,4 +44,11 @@ test('거부 메시지: 모든 거부 사유에 문구가 있다', () => {
   for (const message of Object.values(REJECT_MESSAGES)) expect(message.length).toBeGreaterThan(0)
   expect(REJECT_MESSAGES.slotSealed).toContain('봉인')
   expect(REJECT_MESSAGES.notEnoughGold).toContain('화폐')
+})
+
+test('적 예고: 맞힐 때 거는 독도 수치에 나온다', () => {
+  const turn2 = act(startRally('spider', DECK, 1, BALANCE).state, { type: 'endTurn' })
+  const text = intents(turn2).e0 ?? ''
+  expect(text).toContain('독을 뿜는')
+  expect(text).toMatch(/피해 \d+, 독 \+\d+/)
 })

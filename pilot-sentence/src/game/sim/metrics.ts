@@ -1,3 +1,4 @@
+import type { Balance } from '@/game/content/balance'
 import type { SimGame } from '@/kit/sim/simulate'
 import { PLAYER_ID, type RallyState } from '@/game/rally/combat'
 import { previewRound } from '@/game/rally/preview'
@@ -21,16 +22,16 @@ export function combatMetrics(state: RallyState): Record<string, number> {
   }
 }
 
-function previewKey(state: RallyState): string {
-  const { mine, enemy } = previewRound(state)
+function previewKey(state: RallyState, balance: Balance): string {
+  const { mine, enemy } = previewRound(state, balance)
   return [...mine, ...enemy].map((l) => l.text).join('|')
 }
 
 /** 턴 시작 시점 지표. */
-export function combatTurnMetrics(game: SimGame<RallyState, SimCombatAction>) {
+export function combatTurnMetrics(game: SimGame<RallyState, SimCombatAction>, balance: Balance) {
   return (state: RallyState): Record<string, number> => {
     const actions = game.legalActions(state).filter((a) => !isFinisher(a))
-    const outcomes = new Set([previewKey(state), ...actions.map((a) => previewKey(game.apply(state, a)))])
+    const outcomes = new Set([previewKey(state, balance), ...actions.map((a) => previewKey(game.apply(state, a), balance))])
     const scores = scoreCandidates(game, state).map((c) => c.score).sort((a, b) => b - a)
     return {
       choiceDiversity: outcomes.size,

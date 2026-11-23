@@ -165,17 +165,17 @@ function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new
 export function runCommand(state: RunState | null, command: PlayCommand, balance: Balance): PlayResult {
   if (command.type === 'new') {
     const started = startRun(command.seed, balance).state
-    return { state: started, output: `새 런 (시드 ${command.seed})\n\n${renderRun(started)}` }
+    return { state: started, output: `새 런 (시드 ${command.seed})\n\n${renderRun(started, balance)}` }
   }
   if (!state) return { state: null, output: `진행 중인 런이 없습니다. 먼저 new [시드]로 시작하세요.\n\n${USAGE}` }
-  if (command.type === 'show') return { state, output: renderRun(state) }
+  if (command.type === 'show') return { state, output: renderRun(state, balance) }
 
   const action = toRunAction(state, command)
-  if (typeof action === 'string') return { state, output: `${action}\n\n${renderRun(state)}` }
+  if (typeof action === 'string') return { state, output: `${action}\n\n${renderRun(state, balance)}` }
   const before = state
   const result = reduceRun(state, action, balance)
   const log = [...describeEvents(result.events, before, result.state), ...(command.type === 'place' ? displacedLines(before, result.state) : [])]
-  return { state: result.state, output: `${log.length > 0 ? `${log.join('\n')}\n\n` : ''}${renderRun(result.state)}` }
+  return { state: result.state, output: `${log.length > 0 ? `${log.join('\n')}\n\n` : ''}${renderRun(result.state, balance)}` }
 }
 
 // ───────────────────────── 이벤트 기록 ─────────────────────────
@@ -277,12 +277,12 @@ function header(state: RunState, title: string): string {
   return `━━ ${state.floor}/${FLOORS.length}층 · ${title} ━━\nHP ${state.hp}/${state.maxHp} · 화폐 ${state.gold}`
 }
 
-function renderCombat(state: RunState, combat: RallyState): string {
+function renderCombat(state: RunState, combat: RallyState, balance: Balance): string {
   const encounter = RALLY_ENCOUNTERS[combat.encounterId]
   const player = combat.entities.find((e) => e.id === PLAYER_ID)
   const enemies = combat.entities.filter((e) => e.side === 'enemy')
   const nameOf = wordNamer(combat)
-  const preview = previewEvents(combat)
+  const preview = previewEvents(combat, balance)
   const intents = intentTexts(combat, preview.enemy, nameOf)
   const out: string[] = []
 
@@ -355,8 +355,8 @@ function renderEnd(state: RunState): string {
   ].join('\n')
 }
 
-export function renderRun(state: RunState): string {
+export function renderRun(state: RunState, balance: Balance): string {
   if (state.phase === 'won' || state.phase === 'lost') return renderEnd(state)
   if (state.phase === 'shop') return renderShop(state)
-  return state.combat ? renderCombat(state, state.combat) : header(state, '전투 없음')
+  return state.combat ? renderCombat(state, state.combat, balance) : header(state, '전투 없음')
 }

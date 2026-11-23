@@ -68,7 +68,7 @@ test('combatMetrics: 비율과 0으로 나누기', () => {
 })
 
 test('턴 지표: 선택지 다양성과 뻔한 최선 여부', () => {
-  const m = combatTurnMetrics(game)(game.start(1))
+  const m = combatTurnMetrics(game, BALANCE)(game.start(1))
   expect(m.choiceDiversity).toBeGreaterThanOrEqual(1)
   expect([0, 1]).toContain(m.obviousBest)
 })

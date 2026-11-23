@@ -1,4 +1,3 @@
-import { BALANCE } from '@/game/content/balance'
 import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { getWord } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
@@ -6,7 +5,7 @@ import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
 import { renderClause, type RenderToken } from '@/game/grammar/render'
 import { getSlot, type PlacedWord } from '@/game/sentence/board'
-import { enemyIntent, materializeFor, nextSealRole, type RallyState } from './combat'
+import { ENEMY_MODIFIER_SLOTS, enemyIntent, materializeFor, nextSealRole, type RallyState } from './combat'
 import { enemyBoard, hasVerb } from './sentence'
 
 /** 화면과 텍스트 플레이가 함께 쓰는 문장·문구. */
@@ -81,10 +80,14 @@ export function intentTexts(
       texts[id] = `${attachParticle(name, 'subject')} 당신의 ${ROLE_NAMES[nextSealRole(state)]} 칸을 봉인한다`
       return
     }
-    const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, BALANCE.maxModifiers), 0, nameOf))
+    const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, ENEMY_MODIFIER_SLOTS), 0, nameOf))
+    // 맞힐 때 거는 독은 피해 이벤트 바로 뒤에 오므로, 마지막으로 피해를 준 개체의 것으로 본다.
+    let lastHitter: string | null = null
     const numbers = enemyEvents.flatMap((e) => {
+      if (e.type === 'damaged') lastHitter = e.sourceId
       if (e.type === 'damaged' && e.sourceId === id) return [`피해 ${e.amount + e.blocked}`]
       if (e.type === 'statusApplied' && e.entityId === id && e.status === 'block') return [`보호 +${e.amount}`]
+      if (e.type === 'statusApplied' && e.status === 'poison' && e.entityId !== id && lastHitter === id) return [`독 +${e.amount}`]
       if (e.type === 'grew' && e.entityId === id) return [`최대 HP +${e.amount}`]
       return []
     })

@@ -93,7 +93,7 @@ test('손패가 가득 차 넘친 카드는 버림 더미로 갔다고 알려 �
 test('상점: 1층을 이기면 보상·값·화폐가 보이고, 사면 화폐가 줄고 남은 값이 오른다', () => {
   const shop = clearFloor(fresh())
   expect(shop.phase).toBe('shop')
-  const screen = renderRun(shop)
+  const screen = renderRun(shop, BALANCE)
   expect(screen).toContain('상점')
   expect(screen).toContain(`화폐 ${shop.gold}`)
   const items = shop.shop?.items ?? []
@@ -124,7 +124,7 @@ test('런 종료 화면: 결과·도달 층·최대 한 방·산 것', () => {
     hp: 0,
     combat: s.combat && { ...s.combat, entities: s.combat.entities.map((e) => (e.id === PLAYER_ID ? { ...e, hp: 0 } : e)) },
   }
-  const screen = renderRun(lost)
+  const screen = renderRun(lost, BALANCE)
   expect(screen).toContain('패배')
   expect(screen).toContain('1/7층')
   expect(screen).toContain('최대 한 방')
@@ -137,7 +137,7 @@ test('런 상태는 JSON으로 저장했다 읽어도 같다', () => {
 
 test('카드 id로도 놓을 수 있고, 손패 목록에 id가 보인다', () => {
   const s = withHand(fresh(), ['fiercely', 'bite'])
-  expect(renderRun(s)).toMatch(/^ {2}2\. \(t1\) 물어뜯는다/m)
+  expect(renderRun(s, BALANCE)).toMatch(/^ {2}2\. \(t1\) 물어뜯는다/m)
   const placed = run(s, { type: 'place', hand: 't1', clause: 1, role: 'verb', modifier: null })
   const board = placed.state?.combat?.board
   expect(board && getSlot(board, { clause: 0, role: 'verb' }).head.wordId).toBe('bite')
@@ -155,7 +155,7 @@ test('허수아비 화자: 미리보기에 내부 id 대신 허수아비 이름�
   const build = { ...base.build, relics: ['scarecrowSpeaker' as const] }
   let s: RunState = { ...base, build, combat: base.combat && { ...base.combat, build } }
   s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
-  const preview = renderRun(s).split('미리보기')[1] ?? ''
+  const preview = renderRun(s, BALANCE).split('미리보기')[1] ?? ''
   expect(preview).toContain('허수아비 → 거미')
   expect(preview).not.toMatch(/\bt\d+\b/)
 })
@@ -167,7 +167,7 @@ test('강화: 산 뒤에는 단계 화살표 대신 빌드 요약에 지금 단�
     gold: 100,
     shop: { items: [{ offer: { kind: 'upgrade', wordId: 'fiercely' }, price: 8, sold: false }] },
   }
-  expect(renderRun(withUpgrade)).toContain('격렬하게 0→1단계')
+  expect(renderRun(withUpgrade, BALANCE)).toContain('격렬하게 0→1단계')
   const bought = run(withUpgrade, { type: 'buy', item: 1 })
   expect(bought.output).not.toContain('1→2단계')
   expect(bought.output).toContain('강화: 격렬하게 1단계')

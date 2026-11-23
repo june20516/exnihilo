@@ -76,10 +76,16 @@ test('버리기: 같은 장수를 뽑고, 두 번째는 noDiscardLeft', () => {
 })
 
 test('버리기: 덱이 비어 있으면 버림 더미를 섞어 뽑고, 그래도 없으면 덜 뽑는다', () => {
-  const r = act(withHand(start(), ['bite', 'guard']), { type: 'discard', instanceIds: ['h0', 'h1'] })
-  expect(r.state.deck.hand).toHaveLength(2)
-  const lonely = act(withHand(start(), ['bite']), { type: 'discard', instanceIds: ['h0'] })
-  expect(lonely.state.deck.hand.map((c) => c.instanceId)).toEqual(['h0'])
+  const base = withHand(start(), ['bite', 'guard'])
+  const earlier = { ...base, deck: { ...base.deck, discardPile: cards(['hide', 'rage'], 'd') } }
+  const r = act(earlier, { type: 'discard', instanceIds: ['h0', 'h1'] })
+  expect(r.state.deck.hand.map((c) => c.wordId).sort()).toEqual(['hide', 'rage'])
+  expect(r.state.deck.discardPile.map((c) => c.wordId)).toEqual(['bite', 'guard'])
+  // 버린 카드는 다시 뽑지 않는다: 덱 전체가 손패에 있던 카드 한 장뿐이면 손패는 빈다.
+  const alone = withHand(start(), ['bite'])
+  const lonely = act({ ...alone, deck: { ...alone.deck, drawPile: [], discardPile: [] } }, { type: 'discard', instanceIds: ['h0'] })
+  expect(lonely.state.deck.hand).toEqual([])
+  expect(lonely.state.deck.discardPile.map((c) => c.instanceId)).toEqual(['h0'])
 })
 
 test('버리기: 손패에 없는 카드나 빈 목록은 거부', () => {
@@ -225,4 +231,12 @@ describe('빌드와 전투 옵션', () => {
     expect(hp(s, 'e0')).toBe(39)
     expect(hp(act(s, { type: 'endTurn' }).state, 'p')).toBe(52)
   })
+})
+
+test('버리기: 뽑을 더미가 비어도 방금 버린 카드를 다시 뽑지 않는다', () => {
+  const s = withHand(start(), ['bite', 'guard'])
+  const empty: RallyState = { ...s, deck: { ...s.deck, drawPile: [], discardPile: [] } }
+  const r = act(empty, { type: 'discard', instanceIds: ['h0'] }).state
+  expect(r.deck.hand.map((c) => c.wordId)).toEqual(['guard'])
+  expect(r.deck.discardPile.map((c) => c.wordId)).toEqual(['bite'])
 })

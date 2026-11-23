@@ -2,8 +2,8 @@ export type Side = 'ally' | 'enemy'
 export type Row = 'front' | 'back'
 export type StatusKind = 'block' | 'poison' | 'freeze' | 'strength' | 'weak' | 'vulnerable'
 
-const WEAK_MULTIPLIER = 0.75
-const VULNERABLE_MULTIPLIER = 1.5
+export const WEAK_MULTIPLIER = 0.75
+export const VULNERABLE_MULTIPLIER = 1.5
 
 export interface Entity {
   readonly id: string
