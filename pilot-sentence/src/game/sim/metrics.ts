@@ -1,44 +1,40 @@
 import type { SimGame } from '@/kit/sim/simulate'
-import { BALANCE } from '@/game/content/balance'
-import { type CombatState, PLAYER_ID } from '@/game/combat/combat'
-import { previewExecution } from '@/game/combat/preview'
+import { PLAYER_ID, type RallyState } from '@/game/rally/combat'
+import { previewRound } from '@/game/rally/preview'
 import { scoreCandidates } from './bots'
-import { isFinisher, placementsFor, type SimCombatAction } from './combatGame'
+import { isFinisher, type SimCombatAction } from './combatGame'
 
 export const MAX_SIM_TURNS = 30
 /** 1위와 2위 점수 차가 이 이상이면 "뻔한 최선"으로 본다. */
 export const OBVIOUS_GAP = 10
 
-export function combatMetrics(state: CombatState): Record<string, number> {
+/** 전투가 끝난 시점의 지표 (v2 spec §7). */
+export function combatMetrics(state: RallyState): Record<string, number> {
   const player = state.entities.find((e) => e.id === PLAYER_ID)
-  const { placed, wasted, bestBurst } = state.log
+  const { casts, defensiveCasts, deadTurns, bestBurst } = state.log
   return {
     hpLost: player ? player.maxHp - player.hp : 0,
     turns: state.turn,
-    /** 놓은 단어 중 한 번도 실행되지 못하고 흉조에 지워진 비율. */
-    wastedRate: placed === 0 ? 0 : wasted / placed,
-    /** 한 턴에 적에게 준 피해의 최댓값(한 방의 크기). */
+    deadTurnRate: deadTurns / state.turn,
+    defendRate: casts === 0 ? 0 : defensiveCasts / casts,
     bestBurst,
   }
 }
 
-function previewKey(state: CombatState): string {
-  return previewExecution(state).map((l) => l.text).join('|')
+function previewKey(state: RallyState): string {
+  const { mine, enemy } = previewRound(state)
+  return [...mine, ...enemy].map((l) => l.text).join('|')
 }
 
-/** 턴 시작 시점 지표 (spec 10.7). */
-export function combatTurnMetrics(game: SimGame<CombatState, SimCombatAction>) {
-  return (state: CombatState): Record<string, number> => {
-    const hand = state.deck.hand
-    const unplayable = hand.filter((c) => placementsFor(state, c.instanceId, c.wordId, BALANCE).length === 0).length
+/** 턴 시작 시점 지표. */
+export function combatTurnMetrics(game: SimGame<RallyState, SimCombatAction>) {
+  return (state: RallyState): Record<string, number> => {
     const actions = game.legalActions(state).filter((a) => !isFinisher(a))
     const outcomes = new Set([previewKey(state), ...actions.map((a) => previewKey(game.apply(state, a)))])
     const scores = scoreCandidates(game, state).map((c) => c.score).sort((a, b) => b - a)
-    const obviousBest = scores.length >= 2 && scores[0] - scores[1] >= OBVIOUS_GAP ? 1 : 0
     return {
-      unplayableRate: hand.length === 0 ? 0 : unplayable / hand.length,
       choiceDiversity: outcomes.size,
-      obviousBest,
+      obviousBest: scores.length >= 2 && scores[0] - scores[1] >= OBVIOUS_GAP ? 1 : 0,
     }
   }
 }

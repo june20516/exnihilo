@@ -135,8 +135,8 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'slime', text: '슬라임', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'slime' }) },
   { id: 'nibble', text: '깨문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 3 }) },
   { id: 'crush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 10 }) },
-  { id: 'spiderBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 7 }) },
-  { id: 'spiderNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 5 }) },
+  { id: 'spiderBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 14 }) },
+  { id: 'spiderNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 9 }) },
   {
     id: 'curl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true,
     effect: verb('support', { kind: 'block', amount: 8, to: 'subject' }),

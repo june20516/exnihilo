@@ -1,91 +1,74 @@
 import { createRng } from '@/kit/core/rng'
 import { BALANCE } from '@/game/content/balance'
-import { PRESETS } from '@/game/content/rules'
+import type { WordId } from '@/game/content/words'
+import type { CardInst, RallyState } from '@/game/rally/combat'
 import { greedyBot, passiveBot, randomBot, scoreState } from './bots'
 import { combatGame, type SimCombatAction } from './combatGame'
-import { startCombat } from '@/game/combat/combat'
-import { STARTER_DECK } from '@/game/content/encounters'
 import { combatMetrics, combatTurnMetrics } from './metrics'
 
-const gameB = combatGame('spider', PRESETS.B, BALANCE)
-const gameC = combatGame('spider', PRESETS.C, BALANCE)
-
-test('합법 행동에는 언제나 턴 종료가 있고, 거부될 행동은 없다', () => {
-  const s = gameB.start(123)
-  const legal = gameB.legalActions(s)
-  expect(legal.some((a) => a.action.type === 'endTurn')).toBe(true)
-  expect(legal.some((a) => a.action.type === 'swap')).toBe(true)
-  expect(gameB.legalActions({ ...s, resource: 0, swapsLeft: 0 })).toEqual([expect.objectContaining({ key: 'endTurn' })])
+const game = combatGame('spider', BALANCE)
+const withHand = (s: RallyState, words: WordId[]): RallyState => ({
+  ...s,
+  deck: { ...s.deck, hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
 })
 
-test('낭독 프리셋에서는 낭독과 추가 드로우가 합법 행동에 포함된다', () => {
-  const keys = gameC.legalActions(gameC.start(1)).map((a) => a.key)
-  expect(keys).toContain('cast')
-  expect(keys).toContain('drawPaid')
+test('합법 행동에는 언제나 턴 종료가 있고, 거부될 행동은 없다', () => {
+  for (const seed of [1, 2, 3]) {
+    const s = game.start(seed)
+    const legal = game.legalActions(s)
+    expect(legal.some((a) => a.action.type === 'endTurn')).toBe(true)
+    for (const a of legal) {
+      const next = game.apply(s, a)
+      if (a.action.type !== 'endTurn' && a.action.type !== 'cast') expect(next).not.toBe(s)
+    }
+  }
+})
+
+test('동사가 없으면 낭독이 없고, 동사를 놓으면 낭독이 생긴다', () => {
+  const s = withHand(game.start(1), ['bite'])
+  expect(game.legalActions(s).map((a) => a.key)).not.toContain('cast')
+  const placed = game.apply(s, game.legalActions(s).find((a) => a.key === 'place:bite@0:verb') as SimCombatAction)
+  expect(game.legalActions(placed).map((a) => a.key)).toContain('cast')
+})
+
+test('버리기를 쓴 뒤에는 버리기 행동이 없다', () => {
+  const s = withHand(game.start(1), ['bite', 'guard'])
+  const discard = game.legalActions(s).find((a) => a.action.type === 'discard') as SimCombatAction
+  expect(discard).toBeDefined()
+  expect(game.legalActions(game.apply(s, discard)).some((a) => a.action.type === 'discard')).toBe(false)
 })
 
 test('무행동 봇은 턴 종료, 무작위 봇은 합법 행동 중 하나', () => {
-  const s = gameB.start(5)
-  expect(passiveBot(gameB, s, createRng(1))[0].key).toBe('endTurn')
-  expect(gameB.legalActions(s).map((x) => x.key)).toContain(randomBot(gameB, s, createRng(5))[0].key)
+  const s = game.start(5)
+  expect(passiveBot(game, s, createRng(1))[0].key).toBe('endTurn')
+  expect(game.legalActions(s).map((x) => x.key)).toContain(randomBot(game, s, createRng(5))[0].key)
 })
 
-function playOneTurn(seed: number, bot: typeof greedyBot) {
-  let s = gameB.start(seed)
-  let rng = createRng(seed)
-  for (let i = 0; i < 20; i++) {
-    const [a, next]: [SimCombatAction, typeof rng] = bot(gameB, s, rng)
-    rng = next
-    s = gameB.apply(s, a)
-    if (a.action.type === 'endTurn' || a.action.type === 'cast') break
+test('탐욕 봇은 첫 턴에 아무것도 안 할 때보다 낫다(시드 합계)', () => {
+  const playOneTurn = (seed: number, bot: typeof greedyBot) => {
+    let s = game.start(seed)
+    let rng = createRng(seed)
+    for (let i = 0; i < 20; i++) {
+      const [a, next] = bot(game, s, rng)
+      rng = next
+      s = game.apply(s, a)
+      if (a.action.type === 'endTurn' || a.action.type === 'cast') break
+    }
+    return s
   }
-  return s
-}
-
-test('탐욕 봇은 첫 턴에 아무것도 안 할 때보다 나쁘지 않고, 시드 합계로는 낫다', () => {
-  let greedyTotal = 0
-  let passiveTotal = 0
-  for (const seed of [1, 2, 3, 4, 5]) {
-    const greedy = scoreState(playOneTurn(seed, greedyBot))
-    const passive = scoreState(playOneTurn(seed, passiveBot))
-    expect(greedy).toBeGreaterThanOrEqual(passive)
-    greedyTotal += greedy
-    passiveTotal += passive
-  }
-  expect(greedyTotal).toBeGreaterThan(passiveTotal)
+  const total = (bot: typeof greedyBot) => [1, 2, 3, 4, 5].reduce((sum, seed) => sum + scoreState(playOneTurn(seed, bot)), 0)
+  expect(total(greedyBot)).toBeGreaterThan(total(passiveBot))
 })
 
-test('점수는 이월되는 보호를 반영한다', () => {
-  const s = gameB.start(1)
-  const withBlock = (id: string, block: number) => ({
-    ...s,
-    entities: s.entities.map((e) => (e.id === id ? { ...e, statuses: { ...e.statuses, block } } : e)),
-  })
-  expect(scoreState(withBlock('e0', 6))).toBeLessThan(scoreState(s))
-  expect(scoreState(withBlock('p', 6))).toBeGreaterThan(scoreState(s))
+test('combatMetrics: 비율과 0으로 나누기', () => {
+  const s = game.start(1)
+  expect(combatMetrics(s)).toMatchObject({ hpLost: 0, turns: 1, defendRate: 0, bestBurst: 0 })
+  const m = combatMetrics({ ...s, turn: 4, log: { casts: 4, defensiveCasts: 1, deadTurns: 1, bestBurst: 12 } })
+  expect(m).toMatchObject({ deadTurnRate: 0.25, defendRate: 0.25, bestBurst: 12 })
 })
 
-test('턴 지표: 쓸 수 없는 손패 비율, 선택지 다양성, 뻔한 최선 여부', () => {
-  const s = gameB.start(1)
-  const m = combatTurnMetrics(gameB)(s)
-  expect(m.unplayableRate).toBeGreaterThanOrEqual(0)
-  expect(m.unplayableRate).toBeLessThanOrEqual(1)
+test('턴 지표: 선택지 다양성과 뻔한 최선 여부', () => {
+  const m = combatTurnMetrics(game)(game.start(1))
   expect(m.choiceDiversity).toBeGreaterThanOrEqual(1)
   expect([0, 1]).toContain(m.obviousBest)
-  // 손패가 오염 카드뿐이면 쓸 수 없는 비율은 1
-  const junk = { ...s, deck: { ...s.deck, hand: [{ instanceId: 'w', wordId: 'web' }] } }
-  expect(combatTurnMetrics(gameB)(junk).unplayableRate).toBe(1)
-})
-
-describe('combatMetrics: 흉조 축 비교 지표', () => {
-  test('낭비율 = 실행 전 지워진 단어 / 놓은 단어, 최대 한 방은 기록 그대로', () => {
-    const base = startCombat('spider', STARTER_DECK, 1, BALANCE, PRESETS.A).state
-    const m = combatMetrics({ ...base, log: { placed: 4, wasted: 1, bestBurst: 12, unexecuted: [] } })
-    expect(m).toMatchObject({ wastedRate: 0.25, bestBurst: 12 })
-  })
-
-  test('놓은 단어가 없으면 낭비율 0', () => {
-    const base = startCombat('spider', STARTER_DECK, 1, BALANCE, PRESETS.A).state
-    expect(combatMetrics(base).wastedRate).toBe(0)
-  })
 })

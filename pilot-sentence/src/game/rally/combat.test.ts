@@ -1,34 +1,10 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import { BALANCE } from '@/game/content/balance'
-import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
-import type { ClauseSpec } from '@/game/content/encounters'
 import type { WordId } from '@/game/content/words'
 import { getSlot, playerWordsOnBoard } from '@/game/sentence/board'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
 import { hasVerb } from './sentence'
-
-/** 엔진 규칙 테스트용 고정 조우(실제 조우는 밸런스 튜닝으로 바뀐다). */
-const clause = (subject: WordId, verb: WordId, modifiers: WordId[] = []): ClauseSpec => ({
-  frameId: 'transitive',
-  slots: [{ role: 'subject', head: subject, modifiers }, { role: 'object', head: 'you' }, { role: 'verb', head: verb }],
-})
-RALLY_ENCOUNTERS['test-dummy'] = {
-  id: 'test-dummy',
-  name: '시험 거미',
-  enemies: [{ defId: 'spider', name: '거미', hp: 30, row: 'front', portrait: '', intents: [clause('spider', 'spiderBite')] }],
-}
-RALLY_ENCOUNTERS['test-curl'] = {
-  id: 'test-curl',
-  name: '웅크리는 거미',
-  enemies: [{ defId: 'spider', name: '거미', hp: 30, row: 'front', portrait: '', intents: [clause('spider', 'curl'), clause('spider', 'spiderBite')] }],
-}
-RALLY_ENCOUNTERS['test-pair'] = {
-  id: 'test-pair',
-  name: '새끼 거미 둘',
-  enemies: [1, 2].map((n) => ({
-    defId: 'spiderling', name: `새끼 거미 ${n}`, hp: 10, row: 'front' as const, portrait: '', intents: [clause('spiderling', 'nibble')],
-  })),
-}
+import './testFixtures'
 
 const DECK: WordId[] = ['bite', 'bite', 'bite', 'slash', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend', 'fiercely', 'fiercely', 'hungry', 'cracked', 'venomous']
 const V = { clause: 0, role: 'verb' } as const

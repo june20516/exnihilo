@@ -36,7 +36,7 @@ export const RALLY_ENCOUNTERS: Record<string, RallyEncounterDef> = {
     name: '거미',
     enemies: [
       {
-        defId: 'spider', name: '거미', hp: 40, row: 'front', portrait: '/assets/spider.jpg',
+        defId: 'spider', name: '거미', hp: 45, row: 'front', portrait: '/assets/spider.jpg',
         intents: [intent('spider', 'spiderBite'), intent('spider', 'spiderNip', ['venomous']), intent('spider', 'curl')],
       },
     ],
@@ -63,6 +63,5 @@ export const RALLY_ENCOUNTERS: Record<string, RallyEncounterDef> = {
 
 /** spec §4 시작 덱(15장): 동사 10, 수식어 5. */
 export const RALLY_STARTER_DECK: readonly WordId[] = [
-  'bite', 'bite', 'bite', 'slash', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend',
-  'fiercely', 'fiercely', 'hungry', 'cracked', 'venomous',
+  'bite', 'bite', 'bite', 'slash', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend', 'fiercely', 'fiercely', 'hungry', 'cracked', 'venomous',
 ]

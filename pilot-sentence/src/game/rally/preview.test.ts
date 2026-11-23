@@ -1,28 +1,18 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import { BALANCE } from '@/game/content/balance'
-import { RALLY_ENCOUNTERS, RALLY_STARTER_DECK } from '@/game/content/enemies'
-import type { ClauseSpec } from '@/game/content/encounters'
+import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
 import { sentenceFormula } from './formula'
 import { previewEvents, previewRound } from './preview'
-
-const clause = (subject: WordId, verb: WordId): ClauseSpec => ({
-  frameId: 'transitive',
-  slots: [{ role: 'subject', head: subject }, { role: 'object', head: 'you' }, { role: 'verb', head: verb }],
-})
-RALLY_ENCOUNTERS['test-preview'] = {
-  id: 'test-preview',
-  name: '시험 거미',
-  enemies: [{ defId: 'spider', name: '거미', hp: 30, row: 'front', portrait: '', intents: [clause('spider', 'spiderBite')] }],
-}
+import './testFixtures'
 
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const V = { clause: 0, role: 'verb' } as const
 const act = (s: RallyState, a: RallyAction) => reduceRally(s, a, BALANCE).state
 const withHand = (words: WordId[]): RallyState => ({
-  ...startRally('test-preview', RALLY_STARTER_DECK, 1, BALANCE).state,
+  ...startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE).state,
   deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
 })
 const texts = (lines: readonly { text: string }[]) => lines.map((l) => l.text)
