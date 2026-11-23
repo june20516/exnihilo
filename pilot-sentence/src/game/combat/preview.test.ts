@@ -1,7 +1,7 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import { BALANCE } from '@/game/content/balance'
 import { ENCOUNTERS, STARTER_DECK } from '@/game/content/encounters'
-import { PRESETS } from '@/game/content/rules'
+import { OMEN_VARIANTS, type OmenVariantId, PRESETS, type RuleConfig } from '@/game/content/rules'
 import { combatGame } from '@/game/sim/combatGame'
 import { type CombatAction, type CombatState, reduceCombat } from './combat'
 import type { CombatEvent } from './events'
@@ -20,8 +20,8 @@ function executedLines(events: readonly CombatEvent[], after: CombatState, by?: 
 }
 
 /** 무작위로 몇 수 둔 상태들을 만든다(합법 행동만). */
-function randomStates(presetId: 'A' | 'B' | 'C', encounterId: string, seed: number): CombatState[] {
-  const game = combatGame(encounterId, PRESETS[presetId], BALANCE, STARTER_DECK)
+function randomStates(rules: RuleConfig, encounterId: string, seed: number): CombatState[] {
+  const game = combatGame(encounterId, rules, BALANCE, STARTER_DECK)
   const states: CombatState[] = []
   let state = game.start(seed)
   let rng: RngState = createRng(seed)
@@ -37,12 +37,16 @@ function randomStates(presetId: 'A' | 'B' | 'C', encounterId: string, seed: numb
 
 const act = (s: CombatState, a: CombatAction) => reduceCombat(s, a, BALANCE)
 
-describe.each(['A', 'B', 'C'] as const)('미리보기는 실제 결과와 같다: 프리셋 %s', (presetId) => {
+const CASES = (['A', 'B', 'C'] as const).flatMap((presetId) =>
+  (Object.keys(OMEN_VARIANTS) as OmenVariantId[]).map((omenId) => [`${presetId}/${omenId}`, { ...PRESETS[presetId], omen: OMEN_VARIANTS[omenId].rule }] as const),
+)
+
+describe.each(CASES)('미리보기는 실제 결과와 같다: %s', (_, rules) => {
   test.each(Object.keys(ENCOUNTERS).filter((id) => !id.startsWith('test-')))('%s', (encounterId) => {
     let checked = 0
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      for (const state of randomStates(presetId, encounterId, seed)) {
-        if (PRESETS[presetId].execution === 'auto') {
+      for (const state of randomStates(rules, encounterId, seed)) {
+        if (rules.execution === 'auto') {
           const r = act(state, { type: 'endTurn' })
           expect(previewExecution(state).map((l) => l.text)).toEqual(executedLines(r.events, r.state))
         } else {

@@ -1,12 +1,13 @@
 import { BALANCE } from '@/game/content/balance'
 import { ENCOUNTERS } from '@/game/content/encounters'
-import { PRESETS, type RuleConfig } from '@/game/content/rules'
+import { OMEN_VARIANTS, type OmenRule, PRESETS, type RuleConfig } from '@/game/content/rules'
 import type { WordId } from '@/game/content/words'
 import { getSlot } from '@/game/sentence/board'
 import {
-  type CardInst, type CombatAction, type CombatState, currentIntent, reduceCombat, startCombat, turnsUntilEnemyCast,
+  type CardInst, type CombatAction, type CombatState, currentIntent, reduceCombat, startCombat, turnsUntilEnemyCast, turnsUntilOmen,
   upcomingIntents,
 } from './combat'
+import type { CombatEvent } from './events'
 import { previewExecution } from './preview'
 
 /**
@@ -45,6 +46,8 @@ ENCOUNTERS['test-idle'] = {
   id: 'test-idle',
   interventionLoop: [{ kind: 'pollute', word: 'web', count: 1 }],
 }
+/** 낭독 규칙 자체를 검증할 때는 흉조가 낭독 뒤에 오도록 고정한다. */
+const C_POST: RuleConfig = { ...PRESETS.C, omen: OMEN_VARIANTS.post1.rule }
 const DECK: WordId[] = ['you', 'you', 'mark', 'scarecrow', 'bite', 'guard', 'mend', 'rage', 'blind', 'fiercely', 'scare', 'hide']
 
 const start = (rules: RuleConfig = PRESETS.A) => startCombat('test-spider', DECK, 123, BALANCE, rules).state
@@ -202,7 +205,7 @@ describe('프리셋 C (잉크·낭독형)', () => {
   })
 
   test('낭독: 지금 문장을 실행하고 내 단어를 소비(버림 더미, 원문 복원)한 뒤 턴을 끝낸다', () => {
-    let s = withHand(start(PRESETS.C), ['you', 'mark'])
+    let s = withHand(start(C_POST), ['you', 'mark'])
     s = act(s, { type: 'place', instanceId: 'h0', at: S }).state
     s = act(s, { type: 'place', instanceId: 'h1', at: O }).state
     const r = act(s, { type: 'cast' })
@@ -222,9 +225,65 @@ describe('미리보기', () => {
     expect(lines).toContain('탐험가: 독 +2')
   })
 
-  test('낭독 모드: 지금 낭독하면의 결과(개입 없이)', () => {
-    const s = act(withHand(start(PRESETS.C), ['you']), { type: 'place', instanceId: 'h0', at: S }).state
+  test('낭독 모드(흉조 실행 후): 지금 낭독하면의 결과', () => {
+    const s = act(withHand(start(C_POST), ['you']), { type: 'place', instanceId: 'h0', at: S }).state
     const lines = previewExecution(s).map((l) => l.text)
     expect(lines).toContain('탐험가 → 탐험가: 피해 6')
+  })
+})
+
+describe('흉조 축 (시점·주기)', () => {
+  const withOmen = (rules: RuleConfig, timing: OmenRule['timing'], every = 1): RuleConfig => ({ ...rules, omen: { timing, every } })
+  const biteSources = (events: readonly CombatEvent[]) =>
+    events.filter((e): e is Extract<CombatEvent, { type: 'damaged' }> => e.type === 'damaged').map((e) => e.sourceId)
+  const placeYouMark = (rules: RuleConfig) => {
+    let s = withHand(start(rules), ['you', 'mark'])
+    s = act(s, { type: 'place', instanceId: 'h0', at: S }).state
+    return act(s, { type: 'place', instanceId: 'h1', at: O }).state
+  }
+
+  test('실행 전(A): 첫 흉조(주어 되돌림)가 먼저 적용되어 거미가 문다', () => {
+    expect(biteSources(act(placeYouMark(withOmen(PRESETS.A, 'beforeExecution')), { type: 'endTurn' }).events)).toEqual(['e0'])
+  })
+
+  test('실행 후(A): 내가 고친 문장이 먼저 실행되고, 그 뒤 주어가 되돌려진다', () => {
+    const r = act(placeYouMark(withOmen(PRESETS.A, 'afterExecution')), { type: 'endTurn' })
+    expect(biteSources(r.events)).toEqual(['p'])
+    expect(getSlot(r.state.board, S).head.wordId).toBe('spider')
+  })
+
+  test('실행 전(C): 플레이어 낭독보다도 흉조가 먼저 적용된다', () => {
+    const r = act(placeYouMark(withOmen(PRESETS.C, 'beforeExecution')), { type: 'cast' })
+    expect(biteSources(r.events)).toEqual(['e0'])
+  })
+
+  test('실행 후(C): 낭독이 먼저 실행된다', () => {
+    const r = act(placeYouMark(withOmen(PRESETS.C, 'afterExecution')), { type: 'cast' })
+    expect(biteSources(r.events)).toEqual(['p'])
+  })
+
+  test('주기 2: 흉조는 짝수 턴 끝에만 오고, 루프는 착탄할 때만 넘어간다', () => {
+    const rules = withOmen(PRESETS.A, 'beforeExecution', 2)
+    const s1 = start(rules)
+    expect(turnsUntilOmen(s1)).toBe(2)
+    const r1 = act(s1, { type: 'endTurn' })
+    expect(r1.events.some((e) => e.type === 'intervention')).toBe(false)
+    expect(turnsUntilOmen(r1.state)).toBe(1)
+    expect(currentIntent(r1.state)).toEqual({ kind: 'revert', at: S })
+    const r2 = act(r1.state, { type: 'endTurn' })
+    expect(r2.events).toContainEqual({ type: 'intervention', step: { kind: 'revert', at: S } })
+    expect(currentIntent(r2.state)).toEqual({ kind: 'revert', at: O })
+  })
+
+  test('기록: 놓은 단어 수, 실행 전에 흉조로 지워진 단어 수', () => {
+    const before = act(placeYouMark(withOmen(PRESETS.A, 'beforeExecution')), { type: 'endTurn' }).state
+    expect(before.log).toMatchObject({ placed: 2, wasted: 1 })
+    const after = act(placeYouMark(withOmen(PRESETS.A, 'afterExecution')), { type: 'endTurn' }).state
+    expect(after.log).toMatchObject({ placed: 2, wasted: 0 })
+  })
+
+  test('기록: 한 턴에 적에게 준 피해의 최댓값(독 틱 제외)', () => {
+    const r = act(placeYouMark(withOmen(PRESETS.C, 'afterExecution')), { type: 'cast' })
+    expect(r.state.log.bestBurst).toBe(6)
   })
 })

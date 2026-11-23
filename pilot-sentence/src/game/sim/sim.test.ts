@@ -3,7 +3,9 @@ import { BALANCE } from '@/game/content/balance'
 import { PRESETS } from '@/game/content/rules'
 import { greedyBot, passiveBot, randomBot, scoreState } from './bots'
 import { combatGame, type SimCombatAction } from './combatGame'
-import { combatTurnMetrics } from './metrics'
+import { startCombat } from '@/game/combat/combat'
+import { STARTER_DECK } from '@/game/content/encounters'
+import { combatMetrics, combatTurnMetrics } from './metrics'
 
 const gameB = combatGame('spider', PRESETS.B, BALANCE)
 const gameC = combatGame('spider', PRESETS.C, BALANCE)
@@ -73,4 +75,17 @@ test('턴 지표: 쓸 수 없는 손패 비율, 선택지 다양성, 뻔한 최�
   // 손패가 오염 카드뿐이면 쓸 수 없는 비율은 1
   const junk = { ...s, deck: { ...s.deck, hand: [{ instanceId: 'w', wordId: 'web' }] } }
   expect(combatTurnMetrics(gameB)(junk).unplayableRate).toBe(1)
+})
+
+describe('combatMetrics: 흉조 축 비교 지표', () => {
+  test('낭비율 = 실행 전 지워진 단어 / 놓은 단어, 최대 한 방은 기록 그대로', () => {
+    const base = startCombat('spider', STARTER_DECK, 1, BALANCE, PRESETS.A).state
+    const m = combatMetrics({ ...base, log: { placed: 4, wasted: 1, bestBurst: 12, unexecuted: [] } })
+    expect(m).toMatchObject({ wastedRate: 0.25, bestBurst: 12 })
+  })
+
+  test('놓은 단어가 없으면 낭비율 0', () => {
+    const base = startCombat('spider', STARTER_DECK, 1, BALANCE, PRESETS.A).state
+    expect(combatMetrics(base).wastedRate).toBe(0)
+  })
 })

@@ -11,7 +11,15 @@ export const OBVIOUS_GAP = 10
 
 export function combatMetrics(state: CombatState): Record<string, number> {
   const player = state.entities.find((e) => e.id === PLAYER_ID)
-  return { hpLost: player ? player.maxHp - player.hp : 0, turns: state.turn }
+  const { placed, wasted, bestBurst } = state.log
+  return {
+    hpLost: player ? player.maxHp - player.hp : 0,
+    turns: state.turn,
+    /** 놓은 단어 중 한 번도 실행되지 못하고 흉조에 지워진 비율. */
+    wastedRate: placed === 0 ? 0 : wasted / placed,
+    /** 한 턴에 적에게 준 피해의 최댓값(한 방의 크기). */
+    bestBurst,
+  }
 }
 
 function previewKey(state: CombatState): string {

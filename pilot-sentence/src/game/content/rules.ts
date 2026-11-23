@@ -6,6 +6,23 @@ export type ResourceRule =
 
 export type PresetId = 'A' | 'B' | 'C'
 
+/** 흉조(적 개입)를 언제, 얼마나 자주 적용하는가. */
+export interface OmenRule {
+  /** beforeExecution: 이번 턴의 모든 실행(플레이어 낭독 포함)보다 먼저 / afterExecution: 모든 실행이 끝난 뒤 */
+  readonly timing: 'beforeExecution' | 'afterExecution'
+  /** N턴마다 한 번 착탄한다(1이면 매 턴). */
+  readonly every: number
+}
+
+export type OmenVariantId = 'pre1' | 'post1' | 'pre2' | 'post2'
+
+export const OMEN_VARIANTS: Record<OmenVariantId, { readonly name: string; readonly rule: OmenRule }> = {
+  pre1: { name: '실행 전·매 턴', rule: { timing: 'beforeExecution', every: 1 } },
+  post1: { name: '실행 후·매 턴', rule: { timing: 'afterExecution', every: 1 } },
+  pre2: { name: '실행 전·2턴마다', rule: { timing: 'beforeExecution', every: 2 } },
+  post2: { name: '실행 후·2턴마다', rule: { timing: 'afterExecution', every: 2 } },
+}
+
 export interface RuleConfig {
   readonly id: PresetId
   readonly name: string
@@ -23,6 +40,7 @@ export interface RuleConfig {
   /** 뒤바꾸기(주어↔목적어) 횟수 제한과 비용. 봉인된 슬롯은 뒤바꿀 수 없다. */
   readonly swapsPerTurn: number
   readonly swapCost: number
+  readonly omen: OmenRule
 }
 
 export const PRESETS: Record<PresetId, RuleConfig> = {
@@ -39,6 +57,7 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     execution: 'auto',
     swapsPerTurn: 1,
     swapCost: 0,
+    omen: OMEN_VARIANTS.pre1.rule,
   },
   B: {
     id: 'B',
@@ -53,6 +72,7 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     execution: 'auto',
     swapsPerTurn: 1,
     swapCost: 0,
+    omen: OMEN_VARIANTS.pre1.rule,
   },
   C: {
     id: 'C',
@@ -67,5 +87,6 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     execution: 'cast',
     swapsPerTurn: 1,
     swapCost: 0,
+    omen: OMEN_VARIANTS.pre1.rule,
   },
 }

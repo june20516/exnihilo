@@ -8,14 +8,28 @@ import type { RuleConfig } from '@/game/content/rules'
 import { getWord, type WordId } from '@/game/content/words'
 import { resolveClause } from '@/game/resolve/resolve'
 import {
-  type Board, buildBoard, dryInk, enemyAttach, enemyReplace, getSlot, isSlotActive, placeWord, type PlacedWord, revertAll,
-  revertSlot, sealSlot, swapNounPhrases,
+  type Board, buildBoard, dryInk, enemyAttach, enemyReplace, getSlot, isSlotActive, placeWord, type PlacedWord,
+  playerWordsOnBoard, revertAll, revertSlot, sealSlot, swapNounPhrases,
 } from '@/game/sentence/board'
 import type { CombatEvent, RejectReason } from './events'
 
 export interface CardInst extends CardInstance {
   readonly wordId: WordId
 }
+
+/** 기계 검증용 전투 기록. */
+export interface CombatLog {
+  /** 플레이어가 놓은 단어 수. */
+  readonly placed: number
+  /** 한 번도 실행되지 못하고 흉조에 지워진 플레이어 단어 수. */
+  readonly wasted: number
+  /** 한 번의 턴 종료(또는 낭독)에서 적에게 준 피해 합의 최댓값. 독 틱은 제외한다. */
+  readonly bestBurst: number
+  /** 마지막 실행 이후에 놓여 아직 실행되지 않은 카드의 instanceId. */
+  readonly unexecuted: readonly string[]
+}
+
+const EMPTY_LOG: CombatLog = { placed: 0, wasted: 0, bestBurst: 0, unexecuted: [] }
 
 export interface CombatState {
   readonly encounterId: string
@@ -34,6 +48,7 @@ export interface CombatState {
   readonly executions: number
   readonly rng: RngState
   readonly nextId: number
+  readonly log: CombatLog
 }
 
 export type CombatAction =
@@ -75,6 +90,12 @@ export function currentIntent(state: CombatState): InterventionStep {
 export function turnsUntilEnemyCast(state: CombatState): number | null {
   if (state.rules.execution !== 'cast') return null
   const every = getEncounter(state.encounterId).castEvery
+  return every - ((state.turn - 1) % every)
+}
+
+/** 다음 흉조가 착탄하기까지 남은 턴 수(이번 턴 종료 때 착탄하면 1). */
+export function turnsUntilOmen(state: CombatState): number {
+  const every = state.rules.omen.every
   return every - ((state.turn - 1) % every)
 }
 
@@ -173,6 +194,7 @@ export function startCombat(
     executions: 0,
     rng,
     nextId: cards.length,
+    log: EMPTY_LOG,
   }
   const started = startTurn(initial, rules.startHand)
   return {
@@ -234,7 +256,13 @@ function place(
     ? getSlot(result.board, at).modifiers.findIndex((m) => m?.instanceId === card.instanceId)
     : null
   return {
-    state: { ...state, board: result.board, deck: addToDiscard(taken.deck, cardsFrom(result.displaced)), resource: state.resource - cost },
+    state: {
+      ...state,
+      board: result.board,
+      deck: addToDiscard(taken.deck, cardsFrom(result.displaced)),
+      resource: state.resource - cost,
+      log: { ...state.log, placed: state.log.placed + 1, unexecuted: [...state.log.unexecuted, card.instanceId] },
+    },
     events: [{ type: 'placed', at, wordId: card.wordId, modifierIndex }, { type: 'apSpent', amount: cost }],
   }
 }
@@ -304,7 +332,7 @@ export function executeSentence(state: CombatState): Reduced<CombatState, Combat
     executions++
     events.push(...r.events)
   })
-  return { state: { ...state, entities, nextId, executions }, events }
+  return { state: { ...state, entities, nextId, executions, log: { ...state.log, unexecuted: [] } }, events }
 }
 
 /** 낭독 후 소비: 플레이어 단어는 버림 더미로, 문장은 원문으로. */
@@ -313,7 +341,12 @@ function consumeAfterCast(state: CombatState): CombatState {
   return { ...state, board: r.board, deck: addToDiscard(state.deck, cardsFrom(r.displaced)) }
 }
 
-function applyInterventions(state: CombatState, events: CombatEvent[]): { state: CombatState; stepCount: number } {
+function playerInstanceIds(board: Board): Set<string> {
+  return new Set(playerWordsOnBoard(board).flatMap((w) => (w.instanceId ? [w.instanceId] : [])))
+}
+
+/** 예고된 흉조를 적용하고 루프를 넘긴다. 실행되지 못하고 지워진 내 단어는 기록에 남긴다. */
+function applyOmen(state: CombatState, events: CombatEvent[]): CombatState {
   const steps = upcomingIntents(state)
   let current = state
   for (const step of steps) {
@@ -321,7 +354,19 @@ function applyInterventions(state: CombatState, events: CombatEvent[]): { state:
     current = applyIntervention(current, step)
     if (step.kind === 'pollute') events.push({ type: 'polluted', wordId: step.word, count: step.count })
   }
-  return { state: current, stepCount: steps.length }
+  const remaining = playerInstanceIds(current.board)
+  const wiped = state.log.unexecuted.filter((id) => !remaining.has(id))
+  return {
+    ...current,
+    loopIndex: current.loopIndex + steps.length,
+    log: { ...current.log, wasted: current.log.wasted + wiped.length, unexecuted: current.log.unexecuted.filter((id) => remaining.has(id)) },
+  }
+}
+
+/** 이번 턴 종료 이벤트에서 적이 받은 피해 합(독 틱 제외). */
+function burstOf(events: readonly CombatEvent[], entities: readonly Entity[]): number {
+  const enemyIds = new Set(entities.filter((e) => e.side === 'enemy').map((e) => e.id))
+  return events.reduce((sum, e) => ((e.type === 'damaged' || e.type === 'hpLost') && enemyIds.has(e.entityId) ? sum + e.amount : sum), 0)
 }
 
 function outcomeOf(entities: readonly Entity[]): 'won' | 'lost' | null {
@@ -330,10 +375,24 @@ function outcomeOf(entities: readonly Entity[]): 'won' | 'lost' | null {
   return entities.some((e) => e.side === 'enemy' && isAlive(e)) ? null : 'won'
 }
 
-/** 턴 종료 흐름. 낭독(cast)이면 먼저 문장을 실행하고 소비한다. */
+/**
+ * 턴 종료 흐름.
+ * 흉조 시점이 실행 전이면 이번 턴의 모든 실행(플레이어 낭독 포함)보다 먼저, 실행 후면 모든 실행이 끝난 뒤 착탄한다.
+ */
 function endTurn(state: CombatState, playerCast: boolean): Reduced<CombatState, CombatEvent> {
   const events: CombatEvent[] = []
   let current = state
+  const omenLands = turnsUntilOmen(state) === 1
+  const finish = (outcome: 'won' | 'lost'): Reduced<CombatState, CombatEvent> => {
+    events.push({ type: 'combatEnded', outcome })
+    return { state: withBurst({ ...current, phase: outcome }), events }
+  }
+  const withBurst = (s: CombatState): CombatState => ({
+    ...s,
+    log: { ...s.log, bestBurst: Math.max(s.log.bestBurst, burstOf(events, s.entities)) },
+  })
+
+  if (omenLands && current.rules.omen.timing === 'beforeExecution') current = applyOmen(current, events)
 
   if (playerCast) {
     events.push({ type: 'cast', by: 'player' })
@@ -341,20 +400,13 @@ function endTurn(state: CombatState, playerCast: boolean): Reduced<CombatState, 
     events.push(...executed.events)
     current = consumeAfterCast(executed.state)
     const early = outcomeOf(current.entities)
-    if (early) {
-      events.push({ type: 'combatEnded', outcome: early })
-      return { state: { ...current, phase: early }, events }
-    }
+    if (early) return finish(early)
   }
 
   if (current.rules.handCarry === 'discard') current = { ...current, deck: discardHand(current.deck) }
 
-  // 적 개입 (실행 직전)
-  const intervened = applyInterventions(current, events)
-  current = intervened.state
-
   // 문장 실행: 자동 모드는 매 턴, 낭독 모드는 적의 낭독 주기에만.
-  // 플레이어가 이번 턴에 낭독했어도 적은 낭독한다(원문으로 돌아간 문장을, 개입 뒤에).
+  // 플레이어가 이번 턴에 낭독했어도 적은 낭독한다(원문으로 돌아간 문장을).
   const enemyCasts = current.rules.execution === 'cast' && turnsUntilEnemyCast(current) === 1
   if (current.rules.execution === 'auto' || enemyCasts) {
     if (enemyCasts) events.push({ type: 'cast', by: 'enemy' })
@@ -364,12 +416,17 @@ function endTurn(state: CombatState, playerCast: boolean): Reduced<CombatState, 
     if (enemyCasts) current = consumeAfterCast(current)
   }
 
+  if (omenLands && current.rules.omen.timing === 'afterExecution') current = applyOmen(current, events)
+
   // 놓은 단어의 지속
   if (current.rules.persistence === 'dry') {
     const dried = dryInk(current.board)
     current = { ...current, board: dried.board, deck: addToDiscard(current.deck, cardsFrom(dried.dried.map((d) => d.word))) }
     for (const d of dried.dried) events.push({ type: 'dried', at: d.at, wordId: d.word.wordId, modifierIndex: d.modifierIndex })
   }
+
+  // 한 방의 크기는 독 틱 전까지의 피해로 잰다.
+  current = withBurst(current)
 
   // 상태 처리
   current = {
@@ -389,7 +446,7 @@ function endTurn(state: CombatState, playerCast: boolean): Reduced<CombatState, 
     return { state: { ...current, phase: outcome }, events }
   }
 
-  current = { ...current, loopIndex: current.loopIndex + intervened.stepCount, turn: current.turn + 1 }
+  current = { ...current, turn: current.turn + 1 }
   for (const step of upcomingIntents(current)) events.push({ type: 'intentRevealed', step })
   const started = startTurn(current, current.rules.autoDraw)
   return { state: started.state, events: [...events, ...started.events] }
