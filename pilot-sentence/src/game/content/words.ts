@@ -45,10 +45,16 @@ export type AdverbMod =
 export type WordEffect =
   | { readonly type: 'target'; readonly ref: TargetRef }
   | { readonly type: 'verb'; readonly range: VerbRange; readonly actions: readonly VerbAction[] }
-  | { readonly type: 'adjective'; readonly mods: readonly AdjectiveMod[] }
+  | { readonly type: 'adjective'; readonly mods: readonly AdjectiveMod[]; readonly lasts: Lasts; readonly stateName: string | null }
   | { readonly type: 'adverb'; readonly mods: readonly AdverbMod[] }
   | { readonly type: 'junk' }
   | { readonly type: 'connective'; readonly mode: ConnectiveMode }
+
+/**
+ * 형용사가 만든 상태의 지속 시간(카드 속성). cast: 이번 낭독 동안만, enemyTurn: 이어지는 적 차례가 끝날 때까지 꾸민 개체에 남는다.
+ * 화면 이름은 임시다(docs/lab/naming).
+ */
+export type Lasts = 'cast' | 'enemyTurn'
 
 /** 연결어: 그리고(따로 실행), 그래서(절 1 피해의 절반을 절 2 위력에), 그러면서(절 1 수식어를 절 2에도). */
 export type ConnectiveMode = 'and' | 'so' | 'while'
@@ -75,7 +81,8 @@ function defineWords(inputs: readonly WordInput[]): Record<WordId, WordDef> {
 
 const target = (ref: TargetRef) => ({ type: 'target', ref }) as const
 const verb = (range: VerbRange, ...actions: VerbAction[]) => ({ type: 'verb', range, actions }) as const
-const adjective = (...mods: AdjectiveMod[]) => ({ type: 'adjective', mods }) as const
+/** 형용사: 지속 시간, 남을 때의 상태 이름(꾸민 명사가 겪는 활용형, cast면 null), 효과. */
+const adjective = (lasts: Lasts, stateName: string | null, ...mods: AdjectiveMod[]) => ({ type: 'adjective', mods, lasts, stateName }) as const
 const adverb = (...mods: AdverbMod[]) => ({ type: 'adverb', mods }) as const
 
 /** spec 10.5 카드 풀과 적 전용 단어. */
@@ -113,14 +120,14 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'swell', text: '부풀어 오른다', kind: 'verbIntransitive', effect: verb('support', { kind: 'grow', amount: 6, to: 'subject' }) },
   { id: 'recover', text: '정신 차린다', kind: 'verbIntransitive', effect: verb('support', { kind: 'cleanse', to: 'subject' }) },
   // 형용사
-  { id: 'blind', text: '눈먼', kind: 'adjective', rarity: 'starter', effect: adjective({ kind: 'outgoingDamageMul', value: 0.5 }) },
-  { id: 'venomous', text: '독을 뿜는', kind: 'adjective', rarity: 'starter', effect: adjective({ kind: 'onHitPoison', amount: 2 }) },
-  { id: 'sturdy', text: '단단한', kind: 'adjective', effect: adjective({ kind: 'incomingFlat', amount: 3 }) },
-  { id: 'giant', text: '거대한', kind: 'adjective', effect: adjective({ kind: 'outgoingDamageMul', value: 1.5 }) },
-  { id: 'cracked', text: '금이 간', kind: 'adjective', effect: adjective({ kind: 'incomingMul', value: 1.5 }) },
+  { id: 'blind', text: '눈먼', kind: 'adjective', rarity: 'starter', effect: adjective('enemyTurn', '눈멂', { kind: 'outgoingDamageMul', value: 0.5 }) },
+  { id: 'venomous', text: '독을 뿜는', kind: 'adjective', rarity: 'starter', effect: adjective('enemyTurn', '독을 뿜음', { kind: 'onHitPoison', amount: 2 }) },
+  { id: 'sturdy', text: '단단한', kind: 'adjective', effect: adjective('enemyTurn', '단단함', { kind: 'incomingFlat', amount: 3 }) },
+  { id: 'giant', text: '거대한', kind: 'adjective', effect: adjective('cast', null, { kind: 'outgoingDamageMul', value: 1.5 }) },
+  { id: 'cracked', text: '금이 간', kind: 'adjective', effect: adjective('enemyTurn', '금이 감', { kind: 'incomingMul', value: 1.5 }) },
   {
     id: 'hungry', text: '굶주린', kind: 'adjective', rarity: 'uncommon',
-    effect: adjective({ kind: 'outgoingFlat', amount: 4 }, { kind: 'selfDamageAfter', amount: 2 }),
+    effect: adjective('cast', null, { kind: 'outgoingFlat', amount: 4 }, { kind: 'selfDamageAfter', amount: 2 }),
   },
   // 부사
   { id: 'fiercely', text: '격렬하게', kind: 'adverb', rarity: 'starter', effect: adverb({ kind: 'powerMul', value: 1.5 }) },
