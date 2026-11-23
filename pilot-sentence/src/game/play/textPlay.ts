@@ -23,13 +23,15 @@ import { describeWord, ROLE_NAMES } from '@/game/ui/describe'
 // ───────────────────────── 명령 ─────────────────────────
 
 export type PlaceRole = SlotRole | 'connective'
+/** 손패 번호(1부터) 또는 카드 id(예: c3). id는 다른 카드를 놓아도 바뀌지 않는다. */
+export type CardRef = number | string
 
 export type PlayCommand =
   | { readonly type: 'new'; readonly seed: number }
   | { readonly type: 'show' }
-  | { readonly type: 'place'; readonly hand: number; readonly clause: number; readonly role: PlaceRole; readonly modifier: number | null }
+  | { readonly type: 'place'; readonly hand: CardRef; readonly clause: number; readonly role: PlaceRole; readonly modifier: number | null }
   | { readonly type: 'target'; readonly enemy: number }
-  | { readonly type: 'discard'; readonly hands: readonly number[] }
+  | { readonly type: 'discard'; readonly hands: readonly CardRef[] }
   | { readonly type: 'clear' }
   | { readonly type: 'cast' }
   | { readonly type: 'end' }
@@ -40,10 +42,11 @@ export const USAGE = [
   '명령 (번호는 모두 1부터):',
   '  new [시드]                              새 런',
   '  show                                    지금 화면',
-  '  place <손패#> <절#> <주어|목적어|동사|연결어> [칸#]',
+  '  place <손패#|카드id> <절#> <주어|목적어|동사|연결어> [칸#]',
   '                                          카드를 놓는다. 형용사는 주어·목적어, 부사는 동사에. 칸#로 수식어 자리를 고른다',
   '  target <적#>                            빈 목적어가 가리킬 적',
-  '  discard <손패#...>                      버리고 그만큼 다시 뽑는다(턴당 횟수 제한)',
+  '  discard <손패#|카드id...>               버리고 그만큼 다시 뽑는다(턴당 횟수 제한)',
+  '  (카드 id는 손패 목록의 괄호 안 값. 놓을 때마다 손패 번호가 당겨지므로 여러 장을 놓을 땐 id가 안전하다)',
   '  clear                                   놓은 카드를 모두 손패로',
   '  cast                                    낭독(그다음 적 차례)',
   '  end                                     낭독하지 않고 턴 종료',
@@ -62,6 +65,12 @@ function positive(text: string | undefined): number | null {
   return n >= 1 ? n : null
 }
 
+/** 손패 번호 또는 카드 id. 아니면 null. */
+function cardRef(text: string | undefined): CardRef | null {
+  if (text !== undefined && /^[a-z]\w*$/.test(text)) return text
+  return positive(text)
+}
+
 export function parseCommand(args: readonly string[]): ParseResult {
   const [name, ...rest] = args
   const need = (what: string): ParseResult => ({ error: `${what}\n\n${USAGE}` })
@@ -78,7 +87,7 @@ export function parseCommand(args: readonly string[]): ParseResult {
     case 'leave':
       return { type: name }
     case 'place': {
-      const hand = positive(rest[0])
+      const hand = cardRef(rest[0])
       const clause = positive(rest[1])
       const role = rest[2] === undefined ? undefined : ROLE_WORDS[rest[2]]
       if (hand === null || clause === null || role === undefined) return need('place <손패#> <절#> <주어|목적어|동사|연결어> [칸#]')
@@ -91,9 +100,9 @@ export function parseCommand(args: readonly string[]): ParseResult {
       return enemy === null ? need('target <적#>') : { type: 'target', enemy }
     }
     case 'discard': {
-      const hands = rest.map(positive)
-      if (hands.length === 0 || hands.some((h) => h === null)) return need('discard <손패#...>')
-      return { type: 'discard', hands: hands.filter((h): h is number => h !== null) }
+      const hands = rest.map(cardRef)
+      if (hands.length === 0 || hands.some((h) => h === null)) return need('discard <손패#|카드id...>')
+      return { type: 'discard', hands: hands.filter((h): h is CardRef => h !== null) }
     }
     case 'buy': {
       const item = positive(rest[0])
@@ -115,11 +124,12 @@ export interface PlayResult {
 function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new' | 'show' }>): RunAction | string {
   const combat = (action: RallyAction): RunAction => ({ type: 'combat', action })
   const hand = state.combat?.deck.hand ?? []
-  const cardAt = (n: number) => hand[n - 1]?.instanceId
+  const cardAt = (ref: CardRef) => (typeof ref === 'number' ? hand[ref - 1] : hand.find((c) => c.instanceId === ref))?.instanceId
+  const missingCard = (ref: CardRef) => (typeof ref === 'number' ? `손패에 ${ref}번 카드가 없습니다.` : `손패에 ${ref} 카드가 없습니다.`)
   switch (command.type) {
     case 'place': {
       const instanceId = cardAt(command.hand)
-      if (!instanceId) return `손패에 ${command.hand}번 카드가 없습니다.`
+      if (!instanceId) return missingCard(command.hand)
       if (command.role === 'connective') return combat({ type: 'connect', instanceId })
       return combat({
         type: 'place',
@@ -136,7 +146,7 @@ function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new
     case 'discard': {
       const ids = command.hands.map(cardAt)
       const missing = command.hands.find((_, i) => !ids[i])
-      if (missing !== undefined) return `손패에 ${missing}번 카드가 없습니다.`
+      if (missing !== undefined) return missingCard(missing)
       return combat({ type: 'discard', instanceIds: ids.filter((id): id is string => id !== undefined) })
     }
     case 'clear':
@@ -164,7 +174,7 @@ export function runCommand(state: RunState | null, command: PlayCommand, balance
   if (typeof action === 'string') return { state, output: `${action}\n\n${renderRun(state)}` }
   const before = state
   const result = reduceRun(state, action, balance)
-  const log = describeEvents(result.events, before, result.state)
+  const log = [...describeEvents(result.events, before, result.state), ...(command.type === 'place' ? displacedLines(before, result.state) : [])]
   return { state: result.state, output: `${log.length > 0 ? `${log.join('\n')}\n\n` : ''}${renderRun(result.state)}` }
 }
 
@@ -193,6 +203,17 @@ function describeEvents(events: readonly RunEvent[], before: RunState, after: Ru
     for (const line of linesFromEvents([event], entities)) lines.push(`  ${line.text}`)
   }
   return lines
+}
+
+/** 놓기로 밀려나 손패로 돌아온 내 카드. */
+function displacedLines(before: RunState, after: RunState): string[] {
+  const onBoard = new Set(
+    (before.combat?.board.clauses ?? []).flatMap((c) => c.slots.flatMap((slot) => [slot.head, ...slot.modifiers]))
+      .flatMap((w) => (w && w.owner === 'player' && w.instanceId ? [w.instanceId] : [])),
+  )
+  return (after.combat?.deck.hand ?? [])
+    .filter((card) => onBoard.has(card.instanceId))
+    .map((card) => `  ${getWord(card.wordId).text}은(는) 밀려나 손패로 돌아갔습니다.`)
 }
 
 function markerLine(event: CombatEvent): string | null {
@@ -237,11 +258,13 @@ function cardLine(wordId: WordId, build: BuildState): string {
   return `${def.text}${level ? `+${level}` : ''} [${KIND_NAMES[def.kind]}] ${describeWord(def)}`
 }
 
-function offerName(offer: Offer, build: BuildState): string {
+/** withLevel이면 강화 보상에 '지금→다음 단계'를 붙인다(아직 사지 않은 상점 보상에만). */
+function offerName(offer: Offer, build: BuildState, withLevel = false): string {
   switch (offer.kind) {
     case 'word':
       return `[단어] ${getWord(offer.wordId).text}`
     case 'upgrade':
+      if (!withLevel) return `[강화] ${getWord(offer.wordId).text}`
       return `[강화] ${getWord(offer.wordId).text} ${build.upgrades[offer.wordId] ?? 0}→${(build.upgrades[offer.wordId] ?? 0) + 1}단계`
     case 'structure':
       return `[구조] ${STRUCTURE_NAMES[offer.id]}`
@@ -284,10 +307,12 @@ function deckSummary(deck: readonly WordId[], build: BuildState): string {
 }
 
 function buildSummary(build: BuildState): string {
+  const upgrades = Object.entries(build.upgrades).map(([id, level]) => `${getWord(id).text} ${level}단계`)
   const relics = build.relics.length > 0 ? build.relics.map((id) => `${RELICS[id].name}(${RELICS[id].text})`).join(', ') : '없음'
   return [
     `수식어 칸: 주어 ${build.slots.subject} · 목적어 ${build.slots.object} · 동사 ${build.slots.verb} · 손패 상한 ${build.handMax} · 턴당 버리기 ${build.discardsPerTurn}`,
     `유물: ${relics}`,
+    `강화: ${upgrades.length > 0 ? upgrades.join(', ') : '없음'}`,
   ].join('\n')
 }
 
@@ -333,13 +358,14 @@ function renderCombat(state: RunState, combat: RallyState): string {
   for (const f of sentenceFormula(combat)) out.push(`  계산식 절 ${f.clause + 1}: ${f.text}`)
 
   out.push('', '미리보기')
-  const mine = linesFromEvents(preview.mine, combat.entities)
+  // 낭독으로 새로 생긴 개체(허수아비 등)의 이름도 찾도록 낭독 뒤의 개체 목록을 쓴다.
+  const mine = linesFromEvents(preview.mine, preview.after.entities)
   const enemyLines = linesFromEvents(preview.enemy, preview.after.entities)
   out.push(`  내 낭독: ${mine.length > 0 ? mine.map((l) => l.text).join(' / ') : '(동사를 놓으면 보입니다)'}`)
   out.push(`  그다음 적 차례: ${enemyLines.length > 0 ? enemyLines.map((l) => l.text).join(' / ') : '(없음)'}`)
 
   out.push('', `손패 (${combat.deck.hand.length}/${combat.build.handMax})`)
-  combat.deck.hand.forEach((card, i) => out.push(`  ${i + 1}. ${cardLine(card.wordId, combat.build)}`))
+  combat.deck.hand.forEach((card, i) => out.push(`  ${i + 1}. (${card.instanceId}) ${cardLine(card.wordId, combat.build)}`))
   out.push('', buildSummary(state.build), deckSummary(state.deck, state.build))
   return out.join('\n')
 }
@@ -348,7 +374,8 @@ function renderShop(state: RunState): string {
   const out: string[] = [header(state, `상점 (${state.floor}층 통과)`), '']
   state.shop?.items.forEach((item, i) => {
     const price = item.sold ? '팔림' : `${item.price} 화폐`
-    out.push(`  ${i + 1}. ${offerName(item.offer, state.build)} — ${offerDetail(item.offer, state.build)} · ${price}`)
+    const detail = item.sold ? '' : ` — ${offerDetail(item.offer, state.build)}`
+    out.push(`  ${i + 1}. ${offerName(item.offer, state.build, !item.sold)}${detail} · ${price}`)
   })
   out.push('', `buy <번호>로 사고, leave로 다음 층(${state.floor + 1}/${FLOORS.length})으로 갑니다. 하나를 사면 남은 보상의 값이 ×1.5 오릅니다. 남은 화폐는 이월됩니다.`)
   out.push('', buildSummary(state.build), deckSummary(state.deck, state.build))

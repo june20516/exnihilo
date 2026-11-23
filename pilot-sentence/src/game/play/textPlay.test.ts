@@ -36,6 +36,8 @@ test('명령 해석: 번호는 1부터 세고, 역할은 한국어로 쓴다', (
   expect(parseCommand(['buy', '2'])).toEqual({ type: 'buy', item: 2 })
   expect(parseCommand(['place', 'x'])).toHaveProperty('error')
   expect(parseCommand(['place', '1', '1', '형용사'])).toHaveProperty('error')
+  expect(parseCommand(['place', 'c12', '1', '동사'])).toEqual({ type: 'place', hand: 'c12', clause: 1, role: 'verb', modifier: null })
+  expect(parseCommand(['discard', 'c1', '2'])).toEqual({ type: 'discard', hands: ['c1', 2] })
   expect(parseCommand(['fly'])).toHaveProperty('error')
   expect(parseCommand([])).toHaveProperty('error')
 })
@@ -132,3 +134,42 @@ test('런 상태는 JSON으로 저장했다 읽어도 같다', () => {
   const s = clearFloor(fresh())
   expect(JSON.parse(JSON.stringify(s))).toEqual(s)
 })
+
+test('카드 id로도 놓을 수 있고, 손패 목록에 id가 보인다', () => {
+  const s = withHand(fresh(), ['fiercely', 'bite'])
+  expect(renderRun(s)).toMatch(/^ {2}2\. \(t1\) 물어뜯는다/m)
+  const placed = run(s, { type: 'place', hand: 't1', clause: 1, role: 'verb', modifier: null })
+  const board = placed.state?.combat?.board
+  expect(board && getSlot(board, { clause: 0, role: 'verb' }).head.wordId).toBe('bite')
+  expect(run(s, { type: 'place', hand: 'c99', clause: 1, role: 'verb', modifier: null }).output).toContain('손패에 c99 카드가 없습니다')
+})
+
+test('이미 놓인 카드를 밀어내면 손패로 돌아갔다고 알려 준다', () => {
+  let s = withHand(fresh(), ['bite', 'slash'])
+  s = run(s, { type: 'place', hand: 't0', clause: 1, role: 'verb', modifier: null }).state ?? s
+  expect(run(s, { type: 'place', hand: 't1', clause: 1, role: 'verb', modifier: null }).output).toContain('물어뜯는다은(는) 밀려나 손패로')
+})
+
+test('허수아비 화자: 미리보기에 내부 id 대신 허수아비 이름이 나온다', () => {
+  const base = withHand(fresh(), ['bite'])
+  const build = { ...base.build, relics: ['scarecrowSpeaker' as const] }
+  let s: RunState = { ...base, build, combat: base.combat && { ...base.combat, build } }
+  s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
+  const preview = renderRun(s).split('미리보기')[1] ?? ''
+  expect(preview).toContain('허수아비 → 거미')
+  expect(preview).not.toMatch(/\bt\d+\b/)
+})
+
+test('강화: 산 뒤에는 단계 화살표 대신 빌드 요약에 지금 단계가 보인다', () => {
+  const shop = clearFloor(fresh())
+  const withUpgrade: RunState = {
+    ...shop,
+    gold: 100,
+    shop: { items: [{ offer: { kind: 'upgrade', wordId: 'fiercely' }, price: 8, sold: false }] },
+  }
+  expect(renderRun(withUpgrade)).toContain('격렬하게 0→1단계')
+  const bought = run(withUpgrade, { type: 'buy', item: 1 })
+  expect(bought.output).not.toContain('1→2단계')
+  expect(bought.output).toContain('강화: 격렬하게 1단계')
+})
+
