@@ -32,7 +32,7 @@ function InkDots({ word }: { word: PlacedWord }) {
   )
 }
 
-function Droppable({
+export function Droppable({
   id,
   children,
 }: {
@@ -45,7 +45,7 @@ function Droppable({
 
 const HEAD_LABELS = { player: '내 단어', enemy: '원문', implied: '생략', emptyVerb: '비어 있음' } as const
 
-const HIGHLIGHT = 'ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.5)] cursor-pointer'
+export const HIGHLIGHT = 'ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.5)] cursor-pointer'
 
 export function SlotView(props: SlotViewProps) {
   const { slot, address, active, nameOf, particle, headPlaceable, modifierPlaceable, onHeadClick, onModifierClick } =

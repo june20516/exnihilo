@@ -12,6 +12,7 @@ const GROUPS: { title: string; kinds: readonly WordKind[] }[] = [
   { title: '자동사', kinds: ['verbIntransitive'] },
   { title: '형용사', kinds: ['adjective'] },
   { title: '부사', kinds: ['adverb'] },
+  { title: '연결어', kinds: ['connective'] },
 ]
 
 interface DeckEditorProps {

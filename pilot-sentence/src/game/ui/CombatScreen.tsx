@@ -12,7 +12,7 @@ import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
 import { ControlPanel } from './ControlPanel'
 import { Hand } from './Hand'
-import { parseDropId } from './placement'
+import { CONNECTIVE_DROP_ID, isConnectiveWord, parseDropId } from './placement'
 import { SentenceBoard } from './SentenceBoard'
 import { SidePanel } from './SidePanel'
 
@@ -44,8 +44,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   const selectedCard = state.deck.hand.find((c) => c.instanceId === selectedId) ?? null
   const rejected = lastEvents.find((e) => e.type === 'rejected')
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
-  // 단계 B에서 절마다 한 줄씩 보여 준다. 지금은 첫 절만.
-  const formula = useMemo(() => (state.phase === 'player' ? (sentenceFormula(state)[0] ?? null) : null), [state])
+  const formulas = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : []), [state])
   const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
   const verbPlaced = hasVerb(state.board)
 
@@ -75,7 +74,24 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const connect = (instanceId: string) => {
+    if (!canAct) return
+    dispatch({ type: 'connect', instanceId })
+    setSelectedId(null)
+  }
+  const onConnectiveClick = () => {
+    if (state.connective) run({ type: 'disconnect' })
+    else if (selectedCard && isConnectiveWord(selectedCard.wordId)) connect(selectedCard.instanceId)
+  }
+  const sentenceEmpty =
+    state.connective === null &&
+    state.board.clauses.every((c) => c.slots.every((s) => isBlank(s.head) && s.modifiers.every((m) => m === null)))
+
   const handleDragEnd = (event: DragEndEvent) => {
+    if (event.over && String(event.over.id) === CONNECTIVE_DROP_ID) {
+      connect(String(event.active.id))
+      return
+    }
     const target = event.over ? parseDropId(String(event.over.id)) : null
     if (target) place(String(event.active.id), target.at, target.modifierIndex)
     else setSelectedId(null)
@@ -104,12 +120,24 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
               selectedWordId={selectedCard?.wordId ?? null}
               onHeadClick={(at) => selectedCard && place(selectedCard.instanceId, at)}
               onModifierClick={(at, index) => selectedCard && place(selectedCard.instanceId, at, index)}
+              connective={state.connective}
+              connectivePlaceable={selectedCard !== null && state.connective === null && isConnectiveWord(selectedCard.wordId)}
+              onConnectiveClick={onConnectiveClick}
             />
             <p
               data-testid="formula"
               className="text-center font-headline text-lg font-bold text-secondary"
             >
-              {formula ? formula.text : verbPlaced ? '이 동사에는 계산식이 없습니다' : '동사를 놓으면 계산식이 보입니다'}
+              {formulas.length > 0
+                ? formulas.map((f) => (
+                    <span key={f.clause} data-clause={f.clause} className="block">
+                      {state.board.clauses.length > 1 ? `절 ${f.clause + 1}: ` : ''}
+                      {f.text}
+                    </span>
+                  ))
+                : verbPlaced
+                  ? '이 동사에는 계산식이 없습니다'
+                  : '동사를 놓으면 계산식이 보입니다'}
             </p>
             <p className="h-5 text-center text-sm text-error" data-testid="message">
               {rejected && rejected.type === 'rejected' ? REJECT_MESSAGES[rejected.reason] : ''}
@@ -166,7 +194,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             <button
               type="button"
               data-testid="clear"
-              disabled={!canAct || !state.board.clauses[0]?.slots.some((s) => !isBlank(s.head) || s.modifiers.some((m) => m !== null))}
+              disabled={!canAct || sentenceEmpty}
               onClick={() => run({ type: 'clear' })}
               className="rounded-lg bg-surface-container-high px-3 py-1 text-xs font-bold disabled:opacity-40"
             >

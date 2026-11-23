@@ -1,6 +1,6 @@
 import { SPIDER_SENTENCE } from '@/game/sentence/testSentence'
 import { buildBoard } from '@/game/sentence/board'
-import { canPlayAnywhere, dropId, parseDropId } from './placement'
+import { canPlayAnywhere, CONNECTIVE_DROP_ID, dropId, isConnectiveWord, parseDropId } from './placement'
 
 test('dropId와 parseDropId는 서로 역함수', () => {
   const head = { clause: 0, role: 'subject' } as const
@@ -22,4 +22,10 @@ test('canPlayAnywhere: 현재 문장 어디에도 놓을 수 없는 단어를 �
   expect(canPlayAnywhere(board, 'bite')).toBe(true)
   expect(canPlayAnywhere(board, 'blind')).toBe(true)
   expect(canPlayAnywhere(board, 'you')).toBe(true)
+})
+
+test('연결어 칸: 연결어 카드만 해당하고, 드롭 id는 슬롯 주소가 아니다', () => {
+  expect(isConnectiveWord('and')).toBe(true)
+  expect(isConnectiveWord('bite')).toBe(false)
+  expect(parseDropId(CONNECTIVE_DROP_ID)).toBeNull()
 })

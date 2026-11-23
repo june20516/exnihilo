@@ -50,3 +50,10 @@ export function canPlayAnywhere(board: Board, wordId: WordId): boolean {
     }),
   )
 }
+
+/** 연결어 칸의 드롭 대상 id. 슬롯 주소 형식이 아니므로 parseDropId는 null을 돌려준다. */
+export const CONNECTIVE_DROP_ID = 'connective'
+
+export function isConnectiveWord(wordId: WordId): boolean {
+  return getWord(wordId).kind === 'connective'
+}
