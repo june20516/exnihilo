@@ -110,6 +110,8 @@ export function placeWord(board: Board, at: SlotAddress, word: PlacedWord, modif
     }
   }
 
+  // 수식어 칸을 겨냥한 head 단어는 거부한다(강조되지 않은 칸에 놓았는데 head가 바뀌는 오동작 방지).
+  if (modifierIndex !== undefined) return { ok: false, reason: 'kindMismatch' }
   if (!slotAccepts(board, at, word.wordId)) return { ok: false, reason: 'kindMismatch' }
   return {
     ok: true,

@@ -102,6 +102,7 @@ export function CombatScreen({ encounterId, seed: initialSeed }: CombatScreenPro
           </div>
           <Hand
             hand={state.deck.hand}
+          board={state.board}
             selectedId={selectedId}
             disabled={!canAct}
             onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}

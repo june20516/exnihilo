@@ -130,3 +130,7 @@ test('playerWordsOnBoard는 보드 위 플레이어 단어만', () => {
   if (!a.ok) throw new Error('배치 실패')
   expect(playerWordsOnBoard(a.board).map((w) => w.wordId)).toEqual(['you'])
 })
+
+test('수식어가 아닌 단어에 modifierIndex를 주면 kindMismatch (head를 바꾸지 않는다)', () => {
+  expect(placeWord(spiderBoard(), S, pw('you'), 1)).toEqual({ ok: false, reason: 'kindMismatch' })
+})
