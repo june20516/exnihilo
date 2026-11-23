@@ -30,6 +30,8 @@ const REJECT_MESSAGES: Record<RejectReason, string> = {
   noPaidDraw: '이 규칙에서는 추가로 뽑을 수 없습니다.',
   deckEmpty: '뽑을 카드가 없습니다.',
   cannotCast: '이 규칙에서는 낭독하지 않습니다(매 턴 자동 실행).',
+  noVerb: '동사가 있어야 낭독할 수 있습니다.',
+  noDiscardLeft: '이번 턴에는 더 버릴 수 없습니다.',
 }
 
 interface PendingPlacement {

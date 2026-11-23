@@ -15,6 +15,8 @@ export type RejectReason =
   | 'noPaidDraw'
   | 'deckEmpty'
   | 'cannotCast'
+  | 'noVerb'
+  | 'noDiscardLeft'
 export type FizzleReason = 'noSubject' | 'noObject' | 'frozen'
 
 export type CombatEvent =
@@ -42,3 +44,7 @@ export type CombatEvent =
   | { readonly type: 'drawn'; readonly count: number; readonly reshuffled: boolean }
   | { readonly type: 'intentRevealed'; readonly step: InterventionStep }
   | { readonly type: 'combatEnded'; readonly outcome: 'won' | 'lost' }
+  | { readonly type: 'enemyTurn' }
+  | { readonly type: 'discarded'; readonly count: number }
+  | { readonly type: 'cleared' }
+  | { readonly type: 'targetChanged'; readonly entityId: string }
