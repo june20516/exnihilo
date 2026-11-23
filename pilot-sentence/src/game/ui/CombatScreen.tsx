@@ -1,3 +1,4 @@
+import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useMemo, useState } from 'react'
 import { useCombatStore } from '@/app/useCombatStore'
 import { BALANCE } from '@/game/content/balance'
@@ -11,6 +12,7 @@ import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
 import { Hand } from './Hand'
 import { Icon } from './Icon'
+import { parseDropId } from './placement'
 import { SentenceBoard } from './SentenceBoard'
 
 const REJECT_MESSAGES: Record<RejectReason, string> = {
@@ -50,51 +52,82 @@ export function CombatScreen({ encounterId, seed: initialSeed }: CombatScreenPro
     setSelectedId(null)
   }
 
+  // 6px 이상 움직여야 드래그로 본다. 그보다 짧으면 클릭 배치로 처리된다.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const instanceId = String(event.active.id)
+    const target = event.over ? parseDropId(String(event.over.id)) : null
+    if (target && canAct) dispatch({ type: 'place', instanceId, at: target.at, modifierIndex: target.modifierIndex })
+    setSelectedId(null)
+  }
+
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
-      <Battlefield entities={state.entities} portraits={portraits} intent={state.phase === 'player' ? currentIntent(state) : null} />
-      <SentenceBoard
-        board={state.board}
-        nameOf={nameOf}
-        selectedWordId={selectedCard?.wordId ?? null}
-        onHeadClick={(at) => placeAt(at)}
-        onModifierClick={(at, index) => placeAt(at, index)}
-      />
-      <p className="h-5 text-center text-sm text-error" data-testid="message">
-        {rejected && rejected.type === 'rejected' ? REJECT_MESSAGES[rejected.reason] : ''}
-      </p>
-      <section className="flex items-end justify-between gap-4 rounded-xl bg-surface-container-lowest p-4 shadow-2xl">
-        <div className="flex flex-col gap-4">
-          <ApMeter ap={state.ap} max={BALANCE.apPerTurn} />
-          <div className="flex gap-3 font-label text-sm text-on-surface-variant">
-            <span className="flex items-center gap-1"><Icon name="auto_stories" className="text-[16px] text-secondary" />서고 {state.deck.drawPile.length}</span>
-            <span className="flex items-center gap-1"><Icon name="history_edu" className="text-[16px]" />망각 {state.deck.discardPile.length}</span>
-            <span>턴 {state.turn}</span>
-          </div>
-        </div>
-        <Hand
-          hand={state.deck.hand}
-          selectedId={selectedId}
-          disabled={!canAct}
-          onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
+    <DndContext
+      sensors={sensors}
+      onDragStart={(e) => setSelectedId(String(e.active.id))}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setSelectedId(null)}
+    >
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
+        <Battlefield
+          entities={state.entities}
+          portraits={portraits}
+          intent={state.phase === 'player' ? currentIntent(state) : null}
         />
-        <button
-          type="button"
-          data-testid="end-turn"
-          disabled={!canAct}
-          onClick={() => {
-            setSelectedId(null)
-            dispatch({ type: 'endTurn' })
-          }}
-          className="flex h-24 w-48 flex-col items-start justify-center rounded-xl bg-primary-container px-5 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
-        >
-          <span className="font-label text-[10px] font-black uppercase tracking-widest text-on-primary">시련 집행</span>
-          <span className="font-headline text-3xl font-black">턴 종료</span>
-          <span className="text-xs opacity-80">문장 현실화</span>
-        </button>
-      </section>
-      <span className="fixed bottom-2 right-3 font-label text-xs text-outline" data-testid="seed">seed {seed}</span>
-      {state.phase !== 'player' && !busy && <CombatResult outcome={state.phase} onRestart={() => restart()} />}
-    </div>
+        <SentenceBoard
+          board={state.board}
+          nameOf={nameOf}
+          selectedWordId={selectedCard?.wordId ?? null}
+          onHeadClick={(at) => placeAt(at)}
+          onModifierClick={(at, index) => placeAt(at, index)}
+        />
+        <p className="h-5 text-center text-sm text-error" data-testid="message">
+          {rejected && rejected.type === 'rejected' ? REJECT_MESSAGES[rejected.reason] : ''}
+        </p>
+        <section className="flex items-end justify-between gap-4 rounded-xl bg-surface-container-lowest p-4 shadow-2xl">
+          <div className="flex flex-col gap-4">
+            <ApMeter ap={state.ap} max={BALANCE.apPerTurn} />
+            <div className="flex gap-3 font-label text-sm text-on-surface-variant">
+              <span className="flex items-center gap-1">
+                <Icon name="auto_stories" className="text-[16px] text-secondary" />
+                서고 {state.deck.drawPile.length}
+              </span>
+              <span className="flex items-center gap-1" data-testid="discard">
+                <Icon name="history_edu" className="text-[16px]" />
+                망각 {state.deck.discardPile.length}
+              </span>
+              <span>턴 {state.turn}</span>
+            </div>
+          </div>
+          <Hand
+            hand={state.deck.hand}
+            selectedId={selectedId}
+            disabled={!canAct}
+            onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
+          />
+          <button
+            type="button"
+            data-testid="end-turn"
+            disabled={!canAct}
+            onClick={() => {
+              setSelectedId(null)
+              dispatch({ type: 'endTurn' })
+            }}
+            className="flex h-24 w-48 flex-col items-start justify-center rounded-xl bg-primary-container px-5 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
+          >
+            <span className="font-label text-[10px] font-black uppercase tracking-widest text-on-primary">
+              시련 집행
+            </span>
+            <span className="font-headline text-3xl font-black">턴 종료</span>
+            <span className="text-xs opacity-80">문장 현실화</span>
+          </button>
+        </section>
+        <span className="fixed bottom-2 right-3 font-label text-xs text-outline" data-testid="seed">
+          seed {seed}
+        </span>
+        {state.phase !== 'player' && !busy && <CombatResult outcome={state.phase} onRestart={() => restart()} />}
+      </div>
+    </DndContext>
   )
 }

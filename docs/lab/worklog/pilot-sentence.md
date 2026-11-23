@@ -12,3 +12,4 @@
 | 2026-11-23 15:05 | Plan1 T8 전투 reducer | game 엔진 | plan 테스트 2건의 전제 오류(드로우 재섞기, 개입이 주어를 되돌림) | 테스트 수정 2건 |
 | 2026-11-23 15:10 | Plan1 T9 연출 큐·store | kit | StrictMode updater 이중 호출 | 1회(updater 부수효과 → ref로 수정) |
 | 2026-11-23 15:25 | Plan1 T10 전투 화면 | UI | 거미 일러스트에 글자가 박혀 있음(Plan 3에서 재생성) | 없음 |
+| 2026-11-23 15:45 | Plan1 T11 드래그·연출·e2e | 연출 | Playwright dragTo가 dnd-kit 활성화 거리를 못 넘음 | e2e 드래그 방식 1회 수정 |

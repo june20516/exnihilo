@@ -1,3 +1,4 @@
+import { useDraggable } from '@dnd-kit/core'
 import type { WordDef } from '@/game/content/words'
 import { describeWord } from './describe'
 import { KIND_LABELS, KIND_STYLES } from './wordStyle'
@@ -12,22 +13,36 @@ interface WordTileProps {
 
 export function WordTile({ def, instanceId, selected, disabled, onSelect }: WordTileProps) {
   const style = KIND_STYLES[def.kind]
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: instanceId,
+    disabled: disabled || def.cost === null,
+  })
+  const dragStyle = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0) rotate(-4deg)`, zIndex: 60 }
+    : undefined
   return (
     <button
+      ref={setNodeRef}
       type="button"
       data-testid={`tile-${def.id}`}
       data-instance-id={instanceId}
       onClick={onSelect}
       disabled={disabled}
-      className={`flex h-52 w-40 flex-col justify-between rounded-xl bg-surface-container p-3 text-left shadow-lg transition-all duration-200
-        ${selected ? '-translate-y-4 ring-2 ring-secondary shadow-2xl' : 'hover:-translate-y-2'}
+      style={dragStyle}
+      {...attributes}
+      {...listeners}
+      className={`flex h-52 w-40 flex-col justify-between rounded-xl bg-surface-container p-3 text-left shadow-lg
+        ${isDragging ? 'shadow-2xl ring-2 ring-secondary' : 'transition-all duration-200'}
+        ${selected && !isDragging ? '-translate-y-4 ring-2 ring-secondary shadow-2xl' : 'hover:-translate-y-2'}
         ${def.cost === null ? 'opacity-50' : ''} disabled:cursor-not-allowed`}
     >
       <div className="flex items-center justify-between">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary-container/60 font-label text-xs font-bold text-secondary">
           {def.cost ?? '✕'}
         </span>
-        <span className={`rounded px-1.5 py-0.5 font-label text-[10px] font-bold ${style.tag}`}>{KIND_LABELS[def.kind]}</span>
+        <span className={`rounded px-1.5 py-0.5 font-label text-[10px] font-bold ${style.tag}`}>
+          {KIND_LABELS[def.kind]}
+        </span>
       </div>
       <span className={`text-center font-headline text-2xl font-black tracking-tight ${style.text}`}>{def.text}</span>
       <p className="rounded bg-surface-container-lowest/60 p-1.5 text-xs leading-tight text-on-surface-variant">

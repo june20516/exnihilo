@@ -35,7 +35,9 @@ export function EntityCard({ entity, portrait, align }: EntityCardProps) {
           <div className="h-3 overflow-hidden rounded-full bg-surface-container-high">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                isEnemy ? 'bg-gradient-to-r from-error to-primary-container' : 'bg-gradient-to-r from-primary-container to-primary'
+                isEnemy
+                  ? 'bg-gradient-to-r from-error to-primary-container'
+                  : 'bg-gradient-to-r from-primary-container to-primary'
               }`}
               style={{ width: `${hpRatio * 100}%` }}
             />
@@ -48,7 +50,8 @@ export function EntityCard({ entity, portrait, align }: EntityCardProps) {
           </span>
           {entity.statuses.block > 0 && (
             <span className="flex items-center gap-1 text-tertiary">
-              <Icon name="shield" className="text-[14px]" />보호 {entity.statuses.block}
+              <Icon name="shield" className="text-[14px]" />
+              보호 {entity.statuses.block}
             </span>
           )}
           {entity.statuses.poison > 0 && (
@@ -58,7 +61,8 @@ export function EntityCard({ entity, portrait, align }: EntityCardProps) {
           )}
           {entity.statuses.freeze > 0 && (
             <span className="flex items-center gap-1 text-secondary">
-              <Icon name="bedtime" className="text-[14px]" />잠듦
+              <Icon name="bedtime" className="text-[14px]" />
+              잠듦
             </span>
           )}
         </div>

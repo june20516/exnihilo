@@ -6,7 +6,10 @@ interface CombatResultProps {
 export function CombatResult({ outcome, onRestart }: CombatResultProps) {
   const won = outcome === 'won'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-container-lowest/80 backdrop-blur" data-testid="result">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-container-lowest/80 backdrop-blur"
+      data-testid="result"
+    >
       <div className="flex flex-col items-center gap-6 rounded-xl bg-surface-container p-10 shadow-2xl">
         <span className={`font-headline text-5xl font-black ${won ? 'text-secondary' : 'text-error'}`}>
           {won ? '승리' : '패배'}

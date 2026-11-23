@@ -1,7 +1,10 @@
+import { useDroppable } from '@dnd-kit/core'
+import type { ReactNode } from 'react'
 import type { SlotAddress } from '@/game/content/encounters'
 import { getWord } from '@/game/content/words'
 import type { PlacedWord, SlotState } from '@/game/sentence/board'
 import { Icon } from './Icon'
+import { dropId } from './placement'
 import { ROLE_NAMES } from './describe'
 import { KIND_STYLES } from './wordStyle'
 
@@ -27,6 +30,17 @@ function InkDots({ word }: { word: PlacedWord }) {
   )
 }
 
+function Droppable({
+  id,
+  children,
+}: {
+  id: string
+  children: (isOver: boolean, ref: (el: HTMLElement | null) => void) => ReactNode
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id })
+  return <>{children(isOver, setNodeRef)}</>
+}
+
 export function SlotView(props: SlotViewProps) {
   const { slot, address, nameOf, particle, headPlaceable, modifierPlaceable, onHeadClick, onModifierClick } = props
   const headDef = getWord(slot.head.wordId)
@@ -42,51 +56,60 @@ export function SlotView(props: SlotViewProps) {
         {slot.modifiers.map((modifier, index) => {
           const modifierDef = modifier ? getWord(modifier.wordId) : null
           return (
-            <button
-              key={index}
-              type="button"
-              data-testid={`mod-${slotId}-${index}`}
-              data-modifier={`${slotId}:${index}`}
-              onClick={() => onModifierClick(index)}
-              className={`flex h-20 min-w-16 flex-col items-center justify-center rounded-lg px-2 transition-all ${
-                modifier ? 'bg-surface-container-high shadow-md' : 'border border-dashed border-outline-variant/60'
-              } ${modifierPlaceable ? highlight : ''}`}
-            >
-              {modifier && modifierDef ? (
-                <>
-                  <span className={`font-headline text-base font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
-                    {nameOf(modifier)}
-                  </span>
-                  <InkDots word={modifier} />
-                </>
-              ) : (
-                <span className="text-xs text-outline-variant">＋</span>
+            <Droppable key={index} id={dropId(address, index)}>
+              {(isOver, ref) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  data-testid={`mod-${slotId}-${index}`}
+                  data-modifier={`${slotId}:${index}`}
+                  onClick={() => onModifierClick(index)}
+                  className={`flex h-20 min-w-16 flex-col items-center justify-center rounded-lg px-2 transition-all ${
+                    modifier ? 'bg-surface-container-high shadow-md' : 'border border-dashed border-outline-variant/60'
+                  } ${modifierPlaceable ? highlight : ''} ${isOver && modifierPlaceable ? 'scale-110' : ''}`}
+                >
+                  {modifier && modifierDef ? (
+                    <>
+                      <span className={`font-headline text-base font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
+                        {nameOf(modifier)}
+                      </span>
+                      <InkDots word={modifier} />
+                    </>
+                  ) : (
+                    <span className="text-xs text-outline-variant">＋</span>
+                  )}
+                </button>
               )}
-            </button>
+            </Droppable>
           )
         })}
-        <button
-          type="button"
-          data-testid={`slot-${slotId}`}
-          data-slot={slotId}
-          onClick={onHeadClick}
-          className={`relative flex h-20 min-w-32 flex-col items-center justify-center rounded-lg px-3 shadow-xl transition-all ${
-            address.role === 'verb' ? 'bg-primary-container' : 'bg-surface-container-highest'
-          } ${headPlaceable ? highlight : ''}`}
-        >
-          {slot.sealed && <Icon name="lock" className="absolute right-1.5 top-1.5 text-[14px] text-secondary" />}
-          <span
-            className={`font-headline text-2xl font-black tracking-tight ${
-              address.role === 'verb' ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
-            }`}
-          >
-            {nameOf(slot.head)}
-          </span>
-          <span className="flex items-center gap-1 font-label text-[10px] text-on-surface-variant">
-            {slot.head.owner === 'enemy' ? '원문' : '내 단어'}
-            <InkDots word={slot.head} />
-          </span>
-        </button>
+        <Droppable id={dropId(address, null)}>
+          {(isOver, ref) => (
+            <button
+              ref={ref}
+              type="button"
+              data-testid={`slot-${slotId}`}
+              data-slot={slotId}
+              onClick={onHeadClick}
+              className={`relative flex h-20 min-w-32 flex-col items-center justify-center rounded-lg px-3 shadow-xl transition-all ${
+                address.role === 'verb' ? 'bg-primary-container' : 'bg-surface-container-highest'
+              } ${headPlaceable ? highlight : ''} ${isOver && headPlaceable ? 'scale-105' : ''}`}
+            >
+              {slot.sealed && <Icon name="lock" className="absolute right-1.5 top-1.5 text-[14px] text-secondary" />}
+              <span
+                className={`font-headline text-2xl font-black tracking-tight ${
+                  address.role === 'verb' ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
+                }`}
+              >
+                {nameOf(slot.head)}
+              </span>
+              <span className="flex items-center gap-1 font-label text-[10px] text-on-surface-variant">
+                {slot.head.owner === 'enemy' ? '원문' : '내 단어'}
+                <InkDots word={slot.head} />
+              </span>
+            </button>
+          )}
+        </Droppable>
         {particle && (
           <span
             data-testid={`particle-${slotId}`}
