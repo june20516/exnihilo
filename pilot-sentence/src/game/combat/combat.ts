@@ -51,6 +51,8 @@ export type CombatAction =
 
 export const PLAYER_ID = 'p'
 const ENRAGED_STEPS_PER_TURN = 2
+/** 잉크 건조 프리셋에서 뒤바꾸기로 옮긴 단어가 유지되는 실행 횟수(카드 기본 잉크와 같다). */
+const SWAP_INK = 2
 
 function getEncounter(id: string): EncounterDef {
   const encounter = ENCOUNTERS[id]
@@ -247,7 +249,7 @@ function swap(state: CombatState, clause: number): Reduced<CombatState, CombatEv
   return {
     state: {
       ...state,
-      board: swapNounPhrases(state.board, clause),
+      board: swapNounPhrases(state.board, clause, state.rules.persistence === 'dry' ? SWAP_INK : null),
       swapsLeft: state.swapsLeft - 1,
       resource: state.resource - state.rules.swapCost,
     },
@@ -351,7 +353,8 @@ function endTurn(state: CombatState, playerCast: boolean): Reduced<CombatState, 
   const intervened = applyInterventions(current, events)
   current = intervened.state
 
-  // 문장 실행: 자동 모드는 매 턴, 낭독 모드는 적의 낭독 주기에만
+  // 문장 실행: 자동 모드는 매 턴, 낭독 모드는 적의 낭독 주기에만.
+  // 플레이어가 이번 턴에 낭독했어도 적은 낭독한다(원문으로 돌아간 문장을, 개입 뒤에).
   const enemyCasts = current.rules.execution === 'cast' && turnsUntilEnemyCast(current) === 1
   if (current.rules.execution === 'auto' || enemyCasts) {
     if (enemyCasts) events.push({ type: 'cast', by: 'enemy' })

@@ -9,6 +9,9 @@ interface SidePanelProps {
   enemyCastIn: number | null
   preview: readonly PreviewLine[]
   previewTitle: string
+  /** 낭독 프리셋에서 적이 이번 턴에 낭독할 때만 주어진다. */
+  secondaryPreview: readonly PreviewLine[] | null
+  secondaryTitle: string
 }
 
 const TONE_CLASS: Record<PreviewLine['tone'], string> = {
@@ -17,9 +20,26 @@ const TONE_CLASS: Record<PreviewLine['tone'], string> = {
   neutral: 'text-on-surface-variant',
 }
 
-export function SidePanel({ intents, enemyCastIn, preview, previewTitle }: SidePanelProps) {
+function PreviewList({ testId, title, lines }: { testId: string; title: string; lines: readonly PreviewLine[] }) {
   return (
-    <aside className="flex min-h-0 flex-col gap-3">
+    <div data-testid={testId} className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface-container p-3 shadow-inner">
+      <div className="mb-1 font-label text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">{title}</div>
+      <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm">
+        {lines.length === 0 && <li className="text-outline">아무 일도 일어나지 않는다</li>}
+        {lines.map((line, i) => (
+          <li key={i} className={TONE_CLASS[line.tone]}>
+            {line.text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+export function SidePanel(props: SidePanelProps) {
+  const { intents, enemyCastIn, preview, previewTitle, secondaryPreview, secondaryTitle } = props
+  return (
+    <aside className="flex min-h-0 flex-col gap-2">
       <div data-testid="intent" className="rounded-lg bg-surface-container-high p-3 shadow-lg">
         <div className="mb-1 flex items-center gap-1 font-label text-[11px] font-bold uppercase tracking-widest text-error">
           <Icon name="replay" className="text-[14px]" />
@@ -37,22 +57,8 @@ export function SidePanel({ intents, enemyCastIn, preview, previewTitle }: SideP
           </div>
         )}
       </div>
-      <div
-        data-testid="preview"
-        className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface-container p-3 shadow-inner"
-      >
-        <div className="mb-1 font-label text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-          {previewTitle}
-        </div>
-        <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm">
-          {preview.length === 0 && <li className="text-outline">아무 일도 일어나지 않는다</li>}
-          {preview.map((line, i) => (
-            <li key={i} className={TONE_CLASS[line.tone]}>
-              {line.text}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <PreviewList testId="preview" title={previewTitle} lines={preview} />
+      {secondaryPreview && <PreviewList testId="preview-enemy" title={secondaryTitle} lines={secondaryPreview} />}
     </aside>
   )
 }

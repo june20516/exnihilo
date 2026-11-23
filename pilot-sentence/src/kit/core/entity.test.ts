@@ -57,10 +57,12 @@ test('연산은 원본 개체를 바꾸지 않는다', () => {
   expect(e.statuses.poison).toBe(0)
 })
 
-test('약화·취약은 턴 종료마다 1 줄고, 힘은 유지된다', () => {
+test('약화·취약은 걸린 턴에는 줄지 않고, 이후 턴 종료마다 1 줄며, 힘은 유지된다', () => {
   const e = addStatus(addStatus(addStatus(spider(), 'weak', 2), 'vulnerable', 1), 'strength', 3)
-  const t = tickEndOfTurn(e).entity
-  expect(t.statuses).toMatchObject({ weak: 1, vulnerable: 0, strength: 3 })
+  const t1 = tickEndOfTurn(e).entity
+  expect(t1.statuses).toMatchObject({ weak: 2, vulnerable: 1, strength: 3 })
+  const t2 = tickEndOfTurn(t1).entity
+  expect(t2.statuses).toMatchObject({ weak: 1, vulnerable: 0, strength: 3 })
 })
 
 test('scaleOutgoing: 힘을 더하고 약화면 0.75배', () => {

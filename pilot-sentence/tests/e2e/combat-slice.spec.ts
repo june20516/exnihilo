@@ -28,13 +28,14 @@ for (const preset of ['A', 'B', 'C']) {
   })
 }
 
-test('뒤바꾸기: 주어와 목적어가 맞바뀌고 미리보기가 갱신된다', async ({ page }) => {
+test('뒤바꾸기: 주어와 목적어가 맞바뀌고, 미리보기는 개입(주어 되돌림)을 반영한다', async ({ page }) => {
   await page.goto('/?seed=123&preset=A')
-  await expect(page.getByTestId('slot-0-subject')).toContainText('거미')
+  await expect(page.getByTestId('preview')).toContainText('거미 → 탐험가')
   await page.getByTestId('swap').click()
   await expect(page.getByTestId('slot-0-subject')).toContainText('당신')
   await expect(page.getByTestId('slot-0-object')).toContainText('거미')
-  await expect(page.getByTestId('preview')).toContainText('탐험가 → 거미')
+  // 거미의 첫 개입은 주어 되돌림이라, 턴 끝에는 "거미가 거미를 물어뜯는다"가 된다
+  await expect(page.getByTestId('preview')).toContainText('거미 → 거미')
 })
 
 test('드래그로 단어를 슬롯에 놓을 수 있다', async ({ page }) => {
@@ -67,4 +68,23 @@ test('연출 재생 중에는 턴 종료 버튼이 잠긴다', async ({ page }) 
   await page.getByTestId('end-turn').click()
   await expect(page.getByTestId('end-turn')).toBeDisabled()
   await expect(page.getByTestId('end-turn')).toBeEnabled({ timeout: 10_000 })
+})
+
+test('지목(적 여럿): 대상을 고르면 그 적이 목적어가 되고, 다른 행동을 하면 대기 상태가 풀린다', async ({ page }) => {
+  await page.goto('/?seed=1&preset=B')
+  await page.getByTestId('encounter').selectOption('swarm')
+  await page.getByTestId('tile-mark').first().click()
+  await page.getByTestId('slot-0-object').click()
+  await expect(page.getByText('지목할 적을 고르세요')).toBeVisible()
+  await page.getByTestId('swap').click()
+  await expect(page.getByText('지목할 적을 고르세요')).toHaveCount(0)
+})
+
+test('지목(적 여럿): 고른 적의 이름이 목적어에 쓰인다', async ({ page }) => {
+  await page.goto('/?seed=1&preset=B')
+  await page.getByTestId('encounter').selectOption('swarm')
+  await page.getByTestId('tile-mark').first().click()
+  await page.getByTestId('slot-0-object').click()
+  await page.locator('[data-entity-id="e1"]').click()
+  await expect(page.getByTestId('slot-0-object')).toContainText('새끼 거미 2')
 })

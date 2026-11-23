@@ -6,7 +6,8 @@ import type { RuleConfig } from '@/game/content/rules'
 import { getWord, type WordId } from '@/game/content/words'
 import { turnsUntilEnemyCast, upcomingIntents } from '@/game/combat/combat'
 import type { RejectReason } from '@/game/combat/events'
-import { previewExecution } from '@/game/combat/preview'
+import type { CombatAction } from '@/game/combat/combat'
+import { previewEnemyCast, previewExecution } from '@/game/combat/preview'
 import type { PlacedWord } from '@/game/sentence/board'
 import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
@@ -63,6 +64,15 @@ export function CombatScreen({ encounterId, seed, rules, deck, onRestart }: Comb
   const aliveEnemies = state.entities.filter((e) => e.side === 'enemy' && e.hp > 0)
   const rejected = lastEvents.find((e) => e.type === 'rejected')
   const preview = useMemo(() => (state.phase === 'player' ? previewExecution(state) : []), [state])
+  const enemyCastPreview = useMemo(() => (state.phase === 'player' ? previewEnemyCast(state) : null), [state])
+
+  /** 배치 이외의 행동: 선택과 지목 대기 상태를 풀고 보낸다. */
+  const run = (action: CombatAction) => {
+    if (!canAct) return
+    setSelectedId(null)
+    setPending(null)
+    dispatch(action)
+  }
 
   const place = (instanceId: string, at: SlotAddress, modifierIndex?: number) => {
     if (!canAct) return
@@ -99,6 +109,8 @@ export function CombatScreen({ encounterId, seed, rules, deck, onRestart }: Comb
           onPickEnemy={
             pending
               ? (entityId) => {
+                  // 연출 중에는 대기 상태를 유지한다(누른 것이 조용히 사라지지 않도록)
+                  if (!canAct) return
                   dispatch({ type: 'place', ...pending, targetEntityId: entityId })
                   setPending(null)
                 }
@@ -123,6 +135,8 @@ export function CombatScreen({ encounterId, seed, rules, deck, onRestart }: Comb
             enemyCastIn={turnsUntilEnemyCast(state)}
             preview={preview}
             previewTitle={rules.execution === 'cast' ? '지금 낭독하면' : '이번 턴 끝에 일어날 일 (개입 반영)'}
+            secondaryPreview={enemyCastPreview}
+            secondaryTitle="낭독 없이 턴을 끝내면 (적 낭독, 개입 반영)"
           />
         </div>
         <section className="flex items-end gap-3 rounded-xl bg-surface-container-lowest p-2 shadow-2xl">
@@ -134,8 +148,8 @@ export function CombatScreen({ encounterId, seed, rules, deck, onRestart }: Comb
             discardCount={state.deck.discardPile.length}
             turn={state.turn}
             disabled={!canAct}
-            onSwap={() => dispatch({ type: 'swap', clause: 0 })}
-            onDrawPaid={() => dispatch({ type: 'drawPaid' })}
+            onSwap={() => run({ type: 'swap', clause: 0 })}
+            onDrawPaid={() => run({ type: 'drawPaid' })}
           />
           <Hand
             hand={state.deck.hand}
@@ -151,7 +165,7 @@ export function CombatScreen({ encounterId, seed, rules, deck, onRestart }: Comb
                 type="button"
                 data-testid="cast"
                 disabled={!canAct}
-                onClick={() => dispatch({ type: 'cast' })}
+                onClick={() => run({ type: 'cast' })}
                 className="h-16 rounded-xl bg-secondary-container px-4 font-headline text-xl font-black text-on-secondary-container shadow-xl disabled:opacity-50"
               >
                 낭독
@@ -161,11 +175,7 @@ export function CombatScreen({ encounterId, seed, rules, deck, onRestart }: Comb
               type="button"
               data-testid="end-turn"
               disabled={!canAct}
-              onClick={() => {
-                setSelectedId(null)
-                setPending(null)
-                dispatch({ type: 'endTurn' })
-              }}
+              onClick={() => run({ type: 'endTurn' })}
               className="flex h-20 flex-col items-start justify-center rounded-xl bg-primary-container px-4 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
             >
               <span className="font-headline text-2xl font-black">턴 종료</span>

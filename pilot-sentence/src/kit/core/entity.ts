@@ -16,7 +16,11 @@ export interface Entity {
   readonly statuses: Readonly<Record<StatusKind, number>>
   /** statuses.block 중 이번 턴에 얻은 몫. 다음 턴 종료까지 유지된다. */
   readonly freshBlock: number
+  /** 이번 턴에 걸린 약화·취약. 걸린 턴의 종료에는 지속 시간이 줄지 않는다. */
+  readonly freshTimed: Readonly<Record<TimedStatus, boolean>>
 }
+
+type TimedStatus = 'weak' | 'vulnerable'
 
 export interface CreateEntityParams {
   id: string
@@ -38,6 +42,7 @@ export function createEntity(params: CreateEntityParams): Entity {
     maxHp: params.hp,
     statuses: { block: 0, poison: 0, freeze: 0, strength: 0, weak: 0, vulnerable: 0 },
     freshBlock: 0,
+    freshTimed: { weak: false, vulnerable: false },
   }
 }
 
@@ -78,6 +83,8 @@ export function addStatus(entity: Entity, kind: StatusKind, amount: number): Ent
     ...entity,
     statuses: { ...entity.statuses, [kind]: next },
     freshBlock: kind === 'block' ? Math.min(next, entity.freshBlock + Math.max(0, amount)) : entity.freshBlock,
+    freshTimed:
+      (kind === 'weak' || kind === 'vulnerable') && amount > 0 ? { ...entity.freshTimed, [kind]: true } : entity.freshTimed,
   }
 }
 
@@ -91,11 +98,12 @@ export function tickEndOfTurn(entity: Entity): { entity: Entity; poisonDamage: n
       statuses: {
         ...entity.statuses,
         poison: Math.max(0, entity.statuses.poison - 1),
-        weak: Math.max(0, entity.statuses.weak - 1),
-        vulnerable: Math.max(0, entity.statuses.vulnerable - 1),
+        weak: entity.freshTimed.weak ? entity.statuses.weak : Math.max(0, entity.statuses.weak - 1),
+        vulnerable: entity.freshTimed.vulnerable ? entity.statuses.vulnerable : Math.max(0, entity.statuses.vulnerable - 1),
         block: Math.min(entity.statuses.block, entity.freshBlock),
       },
       freshBlock: 0,
+      freshTimed: { weak: false, vulnerable: false },
     },
     poisonDamage,
   }

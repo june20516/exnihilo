@@ -39,6 +39,12 @@ ENCOUNTERS['test-spider'] = {
   ],
   castEvery: 2,
 }
+/** 개입이 문장을 건드리지 않는 고정 조우(지속 규칙 검증용). */
+ENCOUNTERS['test-idle'] = {
+  ...ENCOUNTERS['test-spider'],
+  id: 'test-idle',
+  interventionLoop: [{ kind: 'pollute', word: 'web', count: 1 }],
+}
 const DECK: WordId[] = ['you', 'you', 'mark', 'scarecrow', 'bite', 'guard', 'mend', 'rage', 'blind', 'fiercely', 'scare', 'hide']
 
 const start = (rules: RuleConfig = PRESETS.A) => startCombat('test-spider', DECK, 123, BALANCE, rules).state
@@ -60,10 +66,10 @@ describe('공통', () => {
     expect(r.events).toEqual([{ type: 'rejected', reason: 'notEnoughAp', at: S }])
   })
 
-  test('뒤바꾸기는 자원 1을 쓰고 턴당 1회, 주어와 목적어를 맞바꾼다', () => {
+  test('뒤바꾸기는 무료로 턴당 1회, 주어와 목적어를 맞바꾼다', () => {
     const s = start()
     const r = act(s, { type: 'swap', clause: 0 })
-    expect(r.state.resource).toBe(s.resource - 1)
+    expect(r.state.resource).toBe(s.resource)
     expect(getSlot(r.state.board, S).head.wordId).toBe('you')
     expect(getSlot(r.state.board, O).head.wordId).toBe('spider')
     // 명사구째 옮긴다: [독을 뿜는]은 거미를 따라 목적어로 간다
@@ -130,6 +136,16 @@ describe('프리셋 A (StS형)', () => {
     expect(act(start(), { type: 'drawPaid' }).events[0]).toMatchObject({ reason: 'noPaidDraw' })
     expect(act(start(), { type: 'cast' }).events[0]).toMatchObject({ reason: 'cannotCast' })
   })
+})
+
+test('A: 뒤바꾸기로 옮긴 단어도 2회 실행 후 원문으로 돌아온다', () => {
+  let s = startCombat('test-idle', DECK, 123, BALANCE, PRESETS.A).state
+  s = act(s, { type: 'swap', clause: 0 }).state
+  s = end(s)
+  expect(getSlot(s.board, S).head.wordId).toBe('you')
+  s = end(s)
+  expect(getSlot(s.board, S).head.wordId).toBe('spider')
+  expect(getSlot(s.board, O).head.wordId).toBe('you')
 })
 
 describe('프리셋 B (하스스톤형)', () => {

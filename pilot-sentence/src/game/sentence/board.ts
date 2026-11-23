@@ -135,14 +135,17 @@ export interface DriedWord {
 }
 
 function tickInk(word: PlacedWord): PlacedWord {
-  return word.owner === 'player' && word.inkLeft !== null ? { ...word, inkLeft: word.inkLeft - 1 } : word
+  return word.inkLeft !== null ? { ...word, inkLeft: word.inkLeft - 1 } : word
 }
 
 function isDry(word: PlacedWord): boolean {
-  return word.owner === 'player' && word.inkLeft !== null && word.inkLeft <= 0
+  return word.inkLeft !== null && word.inkLeft <= 0
 }
 
-/** 플레이어 단어의 잉크를 1 줄이고, 다 마른 단어는 원문으로 되돌린다. */
+/**
+ * 잉크가 있는 단어(플레이어 단어, 뒤바꾸기로 옮겨진 단어)의 잉크를 1 줄이고, 다 마른 단어는 원문으로 되돌린다.
+ * 원문 단어는 잉크가 없어(null) 마르지 않는다.
+ */
 export function dryInk(board: Board): { board: Board; dried: DriedWord[] } {
   const dried: DriedWord[] = []
   const clauses = board.clauses.map((clause, clauseIndex) => ({
@@ -219,12 +222,20 @@ export function playerWordsOnBoard(board: Board): PlacedWord[] {
   )
 }
 
-/** 절의 주어와 목적어 명사구(head + 수식어)를 맞바꾼다. 원문과 봉인은 슬롯에 그대로 남는다. */
-export function swapNounPhrases(board: Board, clause: number): Board {
-  const subject = getSlot(board, { clause, role: 'subject' })
-  const object = getSlot(board, { clause, role: 'object' })
-  const swapped = updateSlot(board, { clause, role: 'subject' }, (s) => ({ ...s, head: object.head, modifiers: object.modifiers }))
-  return updateSlot(swapped, { clause, role: 'object' }, (s) => ({ ...s, head: subject.head, modifiers: subject.modifiers }))
+/**
+ * 절의 주어와 목적어 명사구(head + 수식어)를 맞바꾼다. 원문과 봉인은 슬롯에 그대로 남는다.
+ * movedInk가 주어지면(잉크 건조 프리셋) 잉크가 없던 단어도 그만큼 실행된 뒤 원문으로 돌아간다.
+ */
+export function swapNounPhrases(board: Board, clause: number, movedInk: number | null = null): Board {
+  const withInk = (word: PlacedWord): PlacedWord => (movedInk !== null && word.inkLeft === null ? { ...word, inkLeft: movedInk } : word)
+  const move = (slot: SlotState) => ({
+    head: withInk(slot.head),
+    modifiers: slot.modifiers.map((m) => (m ? withInk(m) : m)),
+  })
+  const subject = move(getSlot(board, { clause, role: 'subject' }))
+  const object = move(getSlot(board, { clause, role: 'object' }))
+  const swapped = updateSlot(board, { clause, role: 'subject' }, (s) => ({ ...s, ...object }))
+  return updateSlot(swapped, { clause, role: 'object' }, (s) => ({ ...s, ...subject }))
 }
 
 /** 모든 슬롯을 원문으로 되돌린다(낭독 후 소비). 밀려난 단어를 돌려준다. */

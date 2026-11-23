@@ -38,7 +38,7 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     persistence: 'dry',
     execution: 'auto',
     swapsPerTurn: 1,
-    swapCost: 1,
+    swapCost: 0,
   },
   B: {
     id: 'B',
@@ -52,7 +52,7 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     persistence: 'permanent',
     execution: 'auto',
     swapsPerTurn: 1,
-    swapCost: 1,
+    swapCost: 0,
   },
   C: {
     id: 'C',
@@ -66,6 +66,6 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     persistence: 'untilCast',
     execution: 'cast',
     swapsPerTurn: 1,
-    swapCost: 1,
+    swapCost: 0,
   },
 }
