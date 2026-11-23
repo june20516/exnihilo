@@ -18,7 +18,7 @@ async function dragBySteps(page: Page, from: Locator, to: Locator) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto(`/?seed=${SEED}`)
+  await page.goto(`/?mode=rally&seed=${SEED}`)
   await page.evaluate(() => window.localStorage.clear())
   await page.reload()
   await expect(page.getByTestId('end-turn')).toBeVisible()

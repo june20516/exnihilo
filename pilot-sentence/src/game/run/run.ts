@@ -49,6 +49,13 @@ export type RunEvent =
   | { readonly type: 'bought'; readonly offer: Offer; readonly price: number }
   | { readonly type: 'runEnded'; readonly outcome: 'won' | 'lost' }
 
+const RUN_ONLY_EVENTS: readonly RunEvent['type'][] = ['floorCleared', 'bought', 'runEnded']
+
+/** 런 이벤트 중 전투 이벤트(연출 큐에 넣을 것). */
+export function isCombatEvent(event: RunEvent): event is CombatEvent {
+  return !RUN_ONLY_EVENTS.includes(event.type)
+}
+
 type Result = Reduced<RunState, RunEvent>
 
 const SEED_MAX = 1_000_000_000

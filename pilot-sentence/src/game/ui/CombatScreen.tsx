@@ -1,9 +1,8 @@
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useMemo, useState } from 'react'
-import { useCombatStore } from '@/app/useCombatStore'
 import { RALLY_ENCOUNTERS, type SlotAddress } from '@/game/content/enemies'
-import type { WordId } from '@/game/content/words'
-import type { RallyAction } from '@/game/rally/combat'
+import type { CombatEvent } from '@/game/combat/events'
+import type { RallyAction, RallyState } from '@/game/rally/combat'
 import { sentenceFormula } from '@/game/rally/formula'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
@@ -18,14 +17,17 @@ import { SentenceBoard } from './SentenceBoard'
 import { SidePanel } from './SidePanel'
 
 interface CombatScreenProps {
-  encounterId: string
-  seed: number
-  deck: readonly WordId[]
-  onRestart: () => void
+  state: RallyState
+  /** 연출 재생 중이면 입력을 막는다. */
+  busy: boolean
+  lastEvents: readonly CombatEvent[]
+  dispatch: (action: RallyAction) => void
+  /** 있으면 전투가 끝났을 때 결과 오버레이를 띄운다(샌드박스). 런에서는 런 화면이 다음 화면을 정한다. */
+  onRestart?: () => void
 }
 
-export function CombatScreen({ encounterId, seed, deck, onRestart }: CombatScreenProps) {
-  const { state, busy, lastEvents, dispatch } = useCombatStore(encounterId, seed, deck)
+export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: CombatScreenProps) {
+  const encounterId = state.encounterId
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** 버리기 모드에서 표시한 카드. null이면 버리기 모드가 아니다. */
   const [marked, setMarked] = useState<ReadonlySet<string> | null>(null)
@@ -173,7 +175,7 @@ export function CombatScreen({ encounterId, seed, deck, onRestart }: CombatScree
           </div>
         </section>
       </main>
-      {state.phase !== 'player' && !busy && <CombatResult outcome={state.phase} onRestart={onRestart} />}
+      {onRestart && state.phase !== 'player' && !busy && <CombatResult outcome={state.phase} onRestart={onRestart} />}
     </DndContext>
   )
 }
