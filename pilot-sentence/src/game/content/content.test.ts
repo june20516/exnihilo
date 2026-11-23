@@ -49,5 +49,5 @@ test('프리셋 A/B/C가 spec 10.1의 값을 가진다', () => {
   expect(PRESETS.B.resource).toEqual({ mode: 'ramp', start: 1, max: 6 })
   expect(PRESETS.C).toMatchObject({ handCarry: 'keep', autoDraw: 1, paidDrawCost: 1, persistence: 'untilCast', execution: 'cast' })
   expect(PRESETS.C.resource).toEqual({ mode: 'ink', regen: 3, max: 8, start: 3 })
-  for (const preset of Object.values(PRESETS)) expect(preset.freeSwapsPerTurn).toBe(1)
+  for (const preset of Object.values(PRESETS)) expect(preset).toMatchObject({ swapsPerTurn: 1, swapCost: 1 })
 })

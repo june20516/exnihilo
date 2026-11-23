@@ -20,7 +20,9 @@ export interface RuleConfig {
   readonly persistence: 'dry' | 'permanent' | 'untilCast'
   /** auto: 매 턴 끝 실행 / cast: 낭독할 때만 실행 */
   readonly execution: 'auto' | 'cast'
-  readonly freeSwapsPerTurn: number
+  /** 뒤바꾸기(주어↔목적어) 횟수 제한과 비용. 봉인된 슬롯은 뒤바꿀 수 없다. */
+  readonly swapsPerTurn: number
+  readonly swapCost: number
 }
 
 export const PRESETS: Record<PresetId, RuleConfig> = {
@@ -35,7 +37,8 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     resource: { mode: 'fixed', perTurn: 3 },
     persistence: 'dry',
     execution: 'auto',
-    freeSwapsPerTurn: 1,
+    swapsPerTurn: 1,
+    swapCost: 1,
   },
   B: {
     id: 'B',
@@ -48,7 +51,8 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     resource: { mode: 'ramp', start: 1, max: 6 },
     persistence: 'permanent',
     execution: 'auto',
-    freeSwapsPerTurn: 1,
+    swapsPerTurn: 1,
+    swapCost: 1,
   },
   C: {
     id: 'C',
@@ -61,6 +65,7 @@ export const PRESETS: Record<PresetId, RuleConfig> = {
     resource: { mode: 'ink', regen: 3, max: 8, start: 3 },
     persistence: 'untilCast',
     execution: 'cast',
-    freeSwapsPerTurn: 1,
+    swapsPerTurn: 1,
+    swapCost: 1,
   },
 }

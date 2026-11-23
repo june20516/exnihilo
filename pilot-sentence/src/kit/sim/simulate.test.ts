@@ -46,3 +46,15 @@ test('같은 시드면 같은 리포트', () => {
   const b = simulate(counterGame, coin, { seeds: [7, 8, 9], maxTurns: 20, metrics }).report
   expect(a).toEqual(b)
 })
+
+test('turnMetrics는 새 턴이 시작될 때마다 샘플링되어 평균이 보고된다', () => {
+  const alternate: Policy<Counter, CounterAction> = (_g, s, rng) => [s.value < s.turn ? 'inc' : 'end', rng]
+  const { report } = simulate(counterGame, alternate, {
+    seeds: [1],
+    maxTurns: 10,
+    metrics,
+    turnMetrics: (s) => ({ startValue: s.value }),
+  })
+  // 턴 1 시작 값 0, 턴 2 시작 값 1, 턴 3 시작 값 2 → 평균 1
+  expect(report.avgTurnMetrics.startValue).toBe(1)
+})

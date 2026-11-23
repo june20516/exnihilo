@@ -56,19 +56,18 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
       },
     ],
     interventionLoop: [
-      { kind: 'revert', at: at('subject') },
-      { kind: 'revert', at: at('verb') },
       { kind: 'enrage' },
-      { kind: 'revert', at: at('verb') },
-      { kind: 'pollute', word: 'web', count: 1 },
       { kind: 'revert', at: at('object') },
+      { kind: 'revert', at: at('verb') },
+      { kind: 'revert', at: at('object') },
+      { kind: 'attach', at: at('verb'), word: 'fiercely' },
     ],
     castEvery: 2,
   },
   swarm: {
     id: 'swarm',
     name: '거미 떼',
-    enemies: [0, 1, 2].map(() => ({ defId: 'spiderling', name: '새끼 거미', hp: 12, row: 'front' as const, portrait: '/assets/spider.jpg' })),
+    enemies: [0, 1, 2].map(() => ({ defId: 'spiderling', name: '새끼 거미', hp: 9, row: 'front' as const, portrait: '/assets/spider.jpg' })),
     initialSentence: [
       {
         frameId: 'transitive',
@@ -80,11 +79,10 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
       },
     ],
     interventionLoop: [
-      { kind: 'revert', at: at('subject') },
-      { kind: 'attach', at: at('verb'), word: 'fiercely' },
+      { kind: 'enrage' },
       { kind: 'revert', at: at('object') },
       { kind: 'revert', at: at('verb') },
-      { kind: 'enrage' },
+      { kind: 'revert', at: at('subject') },
     ],
     castEvery: 2,
   },

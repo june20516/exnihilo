@@ -134,7 +134,7 @@ function resourceAtTurnStart(state: CombatState): number {
 
 function startTurn(state: CombatState, drawCount: number): Reduced<CombatState, CombatEvent> {
   const resource = resourceAtTurnStart(state)
-  const refreshed: CombatState = { ...state, resource, swapsLeft: state.rules.freeSwapsPerTurn }
+  const refreshed: CombatState = { ...state, resource, swapsLeft: state.rules.swapsPerTurn }
   const drawn = drawCards(refreshed, drawCount)
   return {
     state: drawn.state,
@@ -167,7 +167,7 @@ export function startCombat(
     resource: 0,
     loopIndex: 0,
     enraged: false,
-    swapsLeft: rules.freeSwapsPerTurn,
+    swapsLeft: rules.swapsPerTurn,
     executions: 0,
     rng,
     nextId: cards.length,
@@ -241,9 +241,17 @@ function swap(state: CombatState, clause: number): Reduced<CombatState, CombatEv
   if (state.swapsLeft <= 0) return reject(state, 'noSwapLeft', null)
   if (!state.board.clauses[clause]) return reject(state, 'kindMismatch', null)
   if (!isSlotActive(state.board, { clause, role: 'object' })) return reject(state, 'slotInactive', { clause, role: 'object' })
+  const sealed = ['subject', 'object'].some((role) => state.board.clauses[clause].slots.find((s) => s.role === role)?.sealed)
+  if (sealed) return reject(state, 'slotSealed', null)
+  if (state.resource < state.rules.swapCost) return reject(state, 'notEnoughAp', null)
   return {
-    state: { ...state, board: swapNounPhrases(state.board, clause), swapsLeft: state.swapsLeft - 1 },
-    events: [{ type: 'swapped', clause }],
+    state: {
+      ...state,
+      board: swapNounPhrases(state.board, clause),
+      swapsLeft: state.swapsLeft - 1,
+      resource: state.resource - state.rules.swapCost,
+    },
+    events: [{ type: 'swapped', clause }, { type: 'apSpent', amount: state.rules.swapCost }],
   }
 }
 

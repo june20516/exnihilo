@@ -11,6 +11,7 @@ export type RejectReason =
   | 'noTarget'
   | 'notPlayerTurn'
   | 'noSwapLeft'
+  | 'slotSealed'
   | 'noPaidDraw'
   | 'deckEmpty'
   | 'cannotCast'

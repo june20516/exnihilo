@@ -60,15 +60,21 @@ describe('공통', () => {
     expect(r.events).toEqual([{ type: 'rejected', reason: 'notEnoughAp', at: S }])
   })
 
-  test('뒤바꾸기는 턴당 1회 무료로 주어와 목적어를 맞바꾼다', () => {
+  test('뒤바꾸기는 자원 1을 쓰고 턴당 1회, 주어와 목적어를 맞바꾼다', () => {
     const s = start()
     const r = act(s, { type: 'swap', clause: 0 })
+    expect(r.state.resource).toBe(s.resource - 1)
     expect(getSlot(r.state.board, S).head.wordId).toBe('you')
     expect(getSlot(r.state.board, O).head.wordId).toBe('spider')
     // 명사구째 옮긴다: [독을 뿜는]은 거미를 따라 목적어로 간다
     expect(getSlot(r.state.board, O).modifiers[0]?.wordId).toBe('venomous')
-    expect(r.state.resource).toBe(s.resource)
     expect(act(r.state, { type: 'swap', clause: 0 }).events[0]).toMatchObject({ type: 'rejected', reason: 'noSwapLeft' })
+  })
+
+  test('봉인된 슬롯이 있으면 뒤바꿀 수 없다', () => {
+    const s = start()
+    const sealed = { ...s, board: { clauses: s.board.clauses.map((c) => ({ ...c, slots: c.slots.map((slot) => (slot.role === 'subject' ? { ...slot, sealed: true } : slot)) })) } }
+    expect(act(sealed, { type: 'swap', clause: 0 }).events[0]).toMatchObject({ type: 'rejected', reason: 'slotSealed' })
   })
 
   test('자동사 문장에서는 뒤바꾸기가 거부된다', () => {

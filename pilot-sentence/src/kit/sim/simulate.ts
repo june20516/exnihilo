@@ -27,6 +27,8 @@ export interface SimReport {
   readonly avgTurns: number
   readonly avgMetrics: Record<string, number>
   readonly avgMetricsOnWin: Record<string, number>
+  /** 모든 판의 매 턴 시작 시점 샘플 평균. */
+  readonly avgTurnMetrics: Record<string, number>
   readonly actionCounts: Record<string, number>
 }
 
@@ -34,6 +36,8 @@ export interface SimOptions<S> {
   readonly seeds: readonly number[]
   readonly maxTurns: number
   readonly metrics: (state: S) => Record<string, number>
+  /** 새 턴이 시작될 때마다(첫 턴 포함) 샘플링할 지표. */
+  readonly turnMetrics?: (state: S) => Record<string, number>
 }
 
 /** 한 턴에 허용하는 최대 행동 수. 턴을 넘기지 않는 정책이 무한 루프에 빠지지 않게 한다. */
@@ -58,12 +62,18 @@ export function simulate<S, A>(
   options: SimOptions<S>,
 ): { report: SimReport; runs: RunResult[] } {
   const actionCounts: Record<string, number> = {}
+  const turnSamples: Record<string, number>[] = []
   const runs: RunResult[] = options.seeds.map((seed) => {
     let state = game.start(seed)
     let rng = createRng(seed ^ 0x5eed)
     let actions = 0
+    let sampledTurn = 0
     while (game.outcome(state) === null && game.turn(state) <= options.maxTurns) {
       if (actions >= options.maxTurns * MAX_ACTIONS_PER_TURN) break
+      if (options.turnMetrics && game.turn(state) !== sampledTurn) {
+        sampledTurn = game.turn(state)
+        turnSamples.push(options.turnMetrics(state))
+      }
       const [action, nextRng] = policy(game, state, rng)
       rng = nextRng
       const key = game.actionKey(action)
@@ -87,6 +97,7 @@ export function simulate<S, A>(
     avgTurns: runs.length === 0 ? 0 : runs.reduce((sum, r) => sum + r.turns, 0) / runs.length,
     avgMetrics: average(runs.map((r) => r.metrics)),
     avgMetricsOnWin: average(runs.filter((r) => r.outcome === 'won').map((r) => r.metrics)),
+    avgTurnMetrics: average(turnSamples),
     actionCounts,
   }
   return { report, runs }
