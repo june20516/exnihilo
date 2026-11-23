@@ -104,6 +104,8 @@ for (const [name, policy] of policies) {
   )
 }
 
+console.log(`시간 초과(교착) 런: ${summaries.map((s) => `${s.name} ${s.results.filter((r) => r.timedOut).length}`).join(' · ')}`)
+
 const learnedSummary = summaries[0]
 console.log('\n유물별 완주율(학습 봇, 산 런 / 안 산 런)')
 for (const id of Object.keys(RELICS) as RelicId[]) {

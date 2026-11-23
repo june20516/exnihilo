@@ -1,3 +1,4 @@
+import { FLOORS } from '@/game/run/floors'
 import { createRng, type RngState } from '@/kit/core/rng'
 import type { Balance } from '@/game/content/balance'
 import { type FloorRecord, reduceRun, type RunAction, type RunState, startRun } from '@/game/run/run'
@@ -16,6 +17,8 @@ export interface RunResult {
   readonly casts: number
   /** 연결어로 두 절을 낭독한 횟수. */
   readonly twoClauseCasts: number
+  /** 전투 턴 한계나 전체 단계 한계에 걸려 끝났다(패배로 센다). */
+  readonly timedOut: boolean
 }
 
 /** 한 전투가 이 턴 수를 넘기면 교착으로 보고 진 것으로 처리한다. */
@@ -23,13 +26,15 @@ export const MAX_FIGHT_TURNS = 40
 const MAX_STEPS = 20_000
 
 /** 런 하나를 끝까지 돌린다. 전투는 두 수 앞 봇, 상점은 주어진 정책. */
-export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance): RunResult {
+export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance, maxFightTurns = MAX_FIGHT_TURNS): RunResult {
   let state = startRun(seed, balance).state
   let rng = createRng(seed ^ 0x5eed)
   let casts = 0
   let twoClauseCasts = 0
   let timedOut = false
-  for (let step = 0; step < MAX_STEPS && (state.phase === 'combat' || state.phase === 'shop'); step++) {
+  let floorTurns = [...state.log.floorTurns]
+  let step = 0
+  for (; step < MAX_STEPS && (state.phase === 'combat' || state.phase === 'shop'); step++) {
     if (state.phase === 'shop') {
       const [action, next] = shop(state, rng)
       rng = next
@@ -37,7 +42,9 @@ export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance): R
       continue
     }
     const combat = state.combat
-    if (!combat || combat.turn > MAX_FIGHT_TURNS) {
+    if (!combat || combat.turn > maxFightTurns) {
+      // 교착으로 끝난 전투도 층별 턴에 남긴다. 빠지면 가장 긴 전투가 평균에서 사라진다.
+      if (combat) floorTurns = [...state.log.floorTurns, { floor: state.floor, tier: FLOORS[state.floor - 1]?.tier ?? 'normal', turns: combat.turn }]
       timedOut = true
       break
     }
@@ -48,14 +55,17 @@ export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance): R
     }
     state = reduceRun(state, { type: 'combat', action }, balance).state
   }
+  if (step >= MAX_STEPS) timedOut = true
+  if (!timedOut) floorTurns = [...state.log.floorTurns]
   return {
     seed,
     outcome: state.phase === 'won' && !timedOut ? 'won' : 'lost',
     floorReached: state.floor,
     bestBurst: state.log.bestBurst,
     purchases: state.log.purchases,
-    floorTurns: state.log.floorTurns,
+    floorTurns,
     casts,
     twoClauseCasts,
+    timedOut,
   }
 }

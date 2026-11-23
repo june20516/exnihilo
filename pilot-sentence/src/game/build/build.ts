@@ -43,7 +43,7 @@ function upgradeAmount(amount: number, level: number): number {
   return value
 }
 
-/** 배율은 단계마다 +0.5(1보다 작은 약화 배율은 그대로), 가산 +3, 독 +1. */
+/** 배율은 단계마다 +0.5(1보다 작은 약화 배율은 그대로), 주는·받는 가산 +3, 독 +1. */
 function upgradeMod<M extends AdjectiveMod | AdverbMod>(mod: M, level: number): M {
   switch (mod.kind) {
     case 'powerMul':
@@ -51,6 +51,7 @@ function upgradeMod<M extends AdjectiveMod | AdverbMod>(mod: M, level: number): 
     case 'incomingMul':
       return mod.value < 1 ? mod : { ...mod, value: mod.value + 0.5 * level }
     case 'outgoingFlat':
+    case 'incomingFlat':
       return { ...mod, amount: mod.amount + 3 * level }
     case 'onHitPoison':
       return { ...mod, amount: mod.amount + level }
@@ -83,4 +84,9 @@ export function effectiveWord(wordId: WordId, build: BuildState): WordDef {
 
 export function wordLookup(build: BuildState): (id: WordId) => WordDef {
   return (id) => effectiveWord(id, build)
+}
+
+/** 강화하면 정의가 실제로 바뀌는 단어인가. 효과 없는 강화(두 번, 1 미만 배율 등)는 상점에 내지 않는다. */
+export function isUpgradable(wordId: WordId): boolean {
+  return JSON.stringify(effectiveWord(wordId, { ...EMPTY_BUILD, upgrades: { [wordId]: 1 } })) !== JSON.stringify(getWord(wordId))
 }

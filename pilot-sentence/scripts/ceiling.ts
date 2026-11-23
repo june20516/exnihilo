@@ -13,7 +13,7 @@
  * 사용: npm run ceiling [-- --runs 200]
  */
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
-import { applyStructure, type BuildState, EMPTY_BUILD, effectiveWord, MAX_SLOTS, type RelicId } from '@/game/build/build'
+import { applyStructure, type BuildState, EMPTY_BUILD, effectiveWord, isUpgradable, MAX_SLOTS, type RelicId } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import { BALANCE } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
@@ -345,10 +345,7 @@ function offerName(o: Offer): string {
 
 /** 지금 살 수 있는 모든 것(상점 운 무시). */
 function everyOffer(deck: readonly WordId[], build: BuildState): Offer[] {
-  const upgradable = [...new Set(deck)].filter((id) => {
-    const t = getWord(id).effect.type
-    return (t === 'verb' || t === 'adjective' || t === 'adverb') && (build.upgrades[id] ?? 0) < 2
-  })
+  const upgradable = [...new Set(deck)].filter((id) => isUpgradable(id) && (build.upgrades[id] ?? 0) < 2)
   const slotOf = { subjectSlot: 'subject', objectSlot: 'object', verbSlot: 'verb' } as const
   return [
     ...WORD_POOL.map((wordId): Offer => ({ kind: 'word', wordId })),

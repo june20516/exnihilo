@@ -71,3 +71,12 @@ test('trainShopWeights는 결정적이다', () => {
   const b = trainShopWeights([1, 2], 2, 7, BALANCE)
   expect(a).toEqual(b)
 })
+
+test('시간 초과로 끝난 전투도 층별 턴에 기록되고 timedOut으로 표시된다(집계에서 빠지지 않게)', () => {
+  const r = simulateRun(1001, noShopBot, BALANCE, 1)
+  expect(r.timedOut).toBe(true)
+  expect(r.outcome).toBe('lost')
+  const last = r.floorTurns[r.floorTurns.length - 1]
+  expect(last?.floor).toBe(r.floorReached)
+  expect(last?.turns).toBeGreaterThan(1)
+})

@@ -1,5 +1,6 @@
+import { PLAYER_POOL } from '@/game/content/words'
 import { getWord, type WordDef } from '@/game/content/words'
-import { applyStructure, type BuildState, EMPTY_BUILD, effectiveWord } from './build'
+import { applyStructure, effectiveWord, EMPTY_BUILD, isUpgradable, type BuildState } from './build'
 
 const up = (upgrades: BuildState['upgrades']): BuildState => ({ ...EMPTY_BUILD, upgrades })
 const damageOf = (def: WordDef) => (def.effect.type === 'verb' ? def.effect.actions.find((a) => a.kind === 'damage') : undefined)
@@ -34,3 +35,21 @@ test('강화: 눈먼 ×0.5는 강화되지 않는다', () => {
 })
 
 test('강화하지 않은 단어는 원래 정의 객체', () => expect(effectiveWord('bite', EMPTY_BUILD)).toBe(getWord('bite')))
+
+test('강화: 받는 가산(단단한)은 단계마다 +3', () => {
+  const mods = (level: 1 | 2) => {
+    const effect = effectiveWord('sturdy', { ...EMPTY_BUILD, upgrades: { sturdy: level } }).effect
+    return effect.type === 'adjective' ? effect.mods : []
+  }
+  expect(mods(1)).toEqual([{ kind: 'incomingFlat', amount: 6 }])
+  expect(mods(2)).toEqual([{ kind: 'incomingFlat', amount: 9 }])
+})
+
+test('강화할 수 있는 단어는 강화하면 정의가 실제로 바뀐다(효과 없는 강화는 팔지 않는다)', () => {
+  for (const word of PLAYER_POOL) {
+    const changed = JSON.stringify(effectiveWord(word.id, { ...EMPTY_BUILD, upgrades: { [word.id]: 1 } })) !== JSON.stringify(word)
+    expect(isUpgradable(word.id), word.id).toBe(changed)
+  }
+  expect(isUpgradable('twice')).toBe(false)
+  expect(isUpgradable('fiercely')).toBe(true)
+})

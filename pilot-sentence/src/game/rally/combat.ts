@@ -1,5 +1,5 @@
 import { type BuildState, EMPTY_BUILD, wordLookup } from '@/game/build/build'
-import { clearBlock, createEntity, type Entity, isAlive, tickEndOfTurn } from '@/kit/core/entity'
+import { addStatus, clearBlock, createEntity, type Entity, isAlive, tickEndOfTurn } from '@/kit/core/entity'
 import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
@@ -54,17 +54,22 @@ export interface RallyState {
 
 const SEAL_ORDER: readonly SlotRole[] = ['subject', 'object', 'verb']
 
-/** 다음 봉인이 걸릴 내 슬롯(예고에 보여 준다). */
-export function nextSealRole(state: RallyState): SlotRole {
-  return SEAL_ORDER[state.sealCount % SEAL_ORDER.length]
+/** 다음 봉인이 걸릴 내 슬롯(예고에 보여 준다). ahead는 이번 적 차례에 이 봉인보다 먼저 봉인할 적의 수. */
+export function nextSealRole(state: RallyState, ahead = 0): SlotRole {
+  return SEAL_ORDER[(state.sealCount + ahead) % SEAL_ORDER.length]
 }
 
-function setSealed(board: Board, role: SlotRole | null): Board {
+/** 첫 절의 이 역할 슬롯을 봉인한다. 이미 걸린 봉인은 그대로 둔다(같은 턴에 여럿이 봉인할 수 있다). */
+function addSeal(board: Board, role: SlotRole): Board {
   return {
     clauses: board.clauses.map((clause, index) =>
-      index !== 0 ? clause : { ...clause, slots: clause.slots.map((slot) => ({ ...slot, sealed: slot.role === role })) },
+      index !== 0 ? clause : { ...clause, slots: clause.slots.map((slot) => (slot.role === role ? { ...slot, sealed: true } : slot)) },
     ),
   }
+}
+
+function clearSeals(board: Board): Board {
+  return { clauses: board.clauses.map((clause) => ({ ...clause, slots: clause.slots.map((slot) => ({ ...slot, sealed: false })) })) }
 }
 
 export interface EnemyScale {
@@ -432,7 +437,7 @@ function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
   // 적 턴 시작: 적의 보호와 지난 봉인이 사라진다.
   let current: RallyState = {
     ...state,
-    board: setSealed(state.board, null),
+    board: clearSeals(state.board),
     entities: state.entities.map((e) => (e.side === 'enemy' && isAlive(e) ? clearBlock(e) : e)),
   }
   const ended = (outcome: 'won' | 'lost'): Result => {
@@ -445,8 +450,15 @@ function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
     if (!isAliveEnemy(current, enemyId) || !spec) continue
     const intent = enemyIntent(current, index)
     if (intent.kind === 'seal') {
+      // 봉인도 행동이다: 얼어 있으면 빙결을 하나 쓰고 무효가 된다(절 실행과 같은 규칙).
+      const self = current.entities.find((e) => e.id === enemyId)
+      if (self && self.statuses.freeze > 0) {
+        current = { ...current, entities: current.entities.map((e) => (e.id === enemyId ? addStatus(e, 'freeze', -1) : e)) }
+        events.push({ type: 'fizzled', clause: 0, reason: 'frozen' })
+        continue
+      }
       const role = nextSealRole(current)
-      current = { ...current, board: setSealed(current.board, role), sealCount: current.sealCount + 1 }
+      current = { ...current, board: addSeal(current.board, role), sealCount: current.sealCount + 1 }
       events.push({ type: 'sealed', role })
       continue
     }

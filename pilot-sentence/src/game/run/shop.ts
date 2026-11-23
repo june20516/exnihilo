@@ -1,5 +1,5 @@
 import { nextFloat, nextInt, type RngState, shuffle } from '@/kit/core/rng'
-import { type BuildState, MAX_SLOTS, type RelicId, type StructureId } from '@/game/build/build'
+import { type BuildState, isUpgradable, MAX_SLOTS, type RelicId, type StructureId } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import { getWord, type Rarity, WORDS, type WordId } from '@/game/content/words'
 import type { SlotRole, WordKind } from '@/game/grammar/frames'
@@ -57,10 +57,6 @@ export function priceOf(offer: Offer): number {
   return BASE_PRICE[offer.kind] + (rarity ? RARITY_ADJUST[rarity] : 0)
 }
 
-function isUpgradable(wordId: WordId): boolean {
-  const type = getWord(wordId).effect.type
-  return type === 'verb' || type === 'adjective' || type === 'adverb'
-}
 
 function upgradeCandidates(deck: readonly WordId[], build: BuildState): WordId[] {
   return [...new Set(deck)].filter((id) => isUpgradable(id) && (build.upgrades[id] ?? 0) < 2)

@@ -52,3 +52,17 @@ test('적 예고: 맞힐 때 거는 독도 수치에 나온다', () => {
   expect(text).toContain('독을 뿜는')
   expect(text).toMatch(/피해 \d+, 독 \+\d+/)
 })
+
+test('적 예고: 같은 턴에 둘이 봉인하면 순서대로 다음 칸을 말한다', () => {
+  const s = startRally('test-seal-two', DECK, 1, BALANCE).state
+  expect(intents(s)).toEqual({ e0: '필경사 1이 당신의 주어 칸을 봉인한다', e1: '필경사 2가 당신의 목적어 칸을 봉인한다' })
+})
+
+test('적 예고: 얼어 있는 적은 빙결로 무효라고 말하고, 봉인 순서에서도 빠진다', () => {
+  const s = startRally('test-seal-two', DECK, 1, BALANCE).state
+  const frozen: RallyState = { ...s, entities: s.entities.map((e) => (e.id === 'e0' ? { ...e, statuses: { ...e.statuses, freeze: 1 } } : e)) }
+  expect(intents(frozen)).toEqual({
+    e0: '필경사 1이 당신의 주어 칸을 봉인한다 — 빙결로 무효',
+    e1: '필경사 2가 당신의 주어 칸을 봉인한다',
+  })
+})

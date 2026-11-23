@@ -71,12 +71,17 @@ export function intentTexts(
   nameOf: (word: PlacedWord) => string,
 ): Record<string, string> {
   const texts: Record<string, string> = {}
+  let sealsAhead = 0
   RALLY_ENCOUNTERS[state.encounterId]?.enemies.forEach((_, index) => {
     const id = `e${index}`
     const intent = enemyIntent(state, index)
+    const self = state.entities.find((e) => e.id === id)
+    // 얼어 있는 적은 이번 차례에 빙결을 하나 쓰고 아무것도 하지 못한다(봉인 포함).
+    const frozenNote = self && self.statuses.freeze > 0 ? ' — 빙결로 무효' : ''
     if (intent.kind === 'seal') {
-      const name = state.entities.find((e) => e.id === id)?.name ?? '적'
-      texts[id] = `${attachParticle(name, 'subject')} 당신의 ${ROLE_NAMES[nextSealRole(state)]} 칸을 봉인한다`
+      const name = self?.name ?? '적'
+      texts[id] = `${attachParticle(name, 'subject')} 당신의 ${ROLE_NAMES[nextSealRole(state, sealsAhead)]} 칸을 봉인한다${frozenNote}`
+      if (!frozenNote) sealsAhead++
       return
     }
     const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, ENEMY_MODIFIER_SLOTS), 0, nameOf))
@@ -90,7 +95,7 @@ export function intentTexts(
       if (e.type === 'grew' && e.entityId === id) return [`최대 HP +${e.amount}`]
       return []
     })
-    texts[id] = numbers.length > 0 ? `${sentence} — ${numbers.join(', ')}` : sentence
+    texts[id] = frozenNote ? `${sentence}${frozenNote}` : numbers.length > 0 ? `${sentence} — ${numbers.join(', ')}` : sentence
   })
   return texts
 }

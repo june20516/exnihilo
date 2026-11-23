@@ -54,3 +54,19 @@ test('봉인 대상은 주어 → 목적어 → 동사 순환, 예고에서 미�
   }
   expect(order).toEqual(['subject', 'object', 'verb', 'subject'])
 })
+
+test('얼어 있는 적은 봉인하지 못하고, 빙결이 하나 소모된다', () => {
+  const s = startRally('test-seal', DECK, 1, BALANCE).state
+  const frozen: RallyState = { ...s, entities: s.entities.map((e) => (e.side === 'enemy' ? { ...e, statuses: { ...e.statuses, freeze: 1 } } : e)) }
+  const r = act(frozen, { type: 'endTurn' })
+  expect(sealed(r.state)).toEqual([])
+  expect(r.state.sealCount).toBe(0)
+  expect(r.state.entities.find((e) => e.side === 'enemy')?.statuses.freeze).toBe(0)
+  expect(r.events).toContainEqual({ type: 'fizzled', clause: 0, reason: 'frozen' })
+})
+
+test('같은 턴에 둘이 봉인하면 두 칸이 모두 봉인된다(앞 봉인을 덮어쓰지 않는다)', () => {
+  const r = act(startRally('test-seal-two', DECK, 1, BALANCE).state, { type: 'endTurn' })
+  expect(sealed(r.state).sort()).toEqual(['object', 'subject'])
+  expect(r.state.sealCount).toBe(2)
+})

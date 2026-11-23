@@ -56,3 +56,10 @@ RALLY_ENCOUNTERS['test-seal'] = {
   tier: 'boss',
   enemies: [{ defId: 'spider', name: '필경사', hp: 60, row: 'front', portrait: '', intents: [{ kind: 'seal' }, intentClause('spider', 'testBite')] }],
 }
+/** 봉인만 하는 적 둘. */
+RALLY_ENCOUNTERS['test-seal-two'] = {
+  id: 'test-seal-two',
+  name: '봉인하는 필경사 둘',
+  tier: 'boss',
+  enemies: [1, 2].map((n) => ({ defId: 'spider', name: `필경사 ${n}`, hp: 60, row: 'front' as const, portrait: '', intents: [{ kind: 'seal' as const }] })),
+}
