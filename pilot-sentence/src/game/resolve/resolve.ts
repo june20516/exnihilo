@@ -31,7 +31,7 @@ export function resolveTargets(word: PlacedWord, entities: readonly Entity[]): {
 }
 
 /** 슬롯에 붙은 형용사들을 한 묶음으로 합친 값. 그 슬롯에 있는 개체의 성질이 된다. */
-interface SlotMods {
+export interface SlotMods {
   readonly outgoingMul: number
   readonly outgoingFlat: number
   readonly incomingMul: number
@@ -40,7 +40,7 @@ interface SlotMods {
   readonly selfDamageAfter: number
 }
 
-function collectSlotMods(slot: SlotState): SlotMods {
+export function collectSlotMods(slot: SlotState): SlotMods {
   const mods: AdjectiveMod[] = slot.modifiers.flatMap((m) => {
     const effect = m ? getWord(m.wordId).effect : null
     return effect?.type === 'adjective' ? effect.mods : []
@@ -59,14 +59,14 @@ function collectSlotMods(slot: SlotState): SlotMods {
   }
 }
 
-interface AdverbSummary {
+export interface AdverbSummary {
   readonly power: number
   readonly repeat: number
   readonly executionBonus: boolean
   readonly ignoreFreeze: boolean
 }
 
-function collectAdverbs(verbSlot: SlotState): AdverbSummary {
+export function collectAdverbs(verbSlot: SlotState): AdverbSummary {
   const mods = verbSlot.modifiers.flatMap((m) => {
     const effect = m ? getWord(m.wordId).effect : null
     return effect?.type === 'adverb' ? effect.mods : []
