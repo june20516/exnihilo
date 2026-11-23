@@ -6,7 +6,7 @@ import { type ClauseSpec, RALLY_ENCOUNTERS, type RallyIntent } from '@/game/cont
 import { WORDS, type WordDef, type WordId } from '@/game/content/words'
 
 const testVerb = (id: WordId, text: string, kind: WordDef['kind'], effect: WordDef['effect']): WordDef => ({
-  id, text, kind, effect, cost: 1, ink: 2, enemyOnly: true, rarity: 'common',
+  id, text, kind, effect, enemyOnly: true, rarity: 'common',
 })
 
 WORDS['testBite'] = testVerb('testBite', '물어뜯는다', 'verbTransitive', { type: 'verb', range: 'melee', actions: [{ kind: 'damage', amount: 7 }] })
@@ -48,4 +48,11 @@ RALLY_ENCOUNTERS['test-pair'] = {
   enemies: [1, 2].map((n) => ({
     defId: 'spiderling', name: `새끼 거미 ${n}`, hp: 10, row: 'front' as const, portrait: '', intents: [intentClause('spiderling', 'testNibble')],
   })),
+}
+/** 봉인 → 물어뜯는다 7 (HP 60). */
+RALLY_ENCOUNTERS['test-seal'] = {
+  id: 'test-seal',
+  name: '시험 필경사',
+  tier: 'boss',
+  enemies: [{ defId: 'spider', name: '필경사', hp: 60, row: 'front', portrait: '', intents: [{ kind: 'seal' }, intentClause('spider', 'testBite')] }],
 }

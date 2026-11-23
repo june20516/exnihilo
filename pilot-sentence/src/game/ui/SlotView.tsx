@@ -21,17 +21,6 @@ interface SlotViewProps {
   onModifierClick: (index: number) => void
 }
 
-function InkDots({ word }: { word: PlacedWord }) {
-  if (word.owner !== 'player' || word.inkLeft === null) return null
-  return (
-    <span className="flex gap-0.5" title={`잉크 ${word.inkLeft}`}>
-      {Array.from({ length: word.inkLeft }, (_, i) => (
-        <span key={i} className="h-1.5 w-1.5 rounded-full bg-secondary" />
-      ))}
-    </span>
-  )
-}
-
 export function Droppable({
   id,
   children,
@@ -82,7 +71,6 @@ export function SlotView(props: SlotViewProps) {
                       <span className={`font-headline text-sm font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
                         {nameOf(modifier)}
                       </span>
-                      <InkDots word={modifier} />
                     </>
                   ) : (
                     <span className="text-xs text-outline-variant">＋</span>
@@ -119,7 +107,6 @@ export function SlotView(props: SlotViewProps) {
               </span>
               <span className="flex items-center gap-1 font-label text-[10px] text-on-surface-variant">
                 {HEAD_LABELS[slot.head.owner === 'blank' ? (isVerb ? 'emptyVerb' : 'implied') : slot.head.owner]}
-                <InkDots word={slot.head} />
               </span>
             </button>
           )}

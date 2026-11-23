@@ -15,7 +15,7 @@ const V = { clause: 0, role: 'verb' } as const
 
 function put(board: Board, at: SlotAddress, wordId: WordId, extra: Partial<PlacedWord> & { index?: number } = {}): Board {
   const { index, ...rest } = extra
-  const word: PlacedWord = { wordId, owner: 'player', inkLeft: 2, instanceId: wordId, targetEntityId: null, ...rest }
+  const word: PlacedWord = { wordId, owner: 'player', instanceId: wordId, targetEntityId: null, ...rest }
   const r = placeWord(board, at, word, index)
   if (!r.ok) throw new Error(`배치 실패: ${wordId} → ${r.reason}`)
   return r.board
@@ -34,7 +34,7 @@ const find = (entities: readonly Entity[], id: string) => {
 describe('대상 해석', () => {
   test('플레이어, 적 정의, 소환 요청, 지목', () => {
     const es = [player(), spider()]
-    const w: PlacedWord = { wordId: 'you', owner: 'player', inkLeft: 2, instanceId: 'a', targetEntityId: null }
+    const w: PlacedWord = { wordId: 'you', owner: 'player', instanceId: 'a', targetEntityId: null }
     expect(resolveTargets(w, es)).toEqual({ ids: ['p'], summon: null })
     expect(resolveTargets({ ...w, wordId: 'spider' }, es)).toEqual({ ids: ['e1'], summon: null })
     expect(resolveTargets({ ...w, wordId: 'scarecrow' }, es)).toEqual({ ids: [], summon: 'scarecrow' })
@@ -43,7 +43,7 @@ describe('대상 해석', () => {
 
   test('우리는 나와 아군 토큰, 모두는 살아 있는 전원', () => {
     const es = [player(), spider(), scarecrow(), { ...createEntity({ id: 'e2', defId: 'spider', name: '거미', side: 'enemy', hp: 5 }), hp: 0 }]
-    const w: PlacedWord = { wordId: 'allies', owner: 'player', inkLeft: 2, instanceId: 'a', targetEntityId: null }
+    const w: PlacedWord = { wordId: 'allies', owner: 'player', instanceId: 'a', targetEntityId: null }
     expect(resolveTargets(w, es).ids).toEqual(['p', 't9'])
     expect(resolveTargets({ ...w, wordId: 'everyone' }, es).ids).toEqual(['p', 'e1', 't9'])
   })

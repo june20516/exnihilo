@@ -6,8 +6,6 @@ export interface PlacedWord {
   readonly wordId: WordId
   /** blank: 내 문장의 빈칸(생략된 주어·목적어, 빈 동사). */
   readonly owner: 'player' | 'enemy' | 'blank'
-  /** 남은 실행 횟수. 적 단어는 null(마르지 않음). */
-  readonly inkLeft: number | null
   /** 플레이어 카드의 instanceId. 적 단어는 null. */
   readonly instanceId: string | null
   /** [지목]처럼 놓을 때 고른 대상. */
@@ -38,7 +36,7 @@ export type PlaceResult =
   | { readonly ok: false; readonly reason: 'kindMismatch' | 'modifiersFull' | 'slotInactive' }
 
 function enemyWord(wordId: WordId): PlacedWord {
-  return { wordId, owner: 'enemy', inkLeft: null, instanceId: null, targetEntityId: null }
+  return { wordId, owner: 'enemy', instanceId: null, targetEntityId: null }
 }
 
 export function buildBoard(spec: readonly ClauseSpec[], maxModifiers: number): Board {

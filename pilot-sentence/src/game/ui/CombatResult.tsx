@@ -14,7 +14,7 @@ export function CombatResult({ outcome, onRestart }: CombatResultProps) {
         <span className={`font-headline text-5xl font-black ${won ? 'text-secondary' : 'text-error'}`}>
           {won ? '승리' : '패배'}
         </span>
-        <p className="text-on-surface-variant">{won ? '문장이 당신의 뜻대로 완성되었습니다.' : '잉크가 다했습니다.'}</p>
+        <p className="text-on-surface-variant">{won ? '문장이 당신의 뜻대로 완성되었습니다.' : '탐험가가 쓰러졌습니다.'}</p>
         <button
           type="button"
           onClick={onRestart}

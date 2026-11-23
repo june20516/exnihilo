@@ -41,7 +41,6 @@ export type AdverbMod =
   | { readonly kind: 'repeat'; readonly count: number }
   | { readonly kind: 'executionBonus' }
   | { readonly kind: 'ignoreFreeze' }
-  | { readonly kind: 'inkBonus'; readonly amount: number }
 
 export type WordEffect =
   | { readonly type: 'target'; readonly ref: TargetRef }
@@ -58,22 +57,18 @@ export interface WordDef {
   readonly id: WordId
   readonly text: string
   readonly kind: WordKind
-  /** null이면 사용할 수 없는 단어(오염). */
-  readonly cost: number | null
-  readonly ink: number
   readonly rarity: Rarity
   readonly effect: WordEffect
   readonly enemyOnly: boolean
 }
 
-type WordInput = Omit<WordDef, 'cost' | 'ink' | 'enemyOnly' | 'rarity'> &
-  Partial<Pick<WordDef, 'cost' | 'ink' | 'enemyOnly' | 'rarity'>>
+type WordInput = Omit<WordDef, 'enemyOnly' | 'rarity'> & Partial<Pick<WordDef, 'enemyOnly' | 'rarity'>>
 
 function defineWords(inputs: readonly WordInput[]): Record<WordId, WordDef> {
   const words: Record<WordId, WordDef> = {}
   for (const input of inputs) {
     if (words[input.id]) throw new Error(`중복 단어 id: ${input.id}`)
-    words[input.id] = { cost: 1, ink: 2, enemyOnly: false, rarity: 'common', ...input }
+    words[input.id] = { enemyOnly: false, rarity: 'common', ...input }
   }
   return words
 }
@@ -89,15 +84,15 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'you', text: '당신', kind: 'target', rarity: 'starter', effect: target({ kind: 'player' }) },
   { id: 'mark', text: '지목', kind: 'target', rarity: 'starter', effect: target({ kind: 'chosenEnemy' }) },
   { id: 'scarecrow', text: '허수아비', kind: 'target', rarity: 'starter', effect: target({ kind: 'token', tokenId: 'scarecrow' }) },
-  { id: 'golem', text: '돌골렘', kind: 'target', cost: 2, effect: target({ kind: 'token', tokenId: 'golem' }) },
-  { id: 'allies', text: '우리', kind: 'target', cost: 2, rarity: 'uncommon', effect: target({ kind: 'allies' }) },
-  { id: 'everyone', text: '모두', kind: 'target', cost: 3, rarity: 'rare', effect: target({ kind: 'everyone' }) },
+  { id: 'golem', text: '돌골렘', kind: 'target', effect: target({ kind: 'token', tokenId: 'golem' }) },
+  { id: 'allies', text: '우리', kind: 'target', rarity: 'uncommon', effect: target({ kind: 'allies' }) },
+  { id: 'everyone', text: '모두', kind: 'target', rarity: 'rare', effect: target({ kind: 'everyone' }) },
   // 타동사: 공격
   { id: 'bite', text: '물어뜯는다', kind: 'verbTransitive', rarity: 'starter', effect: verb('melee', { kind: 'damage', amount: 6 }) },
-  { id: 'slash', text: '벤다', kind: 'verbTransitive', cost: 2, effect: verb('melee', { kind: 'damage', amount: 10 }) },
-  { id: 'devour', text: '삼킨다', kind: 'verbTransitive', cost: 2, rarity: 'uncommon', effect: verb('melee', { kind: 'damage', amount: 5, lifesteal: true }) },
+  { id: 'slash', text: '벤다', kind: 'verbTransitive', effect: verb('melee', { kind: 'damage', amount: 10 }) },
+  { id: 'devour', text: '삼킨다', kind: 'verbTransitive', rarity: 'uncommon', effect: verb('melee', { kind: 'damage', amount: 5, lifesteal: true }) },
   {
-    id: 'sacrifice', text: '희생한다', kind: 'verbTransitive', cost: 2, rarity: 'uncommon',
+    id: 'sacrifice', text: '희생한다', kind: 'verbTransitive', rarity: 'uncommon',
     effect: verb('ranged', { kind: 'loseHp', amount: 6, to: 'subject' }, { kind: 'damage', amount: 15 }),
   },
   {
@@ -108,20 +103,20 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'guard', text: '막는다', kind: 'verbTransitive', rarity: 'starter', effect: verb('support', { kind: 'block', amount: 6, to: 'subject' }) },
   { id: 'mend', text: '치유한다', kind: 'verbTransitive', rarity: 'starter', effect: verb('support', { kind: 'heal', amount: 6, to: 'object' }) },
   { id: 'scare', text: '겁준다', kind: 'verbTransitive', rarity: 'starter', effect: verb('ranged', { kind: 'status', status: 'weak', amount: 2, to: 'object' }) },
-  { id: 'curse', text: '저주한다', kind: 'verbTransitive', cost: 2, effect: verb('ranged', { kind: 'status', status: 'vulnerable', amount: 2, to: 'object' }) },
+  { id: 'curse', text: '저주한다', kind: 'verbTransitive', effect: verb('ranged', { kind: 'status', status: 'vulnerable', amount: 2, to: 'object' }) },
   { id: 'poisonFeed', text: '독을 먹인다', kind: 'verbTransitive', effect: verb('melee', { kind: 'status', status: 'poison', amount: 4, to: 'object' }) },
   // 자동사
   { id: 'sleep', text: '잠든다', kind: 'verbIntransitive', effect: verb('support', { kind: 'freeze', to: 'subject' }) },
   { id: 'rage', text: '분노한다', kind: 'verbIntransitive', rarity: 'starter', effect: verb('support', { kind: 'status', status: 'strength', amount: 2, to: 'subject' }) },
   { id: 'hide', text: '숨는다', kind: 'verbIntransitive', rarity: 'starter', effect: verb('support', { kind: 'block', amount: 10, to: 'subject' }) },
   { id: 'collapse', text: '무너진다', kind: 'verbIntransitive', effect: verb('support', { kind: 'loseHp', amount: 10, to: 'subject' }) },
-  { id: 'swell', text: '부풀어 오른다', kind: 'verbIntransitive', cost: 2, effect: verb('support', { kind: 'grow', amount: 6, to: 'subject' }) },
+  { id: 'swell', text: '부풀어 오른다', kind: 'verbIntransitive', effect: verb('support', { kind: 'grow', amount: 6, to: 'subject' }) },
   { id: 'recover', text: '정신 차린다', kind: 'verbIntransitive', effect: verb('support', { kind: 'cleanse', to: 'subject' }) },
   // 형용사
   { id: 'blind', text: '눈먼', kind: 'adjective', rarity: 'starter', effect: adjective({ kind: 'outgoingDamageMul', value: 0.5 }) },
   { id: 'venomous', text: '독을 뿜는', kind: 'adjective', rarity: 'starter', effect: adjective({ kind: 'onHitPoison', amount: 2 }) },
   { id: 'sturdy', text: '단단한', kind: 'adjective', effect: adjective({ kind: 'incomingFlat', amount: 3 }) },
-  { id: 'giant', text: '거대한', kind: 'adjective', cost: 2, effect: adjective({ kind: 'outgoingDamageMul', value: 1.5 }) },
+  { id: 'giant', text: '거대한', kind: 'adjective', effect: adjective({ kind: 'outgoingDamageMul', value: 1.5 }) },
   { id: 'cracked', text: '금이 간', kind: 'adjective', effect: adjective({ kind: 'incomingMul', value: 1.5 }) },
   {
     id: 'hungry', text: '굶주린', kind: 'adjective', rarity: 'uncommon',
@@ -129,9 +124,9 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   },
   // 부사
   { id: 'fiercely', text: '격렬하게', kind: 'adverb', rarity: 'starter', effect: adverb({ kind: 'powerMul', value: 1.5 }) },
-  { id: 'twice', text: '두 번', kind: 'adverb', cost: 3, rarity: 'rare', ink: 1, effect: adverb({ kind: 'repeat', count: 2 }) },
-  { id: 'slowly', text: '천천히', kind: 'adverb', effect: adverb({ kind: 'powerMul', value: 0.5 }, { kind: 'inkBonus', amount: 2 }) },
-  { id: 'again', text: '거듭', kind: 'adverb', cost: 2, rarity: 'uncommon', effect: adverb({ kind: 'executionBonus' }) },
+  { id: 'twice', text: '두 번', kind: 'adverb', rarity: 'rare', effect: adverb({ kind: 'repeat', count: 2 }) },
+  { id: 'slowly', text: '천천히', kind: 'adverb', effect: adverb({ kind: 'powerMul', value: 0.5 }) },
+  { id: 'again', text: '거듭', kind: 'adverb', rarity: 'uncommon', effect: adverb({ kind: 'executionBonus' }) },
   { id: 'persist', text: '기어이', kind: 'adverb', effect: adverb({ kind: 'ignoreFreeze' }) },
   // 적 전용
   { id: 'spider', text: '거미', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'spider' }) },
@@ -167,7 +162,7 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'impliedSubject', text: '당신', kind: 'target', enemyOnly: true, effect: target({ kind: 'player' }) },
   { id: 'impliedObject', text: '대상', kind: 'target', enemyOnly: true, effect: target({ kind: 'chosenEnemy' }) },
   { id: 'blankVerb', text: '___', kind: 'verbTransitive', enemyOnly: true, effect: verb('support') },
-  { id: 'web', text: '거미줄', kind: 'junk', cost: null, enemyOnly: true, effect: { type: 'junk' } },
+  { id: 'web', text: '거미줄', kind: 'junk', enemyOnly: true, effect: { type: 'junk' } },
 ])
 
 export function getWord(id: WordId): WordDef {

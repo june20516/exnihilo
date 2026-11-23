@@ -1,3 +1,4 @@
+import { PLAYER_POOL } from '@/game/content/words'
 import { getWord } from '@/game/content/words'
 import { describeWord } from './describe'
 
@@ -24,4 +25,8 @@ test.each([
   ['web', '사용할 수 없다'],
 ])('describeWord(%s)', (id, expected) => {
   expect(describeWord(getWord(id))).toBe(expected)
+})
+
+test('v2에는 잉크·비용이 없다: 어떤 카드 설명에도 잉크가 나오지 않는다', () => {
+  for (const word of PLAYER_POOL) expect(describeWord(word), word.id).not.toContain('잉크')
 })

@@ -64,8 +64,6 @@ function describeAdverb(mod: AdverbMod): string {
       return '지금까지 실행 횟수만큼 위력 +1'
     case 'ignoreFreeze':
       return '잠든 주어도 실행한다'
-    case 'inkBonus':
-      return `잉크 유지 +${mod.amount}`
   }
 }
 

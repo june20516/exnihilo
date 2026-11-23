@@ -43,7 +43,6 @@ export function DeckEditor({ deck, onSave, onClose }: DeckEditorProps) {
         className="flex items-center gap-2 rounded bg-surface-container px-2 py-1"
         data-testid={`pool-${word.id}`}
       >
-        <span className="w-5 text-center font-label text-xs text-secondary">{word.cost}</span>
         <span className={`w-24 font-headline text-sm font-bold ${KIND_STYLES[word.kind].text}`}>{word.text}</span>
         <span className="flex-1 truncate text-[11px] text-on-surface-variant" title={describeWord(word)}>
           {describeWord(word)}

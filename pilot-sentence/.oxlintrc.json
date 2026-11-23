@@ -3,6 +3,7 @@
   "plugins": ["react", "typescript", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }],
     "typescript/no-explicit-any": "error",
     "no-restricted-properties": ["error", { "object": "Math", "property": "random", "message": "시드 RNG(@/kit/core/rng)를 쓰세요." }]

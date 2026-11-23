@@ -321,7 +321,7 @@ function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }
   const card = state.deck.hand.find((c) => c.instanceId === action.instanceId)
   if (!card) return reject(state, 'unplayable', at)
   const def = getWord(card.wordId)
-  if (def.cost === null || def.enemyOnly) return reject(state, 'unplayable', at)
+  if (def.kind === 'junk' || def.enemyOnly) return reject(state, 'unplayable', at)
   if (!state.board.clauses[at.clause]) return reject(state, 'slotInactive', at)
   if (getSlot(state.board, at).sealed) return reject(state, 'slotSealed', at)
 
@@ -332,7 +332,7 @@ function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }
     targetEntityId = requested
   }
 
-  const placed: PlacedWord = { wordId: card.wordId, owner: 'player', inkLeft: null, instanceId: card.instanceId, targetEntityId }
+  const placed: PlacedWord = { wordId: card.wordId, owner: 'player', instanceId: card.instanceId, targetEntityId }
   const result = placeWord(state.board, at, placed, action.modifierIndex)
   if (!result.ok) return reject(state, result.reason, at)
   const taken = takeFromHand(state.deck, card.instanceId)
@@ -386,7 +386,7 @@ function connect(state: RallyState, instanceId: string): Result {
   if (!taken) return reject(state, 'unplayable')
   const previous = state.connective ? cardsFrom([state.connective]) : []
   const board = state.board.clauses.length > 1 ? state.board : { clauses: [...state.board.clauses, blankClause(state.build.slots)] }
-  const connective: PlacedWord = { wordId: card.wordId, owner: 'player', inkLeft: null, instanceId, targetEntityId: null }
+  const connective: PlacedWord = { wordId: card.wordId, owner: 'player', instanceId, targetEntityId: null }
   return {
     state: { ...state, board, connective, deck: { ...taken.deck, hand: [...taken.deck.hand, ...previous] } },
     events: [{ type: 'connected', wordId: card.wordId }],

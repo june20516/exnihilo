@@ -10,8 +10,8 @@ export function isModifierWord(wordId: WordId): boolean {
 
 /** 선택한 단어를 이 슬롯의 head에 놓을 수 있는가. */
 export function canPlaceHead(board: Board, at: SlotAddress, wordId: WordId): boolean {
-  if (isModifierWord(wordId) || getWord(wordId).cost === null) return false
-  return placeWord(board, at, { wordId, owner: 'player', inkLeft: 1, instanceId: null, targetEntityId: null }).ok
+  if (isModifierWord(wordId) || getWord(wordId).kind === 'junk') return false
+  return placeWord(board, at, { wordId, owner: 'player', instanceId: null, targetEntityId: null }).ok
 }
 
 /** 선택한 단어를 이 슬롯의 수식어 칸에 놓을 수 있는가. */
@@ -42,7 +42,7 @@ export function parseDropId(id: string): { at: SlotAddress; modifierIndex?: numb
 
 /** 현재 문장의 어느 슬롯(head 또는 수식어 칸)에든 놓을 수 있는가. 문형 불일치로 쓸 수 없는 단어를 표시하는 데 쓴다. */
 export function canPlayAnywhere(board: Board, wordId: WordId): boolean {
-  if (getWord(wordId).cost === null) return false
+  if (getWord(wordId).kind === 'junk') return false
   return board.clauses.some((clause, clauseIndex) =>
     clause.slots.some((slot) => {
       const at = { clause: clauseIndex, role: slot.role }

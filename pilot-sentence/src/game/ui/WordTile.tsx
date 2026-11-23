@@ -47,7 +47,7 @@ export function WordTile({ def, instanceId, selected, marked, disabled, draggabl
         ${playable ? '' : 'opacity-50'} disabled:cursor-not-allowed`}
     >
       <div className="flex items-center justify-between">
-        <span className="font-label text-[10px] text-error">{def.cost === null ? '낼 수 없음' : ''}</span>
+        <span className="font-label text-[10px] text-error">{def.kind === 'junk' ? '낼 수 없음' : ''}</span>
         <span className={`rounded px-1.5 py-0.5 font-label text-[10px] font-bold ${style.tag}`}>
           {KIND_LABELS[def.kind]}
         </span>
@@ -57,7 +57,7 @@ export function WordTile({ def, instanceId, selected, marked, disabled, draggabl
       </span>
       <p className="rounded bg-surface-container-lowest/60 p-1 text-[11px] leading-tight text-on-surface-variant">
         {describeWord(def)}
-        {!playable && def.cost !== null && (
+        {!playable && def.kind !== 'junk' && (
           <span className="mt-1 block text-error" data-testid="unplayable-note">
             이 문장에서는 쓸 수 없다
           </span>

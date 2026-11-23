@@ -167,36 +167,47 @@ test('최대 한 방은 적의 남은 HP에 잘리지 않은 문장의 위력이
   expect(echoed.log.bestBurst).toBe(12)
 })
 
-test('카드 보존: 무작위 행동 200회 동안 내 카드 instanceId 집합이 변하지 않는다', () => {
+test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 동안 내 카드 instanceId 집합이 변하지 않는다(연결어·봉인 포함): %s', (encounterId) => {
   const ids = (s: RallyState) =>
     [...s.deck.hand, ...s.deck.drawPile, ...s.deck.discardPile].map((c) => c.instanceId)
       .concat(playerWordsOnBoard(s.board).flatMap((w) => (w.instanceId ? [w.instanceId] : [])))
+      .concat(s.connective?.instanceId ? [s.connective.instanceId] : [])
       .sort()
-  let s = start('test-pair')
+  let s = startRally(encounterId, [...DECK, 'and', 'so'], 123, BALANCE).state
   s = { ...s, entities: s.entities.map((e) => (e.side === 'ally' ? { ...e, hp: 9999, maxHp: 9999 } : { ...e, hp: 9999, maxHp: 9999 })) }
   const expected = ids(s)
   let rng: RngState = createRng(7)
   const roles = ['subject', 'object', 'verb'] as const
+  let connected = 0
+  let sealed = 0
   for (let i = 0; i < 200 && s.phase === 'player'; i++) {
-    const [kind, r1] = nextInt(rng, 0, 5)
+    const [kind, r1] = nextInt(rng, 0, 7)
     const [pick, r2] = nextInt(r1, 0, Math.max(0, s.deck.hand.length - 1))
     const [roleIndex, r3] = nextInt(r2, 0, 2)
     const [mod, r4] = nextInt(r3, -1, 1)
-    rng = r4
+    const [clause, r5] = nextInt(r4, 0, 1)
+    rng = r5
     const card = s.deck.hand[pick]
     const actions: RallyAction[] = [
       card
-        ? { type: 'place', instanceId: card.instanceId, at: { clause: 0, role: roles[roleIndex] }, modifierIndex: mod < 0 ? undefined : mod }
+        ? { type: 'place', instanceId: card.instanceId, at: { clause, role: roles[roleIndex] }, modifierIndex: mod < 0 ? undefined : mod }
         : { type: 'endTurn' },
       card ? { type: 'discard', instanceIds: [card.instanceId] } : { type: 'clear' },
       { type: 'clear' },
       { type: 'cast' },
       { type: 'endTurn' },
       { type: 'target', entityId: 'e1' },
+      card ? { type: 'connect', instanceId: card.instanceId } : { type: 'clear' },
+      { type: 'disconnect' },
     ]
     s = act(s, actions[kind]).state
     expect(ids(s)).toEqual(expected)
+    if (s.connective) connected++
+    if (s.board.clauses.some((c) => c.slots.some((slot) => slot.sealed))) sealed++
   }
+  // 속성이 헛돌지 않도록: 연결어는 실제로 놓였고, 봉인 조우에서는 봉인이 실제로 걸렸다.
+  expect(connected).toBeGreaterThan(0)
+  if (encounterId === 'test-seal') expect(sealed).toBeGreaterThan(0)
   expect(getSlot(s.board, V)).toBeDefined()
 })
 

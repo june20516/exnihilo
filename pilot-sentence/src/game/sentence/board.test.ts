@@ -8,8 +8,8 @@ const spiderBoard = () => buildBoard(SPIDER_SENTENCE, 2)
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const V = { clause: 0, role: 'verb' } as const
-const pw = (wordId: WordId, ink = 2, id = 'i1'): PlacedWord => ({
-  wordId, owner: 'player', inkLeft: ink, instanceId: id, targetEntityId: null,
+const pw = (wordId: WordId, id = 'i1'): PlacedWord => ({
+  wordId, owner: 'player', instanceId: id, targetEntityId: null,
 })
 
 test('초기 보드: 원문이 현재값으로 복사되고 수식어 칸은 maxModifiers 길이', () => {
@@ -38,10 +38,10 @@ test('부사는 명사 슬롯에, 형용사는 동사 슬롯에 붙일 수 없�
 })
 
 test('형용사는 주어 수식어의 빈 위치로, 꽉 차면 modifiersFull', () => {
-  const a = placeWord(spiderBoard(), S, pw('blind', 2, 'a'))
+  const a = placeWord(spiderBoard(), S, pw('blind', 'a'))
   if (!a.ok) throw new Error('배치 실패')
   expect(getSlot(a.board, S).modifiers.map((m) => m?.wordId ?? null)).toEqual(['venomous', 'blind'])
-  expect(placeWord(a.board, S, pw('blind', 2, 'b'))).toEqual({ ok: false, reason: 'modifiersFull' })
+  expect(placeWord(a.board, S, pw('blind', 'b'))).toEqual({ ok: false, reason: 'modifiersFull' })
 })
 
 test('modifierIndex를 주면 그 위치의 수식어를 교체', () => {
@@ -52,9 +52,9 @@ test('modifierIndex를 주면 그 위치의 수식어를 교체', () => {
 })
 
 test('같은 슬롯을 두 번 덮으면 앞서 놓은 플레이어 단어가 displaced', () => {
-  const a = placeWord(spiderBoard(), S, pw('you', 2, 'a'))
+  const a = placeWord(spiderBoard(), S, pw('you', 'a'))
   if (!a.ok) throw new Error('배치 실패')
-  const b = placeWord(a.board, S, pw('scarecrow', 2, 'b'))
+  const b = placeWord(a.board, S, pw('scarecrow', 'b'))
   if (!b.ok) throw new Error('배치 실패')
   expect(b.displaced).toEqual([expect.objectContaining({ instanceId: 'a' })])
   expect(getSlot(b.board, S).originalHead.wordId).toBe('spider')
@@ -94,13 +94,13 @@ describe('동사가 문형을 결정', () => {
   test('비활성 슬롯에 놓으면 slotInactive', () => {
     const r = placeWord(spiderBoard(), V, pw('rage'))
     if (!r.ok) throw new Error('배치 실패')
-    expect(placeWord(r.board, O, pw('mark', 2, 'x'))).toEqual({ ok: false, reason: 'slotInactive' })
+    expect(placeWord(r.board, O, pw('mark', 'x'))).toEqual({ ok: false, reason: 'slotInactive' })
   })
 
   test('타동사로 되돌리면 원래 목적어가 다시 활성', () => {
-    const a = placeWord(spiderBoard(), V, pw('rage', 2, 'a'))
+    const a = placeWord(spiderBoard(), V, pw('rage', 'a'))
     if (!a.ok) throw new Error('배치 실패')
-    const b = placeWord(a.board, V, pw('slash', 2, 'b'))
+    const b = placeWord(a.board, V, pw('slash', 'b'))
     if (!b.ok) throw new Error('배치 실패')
     expect(isSlotActive(b.board, O)).toBe(true)
     expect(getSlot(b.board, O).head.wordId).toBe('you')

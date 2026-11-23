@@ -11,7 +11,7 @@ export const BLANK_VERB: WordId = 'blankVerb'
 const BLANK_HEADS = { subject: BLANK_SUBJECT, object: BLANK_OBJECT, verb: BLANK_VERB } as const
 
 function blankWord(wordId: WordId, targetEntityId: string | null = null): PlacedWord {
-  return { wordId, owner: 'blank', inkLeft: null, instanceId: null, targetEntityId }
+  return { wordId, owner: 'blank', instanceId: null, targetEntityId }
 }
 
 export function isBlank(word: PlacedWord): boolean {
@@ -86,7 +86,7 @@ export function materialize(board: Board, targetEnemyId: string | null, options:
 /** 적의 예고 문장. 주어를 그 적 하나로 고정한다(같은 종류의 적이 한꺼번에 행동하지 않도록). */
 export function enemyBoard(spec: ClauseSpec, enemyId: string, maxModifiers: number): Board {
   const board = buildBoard([spec], maxModifiers)
-  const self: PlacedWord = { wordId: 'mark', owner: 'enemy', inkLeft: null, instanceId: null, targetEntityId: enemyId }
+  const self: PlacedWord = { wordId: 'mark', owner: 'enemy', instanceId: null, targetEntityId: enemyId }
   return {
     clauses: board.clauses.map((clause) => ({
       ...clause,

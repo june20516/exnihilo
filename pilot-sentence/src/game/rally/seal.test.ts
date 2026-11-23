@@ -3,14 +3,8 @@ import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import { getSlot } from '@/game/sentence/board'
 import { type CardInst, nextSealRole, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
-import { intentClause } from './testFixtures'
+import './testFixtures'
 
-RALLY_ENCOUNTERS['test-seal'] = {
-  id: 'test-seal',
-  name: '시험 필경사',
-  tier: 'boss',
-  enemies: [{ defId: 'spider', name: '필경사', hp: 60, row: 'front', portrait: '', intents: [{ kind: 'seal' }, intentClause('spider', 'testBite')] }],
-}
 RALLY_ENCOUNTERS['test-seal-only'] = {
   id: 'test-seal-only',
   name: '봉인만 하는 필경사',

@@ -9,7 +9,7 @@ const P = createEntity({ id: 'p', defId: 'player', name: '탐험가', side: 'all
 const E0 = createEntity({ id: 'e0', defId: 'spiderling', name: '새끼 거미 1', side: 'enemy', hp: 10 })
 const E1 = createEntity({ id: 'e1', defId: 'spiderling', name: '새끼 거미 2', side: 'enemy', hp: 10 })
 const V = { clause: 0, role: 'verb' } as const
-const card = (wordId: string, id = wordId): PlacedWord => ({ wordId, owner: 'player', inkLeft: null, instanceId: id, targetEntityId: null })
+const card = (wordId: string, id = wordId): PlacedWord => ({ wordId, owner: 'player', instanceId: id, targetEntityId: null })
 const put = (board: Board, at: SlotAddress, word: PlacedWord) => {
   const r = placeWord(board, at, word)
   if (!r.ok) throw new Error(r.reason)

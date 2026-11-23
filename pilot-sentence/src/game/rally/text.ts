@@ -19,7 +19,6 @@ export const REJECT_MESSAGES: Record<RejectReason, string> = {
   unplayable: '사용할 수 없는 단어입니다.',
   noTarget: '대상을 고르세요.',
   notPlayerTurn: '지금은 행동할 수 없습니다.',
-  deckEmpty: '뽑을 카드가 없습니다.',
   noVerb: '동사가 있어야 낭독할 수 있습니다.',
   slotSealed: '봉인된 칸입니다. 다음 적 차례가 시작되면 풀립니다.',
   notEnoughGold: '화폐가 모자랍니다.',

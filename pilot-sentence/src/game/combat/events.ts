@@ -10,7 +10,6 @@ export type RejectReason =
   | 'unplayable'
   | 'noTarget'
   | 'notPlayerTurn'
-  | 'deckEmpty'
   | 'noVerb'
   | 'slotSealed'
   | 'notEnoughGold'
