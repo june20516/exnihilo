@@ -1,10 +1,10 @@
 import { type Entity, scaleIncoming, scaleOutgoing } from '@/kit/core/entity'
 import { wordLookup } from '@/game/build/build'
 import type { VerbAction } from '@/game/content/words'
-import { collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
+import { adjectiveCount, CHAIN_FACTOR, collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
 import { getSlot } from '@/game/sentence/board'
-import type { RallyState } from './combat'
-import { hasVerb, materialize } from './sentence'
+import { clauseHooks, materializeFor, type RallyState } from './combat'
+import { hasVerb } from './sentence'
 
 const WEAK_MULTIPLIER = 0.75
 const VULNERABLE_MULTIPLIER = 1.5
@@ -18,9 +18,11 @@ class Expression {
     this.text = String(base)
   }
 
-  times(factor: number): this {
+  /** label이 있으면 `× 2(사슬)`처럼 붙인다. */
+  times(factor: number, label = ''): this {
     if (factor === 1) return this
-    this.text = this.pendingSum ? `(${this.text}) × ${factor}` : `${this.text} × ${factor}`
+    const term = label ? `${factor}(${label})` : String(factor)
+    this.text = this.pendingSum ? `(${this.text}) × ${term}` : `${this.text} × ${term}`
     this.pendingSum = false
     return this
   }
@@ -59,7 +61,8 @@ function pickAction(actions: readonly VerbAction[]): AmountAction | null {
  */
 export function sentenceFormula(state: RallyState): { text: string; value: number } | null {
   if (!hasVerb(state.board)) return null
-  const board = materialize(state.board, state.targetId)
+  const board = materializeFor(state)
+  const hooks = clauseHooks(state, 0)
   const lookup = wordLookup(state.build)
   const verbSlot = getSlot(board, { clause: 0, role: 'verb' })
   const effect = lookup(verbSlot.head.wordId).effect
@@ -67,12 +70,13 @@ export function sentenceFormula(state: RallyState): { text: string; value: numbe
   const action = pickAction(effect.actions)
   if (!action) return null
 
-  const adverbs = collectAdverbs(verbSlot, lookup)
+  const adverbs = collectAdverbs(verbSlot, lookup, hooks)
   const repeat = adverbs.repeat > 1 ? ` (×${adverbs.repeat}회)` : ''
 
   if (action.kind !== 'damage') {
-    const value = Math.floor(action.amount * adverbs.power)
-    return { text: `${new Expression(action.amount).times(adverbs.power)} = ${value}${repeat}`, value }
+    const bonus = action.kind === 'block' || action.kind === 'heal' ? (hooks.supportBonus ?? 0) : 0
+    const value = Math.floor((action.amount + bonus) * adverbs.power)
+    return { text: `${new Expression(action.amount).plus('유물 ', bonus).times(adverbs.power)} = ${value}${repeat}`, value }
   }
 
   const subjectSlot = getSlot(board, { clause: 0, role: 'subject' })
@@ -81,26 +85,35 @@ export function sentenceFormula(state: RallyState): { text: string; value: numbe
     state.entities.find((e) => e.id === resolveTargets(slot.head, state.entities, lookup).ids[0])
   const source = firstEntity(subjectSlot)
   const target = firstEntity(objectSlot)
+  // 사슬 배율은 식에 따로 보이도록 슬롯 배율과 나눠 계산한다.
   const sourceMods = collectSlotMods(subjectSlot, lookup)
   const targetMods = collectSlotMods(objectSlot, lookup)
+  const chainOf = (slot: typeof subjectSlot) => (hooks.chainBoost && adjectiveCount(slot, lookup) >= 2 ? CHAIN_FACTOR : 1)
+  const sourceChain = chainOf(subjectSlot)
+  const targetChain = chainOf(objectSlot)
+  const base = action.amount + (hooks.damageBonus ?? 0)
   const bonus = adverbs.executionBonus ? state.executions : 0
   const strength = source?.statuses.strength ?? 0
   const weak = (source?.statuses.weak ?? 0) > 0 ? WEAK_MULTIPLIER : 1
   const vulnerable = (target?.statuses.vulnerable ?? 0) > 0 ? VULNERABLE_MULTIPLIER : 1
 
-  const powered = action.amount * adverbs.power + bonus
-  const outgoing = ((source ? scaleOutgoing(powered, source) : powered) + sourceMods.outgoingFlat) * sourceMods.outgoingMul
-  const value = Math.max(0, Math.floor((target ? scaleIncoming(outgoing, target) : outgoing) * targetMods.incomingMul) - targetMods.incomingFlat)
+  const powered = base * adverbs.power + bonus
+  const outgoing = ((source ? scaleOutgoing(powered, source) : powered) + sourceMods.outgoingFlat) * sourceMods.outgoingMul * sourceChain
+  const incoming = (target ? scaleIncoming(outgoing, target) : outgoing) * targetMods.incomingMul * targetChain
+  const value = Math.max(0, Math.floor(incoming) - targetMods.incomingFlat)
 
   const text = new Expression(action.amount)
+    .plus('유물 ', hooks.damageBonus ?? 0)
     .times(adverbs.power)
     .plus('거듭 ', bonus)
     .plus('힘 ', strength)
     .times(weak)
     .plus('', sourceMods.outgoingFlat)
     .times(sourceMods.outgoingMul)
+    .times(sourceChain, '사슬')
     .times(vulnerable)
     .times(targetMods.incomingMul)
+    .times(targetChain, '사슬')
     .minus(targetMods.incomingFlat)
   return { text: `${text} = ${value}${repeat}`, value }
 }

@@ -8,8 +8,8 @@ import { type ClauseSpec, RALLY_ENCOUNTERS, type RallyEncounterDef, type SlotAdd
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import { type ClauseHooks, resolveClause } from '@/game/resolve/resolve'
-import { type Board, getSlot, placeWord, type PlacedWord, revertAll } from '@/game/sentence/board'
-import { blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isDefensiveVerb, materialize } from './sentence'
+import { type Board, getSlot, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
+import { blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
 
 export interface CardInst extends CardInstance {
   readonly wordId: WordId
@@ -95,6 +95,35 @@ export function enemyIntent(state: RallyState, enemyIndex: number): ClauseSpec {
   const spec = getEncounter(state.encounterId).enemies[enemyIndex]
   if (!spec) throw new Error(`적이 없습니다: ${enemyIndex}`)
   return spec.intents[(state.turn - 1) % spec.intents.length]
+}
+
+const has = (state: RallyState, relic: BuildState['relics'][number]) => state.build.relics.includes(relic)
+
+/**
+ * 낭독할 내 절에 끼어드는 빌드 훅(유물). 기본값과 같은 필드는 넣지 않는다.
+ * 미리보기와 계산식도 이 함수를 쓴다.
+ */
+export function clauseHooks(state: RallyState, clause: number): ClauseHooks {
+  const hooks: { -readonly [K in keyof ClauseHooks]: ClauseHooks[K] } = {}
+  let damageBonus = 0
+  if (has(state, 'longSentence')) {
+    const bonus = playerWordsOnBoard(state.board).length * 2
+    damageBonus += bonus
+    if (bonus > 0) hooks.supportBonus = bonus
+  }
+  const subject = state.board.clauses[clause]?.slots.find((s) => s.role === 'subject')
+  if (has(state, 'ellipsis') && subject && isBlank(subject.head)) damageBonus += 4
+  if (damageBonus > 0) hooks.damageBonus = damageBonus
+  if (has(state, 'adjectiveChain')) hooks.chainBoost = true
+  if (has(state, 'stress')) hooks.adverbTwice = true
+  if (has(state, 'poisonGrammar')) hooks.poisonBonus = 2
+  if (has(state, 'echo') && clause === 0 && state.board.clauses.length === 1) hooks.repeatBonus = 1
+  return hooks
+}
+
+/** 낭독할 때 빈칸을 채우는 방식(허수아비 화자). */
+export function materializeFor(state: RallyState): Board {
+  return materialize(state.board, state.targetId, has(state, 'scarecrowSpeaker') ? { impliedSubject: 'scarecrow' } : {})
 }
 
 function cardsFrom(words: readonly PlacedWord[]): CardInst[] {
@@ -325,14 +354,20 @@ function cast(state: RallyState): Result {
   if (!hasVerb(state.board)) return reject(state, 'noVerb')
   const events: CombatEvent[] = [{ type: 'cast', by: 'player' }]
   const verbId = getSlot(state.board, { clause: 0, role: 'verb' }).head.wordId
-  const executed = runClause(state, materialize(state.board, state.targetId), 0, {}, 'player')
+  const executed = runClause(state, materializeFor(state), 0, clauseHooks(state, 0), 'player')
   events.push(...executed.events)
   const burst = enemyDamageTaken(executed.events, executed.state.entities)
   const cleared = revertAll(executed.state.board)
+  // 울림: 첫 절의 동사 카드는 버림 더미 대신 손패로 돌아온다.
+  const verbCard = has(state, 'resonance') ? getSlot(state.board, { clause: 0, role: 'verb' }).head.instanceId : null
+  const used = cardsFrom(cleared.displaced)
+  const returned = used.filter((c) => c.instanceId === verbCard)
+  const spent = used.filter((c) => c.instanceId !== verbCard)
+  const afterCast = addToDiscard(executed.state.deck, spent)
   let current: RallyState = {
     ...executed.state,
     board: cleared.board,
-    deck: addToDiscard(executed.state.deck, cardsFrom(cleared.displaced)),
+    deck: { ...afterCast, hand: [...afterCast.hand, ...returned] },
     log: {
       ...executed.state.log,
       casts: executed.state.log.casts + 1,

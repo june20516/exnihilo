@@ -48,12 +48,12 @@ export function isDefensiveVerb(wordId: WordId): boolean {
  * 빈칸을 실제 대상으로 채운다. 빈 주어는 당신, 빈 목적어는 지원 동사면 당신, 그 외에는 지정한 적.
  * 채운 단어도 빈칸(owner blank)으로 남겨 화면에서 흐리게 보일 수 있게 한다.
  */
-export function materialize(board: Board, targetEnemyId: string | null): Board {
+export function materialize(board: Board, targetEnemyId: string | null, options: { impliedSubject?: WordId } = {}): Board {
   const verbEffect = getWord(slotOf(board, 'verb').head.wordId).effect
   const supportVerb = verbEffect.type === 'verb' && verbEffect.range === 'support'
   const fill = (slot: SlotState): SlotState => {
     if (!isBlank(slot.head)) return slot
-    if (slot.role === 'subject') return { ...slot, head: blankWord('you') }
+    if (slot.role === 'subject') return { ...slot, head: blankWord(options.impliedSubject ?? 'you') }
     if (slot.role === 'object') return { ...slot, head: supportVerb ? blankWord('you') : blankWord('mark', targetEnemyId) }
     return slot
   }

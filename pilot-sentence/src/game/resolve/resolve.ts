@@ -46,7 +46,15 @@ export interface SlotMods {
   readonly selfDamageAfter: number
 }
 
-export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord): SlotMods {
+/** 수식의 사슬: 형용사가 2개 이상인 슬롯은 배율 ×2. */
+export const CHAIN_FACTOR = 2
+
+export function adjectiveCount(slot: SlotState, lookup: WordLookup = getWord): number {
+  return slot.modifiers.filter((m) => m !== null && lookup(m.wordId).effect.type === 'adjective').length
+}
+
+export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord, chainBoost = false): SlotMods {
+  const chain = chainBoost && adjectiveCount(slot, lookup) >= 2 ? CHAIN_FACTOR : 1
   const mods: AdjectiveMod[] = slot.modifiers.flatMap((m) => {
     const effect = m ? lookup(m.wordId).effect : null
     return effect?.type === 'adjective' ? effect.mods : []
@@ -56,9 +64,9 @@ export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord): 
   const sum = (kind: 'outgoingFlat' | 'incomingFlat' | 'onHitPoison' | 'selfDamageAfter') =>
     mods.reduce((s, m) => (m.kind === kind ? s + m.amount : s), 0)
   return {
-    outgoingMul: product('outgoingDamageMul'),
+    outgoingMul: product('outgoingDamageMul') * chain,
     outgoingFlat: sum('outgoingFlat'),
-    incomingMul: product('incomingMul'),
+    incomingMul: product('incomingMul') * chain,
     incomingFlat: sum('incomingFlat'),
     onHitPoison: sum('onHitPoison'),
     selfDamageAfter: sum('selfDamageAfter'),
@@ -72,14 +80,15 @@ export interface AdverbSummary {
   readonly ignoreFreeze: boolean
 }
 
-export function collectAdverbs(verbSlot: SlotState, lookup: WordLookup = getWord): AdverbSummary {
+export function collectAdverbs(verbSlot: SlotState, lookup: WordLookup = getWord, hooks: ClauseHooks = {}): AdverbSummary {
   const mods = verbSlot.modifiers.flatMap((m) => {
     const effect = m ? lookup(m.wordId).effect : null
     return effect?.type === 'adverb' ? effect.mods : []
   })
+  const power = mods.reduce((p, m) => (m.kind === 'powerMul' ? p * m.value : p), 1)
   return {
-    power: mods.reduce((p, m) => (m.kind === 'powerMul' ? p * m.value : p), 1),
-    repeat: mods.reduce((r, m) => (m.kind === 'repeat' ? Math.max(r, m.count) : r), 1),
+    power: hooks.adverbTwice ? power * power : power,
+    repeat: mods.reduce((r, m) => (m.kind === 'repeat' ? Math.max(r, m.count) : r), 1) + (hooks.repeatBonus ?? 0),
     executionBonus: mods.some((m) => m.kind === 'executionBonus'),
     ignoreFreeze: mods.some((m) => m.kind === 'ignoreFreeze'),
   }
@@ -196,9 +205,11 @@ export function resolveClause(
     return finish()
   }
 
-  const subjectMods = collectSlotMods(subjectSlot, lookup)
-  const objectMods = collectSlotMods(objectSlot, lookup)
-  const adverbs = collectAdverbs(verbSlot, lookup)
+  const subjectMods = collectSlotMods(subjectSlot, lookup, hooks.chainBoost)
+  const objectMods = collectSlotMods(objectSlot, lookup, hooks.chainBoost)
+  const adverbs = collectAdverbs(verbSlot, lookup, hooks)
+  const poisonBonus = hooks.poisonBonus ?? 0
+  const supportBonus = hooks.supportBonus ?? 0
   const scaled = (amount: number) => Math.floor(amount * adverbs.power)
 
   /** 피해 한 번: 공격자 슬롯의 outgoing 수식과 피격자 슬롯의 incoming 수식을 적용한다. */
@@ -214,8 +225,9 @@ export function resolveClause(
     table.update(targetId, () => result.entity)
     const after = table.get(targetId)
     if (sourceMods.onHitPoison > 0 && result.dealt > 0 && after && isAlive(after)) {
-      table.update(targetId, (e) => addStatus(e, 'poison', sourceMods.onHitPoison))
-      events.push({ type: 'statusApplied', entityId: targetId, status: 'poison', amount: sourceMods.onHitPoison })
+      const poison = sourceMods.onHitPoison + poisonBonus
+      table.update(targetId, (e) => addStatus(e, 'poison', poison))
+      events.push({ type: 'statusApplied', entityId: targetId, status: 'poison', amount: poison })
     }
     return result.dealt
   }
@@ -225,7 +237,8 @@ export function resolveClause(
     switch (action.kind) {
       case 'damage':
         for (const objectId of table.alive(objects)) {
-          const dealt = dealDamage(subjectId, subjectMods, objectId, objectMods, Math.round(action.amount * (hooks.damageScale ?? 1)))
+          const base = Math.round(action.amount * (hooks.damageScale ?? 1)) + (hooks.damageBonus ?? 0)
+          const dealt = dealDamage(subjectId, subjectMods, objectId, objectMods, base)
           if (action.lifesteal && dealt > 0) {
             const subject = table.get(subjectId)
             if (subject && isAlive(subject)) {
@@ -253,7 +266,7 @@ export function resolveClause(
         return
       case 'block':
         for (const id of targetsOf(action.to)) {
-          const amount = scaled(action.amount)
+          const amount = scaled(action.amount + supportBonus)
           table.update(id, (e) => addStatus(e, 'block', amount))
           events.push({ type: 'statusApplied', entityId: id, status: 'block', amount })
         }
@@ -262,7 +275,7 @@ export function resolveClause(
         for (const id of targetsOf(action.to)) {
           const target = table.get(id)
           if (!target) continue
-          const result = heal(target, scaled(action.amount))
+          const result = heal(target, scaled(action.amount + supportBonus))
           events.push({ type: 'healed', entityId: id, amount: result.healed })
           table.update(id, () => result.entity)
         }
@@ -275,8 +288,9 @@ export function resolveClause(
         return
       case 'status':
         for (const id of targetsOf(action.to)) {
-          table.update(id, (e) => addStatus(e, action.status, action.amount))
-          events.push({ type: 'statusApplied', entityId: id, status: action.status, amount: action.amount })
+          const amount = action.amount + (action.status === 'poison' ? poisonBonus : 0)
+          table.update(id, (e) => addStatus(e, action.status, amount))
+          events.push({ type: 'statusApplied', entityId: id, status: action.status, amount })
         }
         return
       case 'grow':
