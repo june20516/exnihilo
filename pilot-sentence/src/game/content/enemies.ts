@@ -1,6 +1,17 @@
 import type { Row } from '@/kit/core/entity'
-import type { ClauseSpec } from './encounters'
+import type { FrameId, SlotRole } from '@/game/grammar/frames'
 import type { WordId } from './words'
+
+export interface SlotAddress {
+  readonly clause: number
+  readonly role: SlotRole
+}
+
+/** 문장 하나의 원문: 슬롯마다 head 단어와 수식어. */
+export interface ClauseSpec {
+  readonly frameId: FrameId
+  readonly slots: readonly { readonly role: SlotRole; readonly head: WordId; readonly modifiers?: readonly WordId[] }[]
+}
 
 /** v2 기본 랠리의 적. 예고 문장 목록을 턴마다 순서대로 순환한다. */
 export interface RallyEnemySpec {

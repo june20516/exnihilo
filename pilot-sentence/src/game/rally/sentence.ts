@@ -1,5 +1,5 @@
 import { type Entity, isAlive } from '@/kit/core/entity'
-import type { ClauseSpec } from '@/game/content/encounters'
+import type { ClauseSpec } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { FRAMES } from '@/game/grammar/frames'
 import { type Board, buildBoard, type PlacedWord, type SlotState } from '@/game/sentence/board'

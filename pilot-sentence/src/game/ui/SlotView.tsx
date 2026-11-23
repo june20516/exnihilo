@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core'
 import type { ReactNode } from 'react'
-import type { SlotAddress } from '@/game/content/encounters'
+import type { SlotAddress } from '@/game/content/enemies'
 import { getWord } from '@/game/content/words'
 import type { PlacedWord, SlotState } from '@/game/sentence/board'
 import { ROLE_NAMES } from './describe'

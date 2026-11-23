@@ -1,4 +1,4 @@
-import { ENCOUNTERS } from '@/game/content/encounters'
+import { SPIDER_SENTENCE } from '@/game/sentence/testSentence'
 import { buildBoard } from '@/game/sentence/board'
 import { canPlayAnywhere, dropId, parseDropId } from './placement'
 
@@ -15,7 +15,7 @@ test('알 수 없는 드롭 id는 null', () => {
 })
 
 test('canPlayAnywhere: 현재 문장 어디에도 놓을 수 없는 단어를 가려낸다', () => {
-  const board = buildBoard(ENCOUNTERS.spider.initialSentence, 2)
+  const board = buildBoard(SPIDER_SENTENCE, 2)
   // 동사가 문형을 결정하므로 자동사도 언제나 놓을 수 있다
   expect(canPlayAnywhere(board, 'sleep')).toBe(true)
   expect(canPlayAnywhere(board, 'web')).toBe(false)

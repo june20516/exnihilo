@@ -1,8 +1,8 @@
 import type { EffectHandlers } from '@/kit/fx/effectPlayer'
 import { flash, popNumber, shake, wait } from '@/kit/fx/primitives'
-import type { SlotAddress } from '@/game/content/encounters'
+import type { SlotAddress } from '@/game/content/enemies'
 import type { CombatEvent } from '@/game/combat/events'
-import { fadeAway, inkSpread, meltDown, penStroke, readAloud } from './inkEffects'
+import { inkSpread, meltDown, readAloud } from './inkEffects'
 
 const query = (selector: string): Element | null => document.querySelector(selector)
 const slotSelector = (at: SlotAddress, modifierIndex: number | null) =>
@@ -20,12 +20,6 @@ export const fxRegistry: EffectHandlers<CombatEvent> = {
   async rejected(event, speed) {
     const el = event.at ? query(slotSelector(event.at, null)) : query('[data-testid="hand"]')
     if (el) await Promise.all([shake(el, 4, speed), flash(el, '#ff5a52', speed)])
-  },
-  async intervention(event, speed) {
-    const from = query('[data-testid="intent"]') ?? query('[data-portrait^="e"]')
-    const to = 'at' in event.step ? query(slotSelector(event.step.at, null)) : query('[data-testid="hand"]')
-    if (from && to) await penStroke(from, to, speed)
-    if (to) await flash(to, '#ff5a52', speed)
   },
   async clauseExecuted(event, speed) {
     const slots = Array.from(document.querySelectorAll(`[data-clause="${event.clause}"] [data-slot]`))
@@ -68,14 +62,6 @@ export const fxRegistry: EffectHandlers<CombatEvent> = {
     const el = portrait(event.entityId)
     if (el) await meltDown(el, speed)
   },
-  async dried(event, speed) {
-    const el = query(slotSelector(event.at, event.modifierIndex))
-    if (el) await fadeAway(el, speed)
-  },
-  async polluted(_event, speed) {
-    const el = query('[data-testid="discard"]')
-    if (el) await shake(el, 6, speed)
-  },
   async hpLost(event, speed) {
     const el = portrait(event.entityId)
     if (el) await Promise.all([shake(el, 4, speed), popNumber(el, `HP −${event.amount}`, 'damage', speed)])
@@ -87,10 +73,6 @@ export const fxRegistry: EffectHandlers<CombatEvent> = {
   async cleansed(event, speed) {
     const el = portrait(event.entityId)
     if (el) await popNumber(el, '정화', 'heal', speed)
-  },
-  async swapped(event, speed) {
-    const slots = [query(`[data-slot="${event.clause}-subject"]`), query(`[data-slot="${event.clause}-object"]`)]
-    await Promise.all(slots.filter((el): el is Element => el !== null).map((el) => inkSpread(el, speed)))
   },
   async cast(event, speed) {
     const sentence = query('[data-testid="sentence"]')

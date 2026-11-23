@@ -1,4 +1,4 @@
-import type { SlotAddress } from '@/game/content/encounters'
+import type { SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { MODIFIER_TARGET_ROLES, type SlotRole } from '@/game/grammar/frames'
 import { type Board, placeWord } from '@/game/sentence/board'

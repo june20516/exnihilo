@@ -1,8 +1,7 @@
-import type { InterventionStep } from '@/game/content/encounters'
 import { TOKENS } from '@/game/content/tokens'
-import { type AdjectiveMod, type AdverbMod, type AppliedStatus, getWord, type VerbAction, type WordDef } from '@/game/content/words'
+import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type VerbAction, type WordDef } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
-import { attachParticle, hasFinalConsonant } from '@/game/grammar/josa'
+import { attachParticle } from '@/game/grammar/josa'
 
 export const ROLE_NAMES: Record<SlotRole, string> = { subject: '주어', object: '목적어', verb: '동사' }
 
@@ -107,32 +106,4 @@ export function describeWord(def: WordDef): string {
       return effect.mods.map(describeAdverb).join(', ')
   }
   return ''
-}
-
-function withRo(word: string): string {
-  const last = word.at(-1) ?? ''
-  const endsWithRieul = hasFinalConsonant(last) && (last.charCodeAt(0) - 0xac00) % 28 === 8
-  return word + (hasFinalConsonant(word) && !endsWithRieul ? '으로' : '로')
-}
-
-/** 적 개입 예고 배지 문구. */
-export function describeIntent(step: InterventionStep, roleName: (role: SlotRole) => string): string {
-  switch (step.kind) {
-    case 'revert':
-      return `↺ ${attachParticle(roleName(step.at.role), 'object')} 원문으로 되돌림`
-    case 'attach': {
-      const text = getWord(step.word).text
-      return `＋ ${roleName(step.at.role)}에 [${text}]${particleOf(text, 'object')} 붙임`
-    }
-    case 'replace': {
-      const text = getWord(step.word).text
-      return `✎ ${attachParticle(roleName(step.at.role), 'object')} [${text}]${withRo(text).slice(text.length)} 교체`
-    }
-    case 'seal':
-      return `🔒 ${attachParticle(roleName(step.at.role), 'object')} 봉인`
-    case 'pollute':
-      return `☠ 덱에 [${getWord(step.word).text}] ${step.count}장`
-    case 'enrage':
-      return '🔥 격앙: 이후 매 턴 두 번 개입'
-  }
 }

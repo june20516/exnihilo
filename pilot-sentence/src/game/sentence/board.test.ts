@@ -1,20 +1,15 @@
-import { ENCOUNTERS } from '@/game/content/encounters'
+import { SPIDER_SENTENCE } from '@/game/sentence/testSentence'
 import type { WordId } from '@/game/content/words'
 import {
-  buildBoard, dryInk, enemyAttach, enemyReplace, getSlot, isSlotActive, placeWord, playerWordsOnBoard, revertAll, revertSlot, sealSlot,
-  swapNounPhrases,
-  type PlacedWord,
+  buildBoard, getSlot, isSlotActive, placeWord, playerWordsOnBoard, revertAll, revertSlot, type PlacedWord,
 } from './board'
 
-const spiderBoard = () => buildBoard(ENCOUNTERS.spider.initialSentence, 2)
+const spiderBoard = () => buildBoard(SPIDER_SENTENCE, 2)
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const V = { clause: 0, role: 'verb' } as const
 const pw = (wordId: WordId, ink = 2, id = 'i1'): PlacedWord => ({
   wordId, owner: 'player', inkLeft: ink, instanceId: id, targetEntityId: null,
-})
-const ew = (wordId: WordId): PlacedWord => ({
-  wordId, owner: 'enemy', inkLeft: null, instanceId: null, targetEntityId: null,
 })
 
 test('초기 보드: 원문이 현재값으로 복사되고 수식어 칸은 maxModifiers 길이', () => {
@@ -65,25 +60,6 @@ test('같은 슬롯을 두 번 덮으면 앞서 놓은 플레이어 단어가 di
   expect(getSlot(b.board, S).originalHead.wordId).toBe('spider')
 })
 
-test('잉크 2인 단어는 두 번째 건조 때 원문으로 복귀', () => {
-  const a = placeWord(spiderBoard(), S, pw('you'))
-  if (!a.ok) throw new Error('배치 실패')
-  const d1 = dryInk(a.board)
-  expect(getSlot(d1.board, S).head.wordId).toBe('you')
-  expect(d1.dried).toHaveLength(0)
-  const d2 = dryInk(d1.board)
-  expect(getSlot(d2.board, S).head.wordId).toBe('spider')
-  expect(d2.dried[0]).toMatchObject({ at: S, modifierIndex: null, word: { wordId: 'you' } })
-})
-
-test('건조된 수식어는 원문 수식어(없으면 빈칸)로 돌아간다', () => {
-  const a = placeWord(spiderBoard(), S, pw('blind', 1))
-  if (!a.ok) throw new Error('배치 실패')
-  const d = dryInk(a.board)
-  expect(getSlot(d.board, S).modifiers.map((m) => m?.wordId ?? null)).toEqual(['venomous', null])
-  expect(d.dried[0].modifierIndex).toBe(1)
-})
-
 test('이미 원문인 슬롯을 revert해도 변화 없음', () => {
   const b = spiderBoard()
   const r = revertSlot(b, S)
@@ -95,32 +71,6 @@ test('revert는 플레이어 단어를 displaced로 돌려준다', () => {
   const a = placeWord(spiderBoard(), S, pw('you'))
   if (!a.ok) throw new Error('배치 실패')
   expect(revertSlot(a.board, S).displaced.map((d) => d.wordId)).toEqual(['you'])
-})
-
-test('적 attach는 원문도 바꿔서 건조 후에도 남는다', () => {
-  const r = enemyAttach(spiderBoard(), V, ew('fiercely'))
-  expect(getSlot(r.board, V).modifiers[0]?.wordId).toBe('fiercely')
-  expect(getSlot(r.board, V).originalModifiers[0]?.wordId).toBe('fiercely')
-})
-
-test('적 attach는 빈칸이 없으면 맨 왼쪽을 덮는다', () => {
-  const full = enemyAttach(enemyAttach(spiderBoard(), V, ew('fiercely')).board, V, ew('fiercely')).board
-  const r = enemyAttach(full, V, ew('fiercely'))
-  expect(r.displaced).toHaveLength(1)
-})
-
-test('적 replace는 head와 원문을 모두 바꾼다', () => {
-  const r = enemyReplace(spiderBoard(), O, ew('spider'))
-  expect(getSlot(r.board, O).head.wordId).toBe('spider')
-  expect(getSlot(r.board, O).originalHead.wordId).toBe('spider')
-})
-
-test('봉인된 슬롯에도 적 개입은 적용된다', () => {
-  const sealed = sealSlot(spiderBoard(), S)
-  expect(getSlot(sealed, S).sealed).toBe(true)
-  const a = placeWord(sealed, S, pw('you'))
-  if (!a.ok) throw new Error('배치 실패')
-  expect(getSlot(revertSlot(a.board, S).board, S).head.wordId).toBe('spider')
 })
 
 test('playerWordsOnBoard는 보드 위 플레이어 단어만', () => {
@@ -157,10 +107,7 @@ describe('동사가 문형을 결정', () => {
   })
 })
 
-test('swapNounPhrases는 head와 수식어를 맞바꾸고, revertAll은 전부 원문으로 돌린다', () => {
-  const swapped = swapNounPhrases(spiderBoard(), 0)
-  expect(getSlot(swapped, S).head.wordId).toBe('you')
-  expect(getSlot(swapped, O).modifiers[0]?.wordId).toBe('venomous')
+test('revertAll은 전부 원문으로 돌리고 밀려난 플레이어 단어를 돌려준다', () => {
   const a = placeWord(spiderBoard(), V, pw('slash'))
   if (!a.ok) throw new Error('배치 실패')
   const r = revertAll(a.board)

@@ -2,8 +2,7 @@
  * 엔진 테스트 전용 단어와 조우. 실제 콘텐츠는 밸런스 튜닝으로 바뀌므로 엔진 테스트는 여기에만 기댄다.
  * 테스트 파일에서만 import한다.
  */
-import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
-import type { ClauseSpec } from '@/game/content/encounters'
+import { type ClauseSpec, RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { WORDS, type WordDef, type WordId } from '@/game/content/words'
 
 const testVerb = (id: WordId, text: string, kind: WordDef['kind'], effect: WordDef['effect']): WordDef => ({

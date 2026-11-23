@@ -1,10 +1,10 @@
-import { ENCOUNTERS } from '@/game/content/encounters'
+import { SPIDER_SENTENCE } from '@/game/sentence/testSentence'
 import { getWord } from '@/game/content/words'
 import { buildBoard, placeWord, type PlacedWord } from '@/game/sentence/board'
 import { renderClause } from './render'
 
 const nameOf = (w: PlacedWord) => getWord(w.wordId).text
-const board0 = () => buildBoard(ENCOUNTERS.spider.initialSentence, 2)
+const board0 = () => buildBoard(SPIDER_SENTENCE, 2)
 
 test('초기 거미 문장의 표시 토큰', () => {
   const text = renderClause(board0(), 0, nameOf).map((t) => t.text).join(' ')

@@ -1,4 +1,4 @@
-import type { SlotAddress } from '@/game/content/encounters'
+import type { SlotAddress } from '@/game/content/enemies'
 import { FRAMES } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
 import { type Board, isSlotActive, type PlacedWord } from '@/game/sentence/board'

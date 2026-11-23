@@ -1,5 +1,5 @@
 import { createEntity } from '@/kit/core/entity'
-import type { ClauseSpec, SlotAddress } from '@/game/content/encounters'
+import type { ClauseSpec, SlotAddress } from '@/game/content/enemies'
 import { resolveClause } from '@/game/resolve/resolve'
 import { type Board, type PlacedWord, placeWord } from '@/game/sentence/board'
 import { blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isDefensiveVerb, materialize } from './sentence'

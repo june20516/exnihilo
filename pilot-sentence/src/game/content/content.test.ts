@@ -1,11 +1,11 @@
 import { FRAMES } from '@/game/grammar/frames'
-import { ENCOUNTERS, STARTER_DECK } from './encounters'
-import { PRESETS } from './rules'
+import { RALLY_ENCOUNTERS, RALLY_STARTER_DECK } from './enemies'
 import { getWord, WORDS } from './words'
 
-test('시작 덱은 15장이고 모두 플레이어용 단어', () => {
-  expect(STARTER_DECK).toHaveLength(15)
-  for (const id of STARTER_DECK) expect(getWord(id).enemyOnly).toBe(false)
+test('시작 덱은 15장, 모두 플레이어용 단어, 동사 10장', () => {
+  expect(RALLY_STARTER_DECK).toHaveLength(15)
+  for (const id of RALLY_STARTER_DECK) expect(getWord(id).enemyOnly).toBe(false)
+  expect(RALLY_STARTER_DECK.filter((id) => getWord(id).effect.type === 'verb')).toHaveLength(10)
 })
 
 test('플레이어 카드 풀은 32장 이상, 요소별로 5장 이상', () => {
@@ -17,37 +17,26 @@ test('플레이어 카드 풀은 32장 이상, 요소별로 5장 이상', () => 
   expect(count((k) => k === 'verbIntransitive')).toBeGreaterThanOrEqual(5)
   expect(count((k) => k === 'adjective')).toBeGreaterThanOrEqual(5)
   expect(count((k) => k === 'adverb')).toBeGreaterThanOrEqual(5)
-  for (const w of pool) expect(w.cost).toBeGreaterThanOrEqual(1)
 })
 
 test('없는 단어 id는 예외', () => {
   expect(() => getWord('nope')).toThrow()
 })
 
-test('조우 3종이 있고 초기 문장이 문형 슬롯과 허용 품사에 맞는다', () => {
-  expect(Object.keys(ENCOUNTERS).sort()).toEqual(['slime', 'spider', 'swarm'])
-  for (const encounter of Object.values(ENCOUNTERS)) {
-    for (const clause of encounter.initialSentence) {
-      const frame = FRAMES[clause.frameId]
-      expect(clause.slots.map((s) => s.role).sort()).toEqual(frame.slots.map((s) => s.role).sort())
-      for (const slot of clause.slots) {
-        const def = frame.slots.find((d) => d.role === slot.role)
-        expect(def?.accepts).toContain(getWord(slot.head).kind)
-        for (const m of slot.modifiers ?? []) expect(['adjective', 'adverb']).toContain(getWord(m).kind)
+test('조우 3종이 있고, 모든 적의 예고 문장이 문형 슬롯과 허용 품사에 맞는다', () => {
+  const real = Object.keys(RALLY_ENCOUNTERS).filter((id) => !id.startsWith('test-'))
+  expect(real.sort()).toEqual(['slime', 'spider', 'swarm'])
+  for (const id of real) {
+    for (const enemy of RALLY_ENCOUNTERS[id].enemies) {
+      expect(enemy.intents.length).toBeGreaterThan(0)
+      for (const clause of enemy.intents) {
+        const frame = FRAMES[clause.frameId]
+        expect(clause.slots.map((s) => s.role).sort()).toEqual(frame.slots.map((s) => s.role).sort())
+        for (const slot of clause.slots) {
+          expect(frame.slots.find((d) => d.role === slot.role)?.accepts).toContain(getWord(slot.head).kind)
+          for (const m of slot.modifiers ?? []) expect(['adjective', 'adverb']).toContain(getWord(m).kind)
+        }
       }
     }
-    for (const step of encounter.interventionLoop) {
-      if ('word' in step) expect(() => getWord(step.word)).not.toThrow()
-    }
   }
-})
-
-test('프리셋 A/B/C가 spec 10.1의 값을 가진다', () => {
-  expect(PRESETS.A).toMatchObject({ handCarry: 'discard', autoDraw: 4, persistence: 'dry', execution: 'auto' })
-  expect(PRESETS.A.resource).toEqual({ mode: 'fixed', perTurn: 3 })
-  expect(PRESETS.B).toMatchObject({ handCarry: 'keep', handMax: 7, startHand: 4, autoDraw: 1, persistence: 'permanent', execution: 'auto' })
-  expect(PRESETS.B.resource).toEqual({ mode: 'ramp', start: 1, max: 6 })
-  expect(PRESETS.C).toMatchObject({ handCarry: 'keep', autoDraw: 1, paidDrawCost: 1, persistence: 'untilCast', execution: 'cast' })
-  expect(PRESETS.C.resource).toEqual({ mode: 'ink', regen: 3, max: 8, start: 3 })
-  for (const preset of Object.values(PRESETS)) expect(preset).toMatchObject({ swapsPerTurn: 1, swapCost: 0 })
 })

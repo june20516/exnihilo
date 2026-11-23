@@ -1,4 +1,4 @@
-import type { ClauseSpec, SlotAddress } from '@/game/content/encounters'
+import type { ClauseSpec, SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { type FrameId, FRAMES, MODIFIER_TARGET_ROLES, type SlotRole } from '@/game/grammar/frames'
 
@@ -129,48 +129,6 @@ export function placeWord(board: Board, at: SlotAddress, word: PlacedWord, modif
   }
 }
 
-export interface DriedWord {
-  readonly at: SlotAddress
-  readonly modifierIndex: number | null
-  readonly word: PlacedWord
-}
-
-function tickInk(word: PlacedWord): PlacedWord {
-  return word.inkLeft !== null ? { ...word, inkLeft: word.inkLeft - 1 } : word
-}
-
-function isDry(word: PlacedWord): boolean {
-  return word.inkLeft !== null && word.inkLeft <= 0
-}
-
-/**
- * 잉크가 있는 단어(플레이어 단어, 뒤바꾸기로 옮겨진 단어)의 잉크를 1 줄이고, 다 마른 단어는 원문으로 되돌린다.
- * 원문 단어는 잉크가 없어(null) 마르지 않는다.
- */
-export function dryInk(board: Board): { board: Board; dried: DriedWord[] } {
-  const dried: DriedWord[] = []
-  const clauses = board.clauses.map((clause, clauseIndex) => ({
-    ...clause,
-    slots: clause.slots.map((slot) => {
-      const at = { clause: clauseIndex, role: slot.role }
-      let head = tickInk(slot.head)
-      if (isDry(head)) {
-        dried.push({ at, modifierIndex: null, word: head })
-        head = slot.originalHead
-      }
-      const modifiers = slot.modifiers.map((modifier, index) => {
-        if (!modifier) return modifier
-        const ticked = tickInk(modifier)
-        if (!isDry(ticked)) return ticked
-        dried.push({ at, modifierIndex: index, word: ticked })
-        return slot.originalModifiers[index] ?? null
-      })
-      return { ...slot, head, modifiers }
-    }),
-  }))
-  return { board: { clauses }, dried }
-}
-
 /** 슬롯을 원문으로 되돌린다. 밀려난 단어(원문이 아닌 것)를 돌려준다. */
 export function revertSlot(board: Board, at: SlotAddress): { board: Board; displaced: PlacedWord[] } {
   const slot = getSlot(board, at)
@@ -186,57 +144,12 @@ export function revertSlot(board: Board, at: SlotAddress): { board: Board; displ
   }
 }
 
-/** 적이 수식어를 붙인다. 첫 빈칸(없으면 맨 왼쪽)에 넣고 원문의 같은 위치도 갱신한다. */
-export function enemyAttach(board: Board, at: SlotAddress, word: PlacedWord): { board: Board; displaced: PlacedWord[] } {
-  const slot = getSlot(board, at)
-  const emptyIndex = slot.modifiers.findIndex((m) => m === null)
-  const index = emptyIndex >= 0 ? emptyIndex : 0
-  const previous = slot.modifiers[index]
-  return {
-    board: updateSlot(board, at, (s) => ({
-      ...s,
-      modifiers: withModifierAt(s.modifiers, index, word),
-      originalModifiers: withModifierAt(s.originalModifiers, index, word),
-    })),
-    displaced: previous ? [previous] : [],
-  }
-}
-
-/** 적이 head를 교체한다. 원문도 함께 바뀐다. */
-export function enemyReplace(board: Board, at: SlotAddress, word: PlacedWord): { board: Board; displaced: PlacedWord[] } {
-  const slot = getSlot(board, at)
-  return {
-    board: updateSlot(board, at, (s) => ({ ...s, head: word, originalHead: word })),
-    displaced: [slot.head],
-  }
-}
-
-export function sealSlot(board: Board, at: SlotAddress): Board {
-  return updateSlot(board, at, (s) => ({ ...s, sealed: true }))
-}
-
 export function playerWordsOnBoard(board: Board): PlacedWord[] {
   return board.clauses.flatMap((clause) =>
     clause.slots.flatMap((slot) =>
       [slot.head, ...slot.modifiers].filter((w): w is PlacedWord => w !== null && w.owner === 'player'),
     ),
   )
-}
-
-/**
- * 절의 주어와 목적어 명사구(head + 수식어)를 맞바꾼다. 원문과 봉인은 슬롯에 그대로 남는다.
- * movedInk가 주어지면(잉크 건조 프리셋) 잉크가 없던 단어도 그만큼 실행된 뒤 원문으로 돌아간다.
- */
-export function swapNounPhrases(board: Board, clause: number, movedInk: number | null = null): Board {
-  const withInk = (word: PlacedWord): PlacedWord => (movedInk !== null && word.inkLeft === null ? { ...word, inkLeft: movedInk } : word)
-  const move = (slot: SlotState) => ({
-    head: withInk(slot.head),
-    modifiers: slot.modifiers.map((m) => (m ? withInk(m) : m)),
-  })
-  const subject = move(getSlot(board, { clause, role: 'subject' }))
-  const object = move(getSlot(board, { clause, role: 'object' }))
-  const swapped = updateSlot(board, { clause, role: 'subject' }, (s) => ({ ...s, ...object }))
-  return updateSlot(swapped, { clause, role: 'object' }, (s) => ({ ...s, ...subject }))
 }
 
 /** 모든 슬롯을 원문으로 되돌린다(낭독 후 소비). 밀려난 단어를 돌려준다. */

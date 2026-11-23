@@ -1,5 +1,6 @@
 import { addStatus, createEntity, type Entity } from '@/kit/core/entity'
-import { ENCOUNTERS, type SlotAddress } from '@/game/content/encounters'
+import type { SlotAddress } from '@/game/content/enemies'
+import { SPIDER_SENTENCE } from '@/game/sentence/testSentence'
 import type { WordId } from '@/game/content/words'
 import { type Board, buildBoard, placeWord, type PlacedWord } from '@/game/sentence/board'
 import { resolveClause, resolveTargets } from './resolve'
@@ -7,7 +8,7 @@ import { resolveClause, resolveTargets } from './resolve'
 const player = () => createEntity({ id: 'p', defId: 'player', name: '탐험가', side: 'ally', hp: 60 })
 const spider = (hp = 30) => createEntity({ id: 'e1', defId: 'spider', name: '거미', side: 'enemy', hp })
 const scarecrow = () => createEntity({ id: 't9', defId: 'scarecrow', name: '허수아비', side: 'ally', hp: 8 })
-const board0 = () => buildBoard(ENCOUNTERS.spider.initialSentence, 2)
+const board0 = () => buildBoard(SPIDER_SENTENCE, 2)
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const V = { clause: 0, role: 'verb' } as const
