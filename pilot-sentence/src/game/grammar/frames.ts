@@ -1,7 +1,7 @@
 import type { ParticleKind } from './josa'
 
 /** 단어의 품사. 문법 슬롯의 허용 여부를 결정한다. (Plan 2에서 확장) */
-export type WordKind = 'target' | 'verbTransitive' | 'verbIntransitive' | 'adjective' | 'adverb' | 'junk'
+export type WordKind = 'target' | 'verbTransitive' | 'verbIntransitive' | 'adjective' | 'adverb' | 'junk' | 'connective'
 
 export type SlotRole = 'subject' | 'object' | 'verb'
 export type FrameId = 'transitive'

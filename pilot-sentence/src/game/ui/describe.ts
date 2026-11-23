@@ -1,5 +1,5 @@
 import { TOKENS } from '@/game/content/tokens'
-import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type VerbAction, type WordDef } from '@/game/content/words'
+import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type ConnectiveMode, type VerbAction, type WordDef } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
 
@@ -70,11 +70,19 @@ function describeAdverb(mod: AdverbMod): string {
 }
 
 /** 손패 타일 하단에 표시할 한 줄 설명. */
+const CONNECTIVE_TEXT: Record<ConnectiveMode, string> = {
+  and: '둘째 절을 연다. 두 절을 따로 실행',
+  so: '둘째 절을 연다. 절 1 피해의 절반이 절 2 위력에',
+  while: '둘째 절을 연다. 절 1의 수식어가 절 2에도',
+}
+
 export function describeWord(def: WordDef): string {
   const effect = def.effect
   switch (effect.type) {
     case 'junk':
       return '사용할 수 없다'
+    case 'connective':
+      return CONNECTIVE_TEXT[effect.mode]
     case 'target': {
       const ref = effect.ref
       switch (ref.kind) {

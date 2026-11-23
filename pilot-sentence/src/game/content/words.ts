@@ -49,6 +49,10 @@ export type WordEffect =
   | { readonly type: 'adjective'; readonly mods: readonly AdjectiveMod[] }
   | { readonly type: 'adverb'; readonly mods: readonly AdverbMod[] }
   | { readonly type: 'junk' }
+  | { readonly type: 'connective'; readonly mode: ConnectiveMode }
+
+/** 연결어: 그리고(따로 실행), 그래서(절 1 피해의 절반을 절 2 위력에), 그러면서(절 1 수식어를 절 2에도). */
+export type ConnectiveMode = 'and' | 'so' | 'while'
 
 export interface WordDef {
   readonly id: WordId
@@ -141,6 +145,11 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
     id: 'curl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true,
     effect: verb('support', { kind: 'block', amount: 8, to: 'subject' }),
   },
+
+  // 연결어(런 보상). 연결어 칸에 놓으면 둘째 절이 열린다.
+  { id: 'and', text: '그리고', kind: 'connective', effect: { type: 'connective', mode: 'and' } },
+  { id: 'so', text: '그래서', kind: 'connective', rarity: 'uncommon', effect: { type: 'connective', mode: 'so' } },
+  { id: 'while', text: '그러면서', kind: 'connective', rarity: 'rare', effect: { type: 'connective', mode: 'while' } },
 
   // 내 문장의 빈칸(v2 기본 랠리). 낭독할 때 materialize가 실제 대상으로 채운다.
   { id: 'impliedSubject', text: '당신', kind: 'target', enemyOnly: true, effect: target({ kind: 'player' }) },

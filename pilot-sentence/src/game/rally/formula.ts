@@ -2,9 +2,9 @@ import { type Entity, scaleIncoming, scaleOutgoing } from '@/kit/core/entity'
 import { wordLookup } from '@/game/build/build'
 import type { VerbAction } from '@/game/content/words'
 import { adjectiveCount, CHAIN_FACTOR, collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
-import { getSlot } from '@/game/sentence/board'
-import { clauseHooks, materializeFor, type RallyState } from './combat'
-import { hasVerb } from './sentence'
+import { type Board, getSlot } from '@/game/sentence/board'
+import { type ClauseRun, materializeFor, type RallyState, runSentence } from './combat'
+import { isBlank } from './sentence'
 
 const WEAK_MULTIPLIER = 0.75
 const VULNERABLE_MULTIPLIER = 1.5
@@ -55,34 +55,40 @@ function pickAction(actions: readonly VerbAction[]): AmountAction | null {
   return actions.find((a): a is AmountAction => a.kind === 'block' || a.kind === 'heal' || a.kind === 'grow' || a.kind === 'loseHp') ?? null
 }
 
+export interface ClauseFormula {
+  readonly clause: number
+  readonly text: string
+  readonly value: number
+}
+
 /**
- * 내 문장의 계산식 한 줄(spec §2.3). 해석기와 같은 순서·같은 반올림 위치로 값을 계산한다.
- * 행위자는 주어의 첫 개체, 대상은 목적어의 첫 개체. 반복이 있으면 1회분 값 뒤에 횟수를 붙인다.
+ * 절 하나의 계산식. 해석기와 같은 순서·같은 반올림 위치로 값을 계산한다.
+ * 행위자는 주어의 첫 개체, 대상은 목적어의 첫 개체(이 절 실행 직전 상태). 반복이 있으면 1회분 값 뒤에 횟수를 붙인다.
  */
-export function sentenceFormula(state: RallyState): { text: string; value: number } | null {
-  if (!hasVerb(state.board)) return null
-  const board = materializeFor(state)
-  const hooks = clauseHooks(state, 0)
+function clauseFormula(state: RallyState, board: Board, clause: number, run: ClauseRun): ClauseFormula | null {
   const lookup = wordLookup(state.build)
-  const verbSlot = getSlot(board, { clause: 0, role: 'verb' })
+  const verbSlot = getSlot(board, { clause, role: 'verb' })
   const effect = lookup(verbSlot.head.wordId).effect
   if (effect.type !== 'verb') return null
   const action = pickAction(effect.actions)
   if (!action) return null
 
+  const { hooks, soBonus } = run
+  const relicBonus = (hooks.damageBonus ?? 0) - soBonus
   const adverbs = collectAdverbs(verbSlot, lookup, hooks)
   const repeat = adverbs.repeat > 1 ? ` (×${adverbs.repeat}회)` : ''
 
   if (action.kind !== 'damage') {
     const bonus = action.kind === 'block' || action.kind === 'heal' ? (hooks.supportBonus ?? 0) : 0
     const value = Math.floor((action.amount + bonus) * adverbs.power)
-    return { text: `${new Expression(action.amount).plus('유물 ', bonus).times(adverbs.power)} = ${value}${repeat}`, value }
+    return { clause, text: `${new Expression(action.amount).plus('유물 ', bonus).times(adverbs.power)} = ${value}${repeat}`, value }
   }
 
-  const subjectSlot = getSlot(board, { clause: 0, role: 'subject' })
-  const objectSlot = getSlot(board, { clause: 0, role: 'object' })
+  const entities = run.entitiesBefore
+  const subjectSlot = getSlot(board, { clause, role: 'subject' })
+  const objectSlot = getSlot(board, { clause, role: 'object' })
   const firstEntity = (slot: typeof subjectSlot): Entity | undefined =>
-    state.entities.find((e) => e.id === resolveTargets(slot.head, state.entities, lookup).ids[0])
+    entities.find((e) => e.id === resolveTargets(slot.head, entities, lookup).ids[0])
   const source = firstEntity(subjectSlot)
   const target = firstEntity(objectSlot)
   // 사슬 배율은 식에 따로 보이도록 슬롯 배율과 나눠 계산한다.
@@ -92,7 +98,7 @@ export function sentenceFormula(state: RallyState): { text: string; value: numbe
   const sourceChain = chainOf(subjectSlot)
   const targetChain = chainOf(objectSlot)
   const base = action.amount + (hooks.damageBonus ?? 0)
-  const bonus = adverbs.executionBonus ? state.executions : 0
+  const bonus = adverbs.executionBonus ? run.executionsBefore : 0
   const strength = source?.statuses.strength ?? 0
   const weak = (source?.statuses.weak ?? 0) > 0 ? WEAK_MULTIPLIER : 1
   const vulnerable = (target?.statuses.vulnerable ?? 0) > 0 ? VULNERABLE_MULTIPLIER : 1
@@ -103,7 +109,8 @@ export function sentenceFormula(state: RallyState): { text: string; value: numbe
   const value = Math.max(0, Math.floor(incoming) - targetMods.incomingFlat)
 
   const text = new Expression(action.amount)
-    .plus('유물 ', hooks.damageBonus ?? 0)
+    .plus('유물 ', relicBonus)
+    .plus('그래서 ', soBonus)
     .times(adverbs.power)
     .plus('거듭 ', bonus)
     .plus('힘 ', strength)
@@ -115,5 +122,17 @@ export function sentenceFormula(state: RallyState): { text: string; value: numbe
     .times(targetMods.incomingMul)
     .times(targetChain, '사슬')
     .minus(targetMods.incomingFlat)
-  return { text: `${text} = ${value}${repeat}`, value }
+  return { clause, text: `${text} = ${value}${repeat}`, value }
+}
+
+/** 내 문장의 계산식: 동사가 놓인 절마다 한 줄(spec §2.3, 런 spec §4.1). */
+export function sentenceFormula(state: RallyState): ClauseFormula[] {
+  const board = materializeFor(state)
+  const { clauses } = runSentence(state)
+  return board.clauses.flatMap((_, clause) => {
+    const run = clauses[clause]
+    if (!run || isBlank(getSlot(state.board, { clause, role: 'verb' }).head)) return []
+    const formula = clauseFormula(state, board, clause, run)
+    return formula ? [formula] : []
+  })
 }

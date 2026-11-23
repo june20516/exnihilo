@@ -5,11 +5,11 @@ import { createRng, type RngState, shuffle } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
 import type { Balance } from '@/game/content/balance'
 import { type ClauseSpec, RALLY_ENCOUNTERS, type RallyEncounterDef, type SlotAddress } from '@/game/content/enemies'
-import { getWord, type WordId } from '@/game/content/words'
+import { type ConnectiveMode, getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import { type ClauseHooks, resolveClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
-import { blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
+import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
 
 export interface CardInst extends CardInstance {
   readonly wordId: WordId
@@ -45,6 +45,8 @@ export interface RallyState {
   readonly build: BuildState
   /** 층 배율(적 HP·피해). 기본 1·1. */
   readonly enemyScale: EnemyScale
+  /** 연결어 칸의 카드. 있으면 내 문장은 두 절이다. */
+  readonly connective: PlacedWord | null
 }
 
 export interface EnemyScale {
@@ -71,6 +73,8 @@ export type RallyAction =
   | { readonly type: 'target'; readonly entityId: string }
   | { readonly type: 'discard'; readonly instanceIds: readonly string[] }
   | { readonly type: 'clear' }
+  | { readonly type: 'connect'; readonly instanceId: string }
+  | { readonly type: 'disconnect' }
   | { readonly type: 'cast' }
   | { readonly type: 'endTurn' }
 
@@ -121,9 +125,58 @@ export function clauseHooks(state: RallyState, clause: number): ClauseHooks {
   return hooks
 }
 
-/** 낭독할 때 빈칸을 채우는 방식(허수아비 화자). */
+export function connectiveMode(state: RallyState): ConnectiveMode | null {
+  const effect = state.connective ? getWord(state.connective.wordId).effect : null
+  return effect?.type === 'connective' ? effect.mode : null
+}
+
+/** 낭독할 때 빈칸을 채우는 방식(허수아비 화자, 그러면서). */
 export function materializeFor(state: RallyState): Board {
-  return materialize(state.board, state.targetId, has(state, 'scarecrowSpeaker') ? { impliedSubject: 'scarecrow' } : {})
+  return materialize(state.board, state.targetId, {
+    impliedSubject: has(state, 'scarecrowSpeaker') ? 'scarecrow' : undefined,
+    borrowModifiers: connectiveMode(state) === 'while',
+  })
+}
+
+/** 그래서: 앞 절에서 적이 받은 피해 합의 절반(내림). */
+export function soBonusFrom(burst: number): number {
+  return Math.floor(burst / 2)
+}
+
+/** 낭독 직전, 절마다의 실행 조건. 계산식은 이것으로 실제와 같은 값을 낸다. */
+export interface ClauseRun {
+  readonly hooks: ClauseHooks
+  /** 이 절이 실행되기 직전의 개체 상태(앞 절의 결과 반영). */
+  readonly entitiesBefore: readonly Entity[]
+  readonly executionsBefore: number
+  /** 그래서 보너스(절 2에만). */
+  readonly soBonus: number
+}
+
+/**
+ * 내 문장의 절들을 순서대로 실행한다. 그래서이면 절 1의 피해 절반을 절 2의 피해 기본값에 더한다.
+ * 실제 낭독과 계산식이 같은 함수를 쓴다.
+ */
+export function runSentence(state: RallyState): { state: RallyState; events: CombatEvent[]; burst: number; clauses: ClauseRun[] } {
+  const board = materializeFor(state)
+  const mode = connectiveMode(state)
+  let current = state
+  let burst = 0
+  let previousBurst = 0
+  const events: CombatEvent[] = []
+  const clauses: ClauseRun[] = []
+  board.clauses.forEach((_, clause) => {
+    const base = clauseHooks(state, clause)
+    const soBonus = clause > 0 && mode === 'so' ? soBonusFrom(previousBurst) : 0
+    const hooks = soBonus > 0 ? { ...base, damageBonus: (base.damageBonus ?? 0) + soBonus } : base
+    clauses.push({ hooks, entitiesBefore: current.entities, executionsBefore: current.executions, soBonus })
+    const executed = runClause(current, board, clause, hooks, 'player')
+    current = executed.state
+    events.push(...executed.events)
+    previousBurst = enemyDamageTaken(executed.events, current.entities)
+    burst += previousBurst
+  })
+  return { state: current, events, burst, clauses }
 }
 
 function cardsFrom(words: readonly PlacedWord[]): CardInst[] {
@@ -214,6 +267,7 @@ export function startRally(
     log: { casts: 0, defensiveCasts: 0, deadTurns: 0, bestBurst: 0 },
     build,
     enemyScale,
+    connective: null,
   }
   return startPlayerTurn(initial, RALLY_RULES.startHand)
 }
@@ -239,6 +293,7 @@ function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }
   if (!card) return reject(state, 'unplayable', at)
   const def = getWord(card.wordId)
   if (def.cost === null || def.enemyOnly) return reject(state, 'unplayable', at)
+  if (!state.board.clauses[at.clause]) return reject(state, 'slotInactive', at)
 
   let targetEntityId: string | null = null
   if (def.effect.type === 'target' && def.effect.ref.kind === 'chosenEnemy') {
@@ -282,10 +337,43 @@ function discard(state: RallyState, instanceIds: readonly string[]): Result {
   return { state: drawn.state, events: [{ type: 'discarded', count: thrown.length }, ...drawn.events] }
 }
 
+/** 문장을 한 절의 빈칸으로 되돌리고, 놓았던 내 카드(연결어 포함)를 돌려준다. */
+function clearSentence(state: RallyState): { board: Board; cards: CardInst[] } {
+  const r = revertAll(state.board)
+  const connective = state.connective ? cardsFrom([state.connective]) : []
+  return { board: { clauses: r.board.clauses.slice(0, 1) }, cards: [...cardsFrom(r.displaced), ...connective] }
+}
+
 /** 문장을 빈칸으로 되돌리고, 놓았던 내 카드를 손패로 돌려보낸다. */
 function returnPlacedToHand(state: RallyState): RallyState {
-  const r = revertAll(state.board)
-  return { ...state, board: r.board, deck: { ...state.deck, hand: [...state.deck.hand, ...cardsFrom(r.displaced)] } }
+  const { board, cards } = clearSentence(state)
+  return { ...state, board, connective: null, deck: { ...state.deck, hand: [...state.deck.hand, ...cards] } }
+}
+
+function connect(state: RallyState, instanceId: string): Result {
+  const card = state.deck.hand.find((c) => c.instanceId === instanceId)
+  if (!card) return reject(state, 'unplayable')
+  if (getWord(card.wordId).kind !== 'connective') return reject(state, 'kindMismatch')
+  const taken = takeFromHand(state.deck, instanceId)
+  if (!taken) return reject(state, 'unplayable')
+  const previous = state.connective ? cardsFrom([state.connective]) : []
+  const board = state.board.clauses.length > 1 ? state.board : { clauses: [...state.board.clauses, blankClause(state.build.slots)] }
+  const connective: PlacedWord = { wordId: card.wordId, owner: 'player', inkLeft: null, instanceId, targetEntityId: null }
+  return {
+    state: { ...state, board, connective, deck: { ...taken.deck, hand: [...taken.deck.hand, ...previous] } },
+    events: [{ type: 'connected', wordId: card.wordId }],
+  }
+}
+
+/** 연결어를 빼면 둘째 절이 닫히고, 둘째 절의 카드와 연결어는 손패로 돌아온다. */
+function disconnect(state: RallyState): Result {
+  if (!state.connective) return reject(state, 'unplayable')
+  const second = { clauses: state.board.clauses.slice(1) }
+  const cards = [...cardsFrom(playerWordsOnBoard(second)), ...cardsFrom([state.connective])]
+  return {
+    state: { ...state, board: { clauses: state.board.clauses.slice(0, 1) }, connective: null, deck: { ...state.deck, hand: [...state.deck.hand, ...cards] } },
+    events: [{ type: 'disconnected' }],
+  }
 }
 
 function enemyDamageTaken(events: readonly CombatEvent[], entities: readonly Entity[]): number {
@@ -354,19 +442,20 @@ function cast(state: RallyState): Result {
   if (!hasVerb(state.board)) return reject(state, 'noVerb')
   const events: CombatEvent[] = [{ type: 'cast', by: 'player' }]
   const verbId = getSlot(state.board, { clause: 0, role: 'verb' }).head.wordId
-  const executed = runClause(state, materializeFor(state), 0, clauseHooks(state, 0), 'player')
+  const executed = runSentence(state)
   events.push(...executed.events)
-  const burst = enemyDamageTaken(executed.events, executed.state.entities)
-  const cleared = revertAll(executed.state.board)
+  const burst = executed.burst
+  const cleared = clearSentence(executed.state)
   // 울림: 첫 절의 동사 카드는 버림 더미 대신 손패로 돌아온다.
   const verbCard = has(state, 'resonance') ? getSlot(state.board, { clause: 0, role: 'verb' }).head.instanceId : null
-  const used = cardsFrom(cleared.displaced)
+  const used = cleared.cards
   const returned = used.filter((c) => c.instanceId === verbCard)
   const spent = used.filter((c) => c.instanceId !== verbCard)
   const afterCast = addToDiscard(executed.state.deck, spent)
   let current: RallyState = {
     ...executed.state,
     board: cleared.board,
+    connective: null,
     deck: { ...afterCast, hand: [...afterCast.hand, ...returned] },
     log: {
       ...executed.state.log,
@@ -396,6 +485,10 @@ export function reduceRally(state: RallyState, action: RallyAction, _balance: Ba
       return discard(state, action.instanceIds)
     case 'clear':
       return { state: returnPlacedToHand(state), events: [{ type: 'cleared' }] }
+    case 'connect':
+      return connect(state, action.instanceId)
+    case 'disconnect':
+      return disconnect(state)
     case 'cast':
       return cast(state)
     case 'endTurn':

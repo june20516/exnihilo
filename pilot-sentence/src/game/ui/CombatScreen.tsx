@@ -91,7 +91,8 @@ export function CombatScreen({ encounterId, seed, deck, onRestart }: CombatScree
   const selectedCard = state.deck.hand.find((c) => c.instanceId === selectedId) ?? null
   const rejected = lastEvents.find((e) => e.type === 'rejected')
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
-  const formula = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : null), [state])
+  // 단계 B에서 절마다 한 줄씩 보여 준다. 지금은 첫 절만.
+  const formula = useMemo(() => (state.phase === 'player' ? (sentenceFormula(state)[0] ?? null) : null), [state])
   const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
   const verbPlaced = hasVerb(state.board)
 

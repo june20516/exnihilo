@@ -7,6 +7,7 @@ export const KIND_LABELS: Record<WordKind, string> = {
   adjective: '형용사',
   adverb: '부사',
   junk: '오염',
+  connective: '연결어',
 }
 
 /** 품사별 글자색과 태그 배경 (Stitch 시안의 품사 색). */
@@ -17,4 +18,5 @@ export const KIND_STYLES: Record<WordKind, { text: string; tag: string }> = {
   adjective: { text: 'text-tertiary', tag: 'bg-tertiary-container/40 text-tertiary' },
   adverb: { text: 'text-secondary', tag: 'bg-secondary-container/40 text-secondary' },
   junk: { text: 'text-outline', tag: 'bg-surface-container-highest text-outline' },
+  connective: { text: 'text-primary', tag: 'bg-primary/20 text-primary' },
 }

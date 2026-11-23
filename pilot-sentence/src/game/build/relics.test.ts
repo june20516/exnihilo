@@ -39,7 +39,7 @@ test('유물 없음: 훅은 비어 있다', () => expect(clauseHooks(setup([], [
 test('긴 문장: 3장 → 기본값 6+6, ((12 × 1.5) + 4) = 22', () => {
   const s = setup(['longSentence'], [['bite', V], ['fiercely', V, 0], ['hungry', S, 0]])
   expect(hits(cast(s).events)[0]?.amount).toBe(22)
-  expect(sentenceFormula(s)?.text).toBe('(6 + 유물 6) × 1.5 + 4 = 22')
+  expect(sentenceFormula(s)[0]?.text).toBe('(6 + 유물 6) × 1.5 + 4 = 22')
 })
 
 test('생략의 미학: 주어를 비우면 10, 당신을 놓으면 6', () => {
@@ -50,13 +50,13 @@ test('생략의 미학: 주어를 비우면 10, 당신을 놓으면 6', () => {
 test('수식의 사슬: 목적어에 금이 간 2장 → 6 × 1.5 × 1.5 × 2 = 27', () => {
   const s = setup(['adjectiveChain'], [['bite', V], ['cracked', O, 0], ['cracked', O, 1]])
   expect(hits(cast(s).events)[0]?.amount).toBe(27)
-  expect(sentenceFormula(s)?.value).toBe(27)
+  expect(sentenceFormula(s)[0]?.value).toBe(27)
 })
 
 test('강세: 격렬하게 ×2.25 → 13', () => {
   const s = setup(['stress'], [['bite', V], ['fiercely', V, 0]])
   expect(hits(cast(s).events)[0]?.amount).toBe(13)
-  expect(sentenceFormula(s)?.text).toBe('6 × 2.25 = 13')
+  expect(sentenceFormula(s)[0]?.text).toBe('6 × 2.25 = 13')
 })
 
 test('독의 문법: 독을 뿜는 주어로 물면 독 4', () => {

@@ -2,7 +2,7 @@ import { type Entity, isAlive } from '@/kit/core/entity'
 import type { ClauseSpec } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { FRAMES, type SlotRole } from '@/game/grammar/frames'
-import { type Board, buildBoard, type PlacedWord, type SlotState } from '@/game/sentence/board'
+import { type Board, buildBoard, type Clause, type PlacedWord, type SlotState } from '@/game/sentence/board'
 
 export const BLANK_SUBJECT: WordId = 'impliedSubject'
 export const BLANK_OBJECT: WordId = 'impliedObject'
@@ -28,14 +28,21 @@ export function blankSentence(slotCounts: Readonly<Record<SlotRole, number>>): B
   return { clauses: [{ frameId: 'transitive', slots }] }
 }
 
-function slotOf(board: Board, role: SlotState['role']): SlotState {
-  const slot = board.clauses[0]?.slots.find((s) => s.role === role)
-  if (!slot) throw new Error(`내 문장에 ${role} 슬롯이 없습니다.`)
+function slotOf(board: Board, role: SlotState['role'], clause = 0): SlotState {
+  const slot = board.clauses[clause]?.slots.find((s) => s.role === role)
+  if (!slot) throw new Error(`내 문장 ${clause}절에 ${role} 슬롯이 없습니다.`)
   return slot
 }
 
+/** 모든 절에 동사가 놓였는가(연결어로 둘째 절을 열었다면 둘째 절에도). */
 export function hasVerb(board: Board): boolean {
-  return !isBlank(slotOf(board, 'verb').head)
+  return board.clauses.every((_, clause) => !isBlank(slotOf(board, 'verb', clause).head))
+}
+
+/** 빈 문장 한 절(연결어로 둘째 절을 열 때 쓴다). */
+export function blankClause(slotCounts: Readonly<Record<SlotRole, number>>): Clause {
+  const [clause] = blankSentence(slotCounts).clauses
+  return clause
 }
 
 /** 동작에 보호나 회복이 있는 동사(방어 계열). */
@@ -44,20 +51,36 @@ export function isDefensiveVerb(wordId: WordId): boolean {
   return effect.type === 'verb' && effect.actions.some((a) => a.kind === 'block' || a.kind === 'heal')
 }
 
+export interface MaterializeOptions {
+  /** 생략된 주어를 채울 단어(허수아비 화자). 기본 당신. */
+  readonly impliedSubject?: WordId
+  /** 그러면서: 절 1의 슬롯별 수식어를 절 2의 같은 슬롯에도 덧붙인다. */
+  readonly borrowModifiers?: boolean
+}
+
 /**
- * 빈칸을 실제 대상으로 채운다. 빈 주어는 당신, 빈 목적어는 지원 동사면 당신, 그 외에는 지정한 적.
- * 채운 단어도 빈칸(owner blank)으로 남겨 화면에서 흐리게 보일 수 있게 한다.
+ * 빈칸을 실제 대상으로 채운다. 빈 주어는 당신, 빈 목적어는 그 절의 동사가 지원 계열이면 당신, 그 외에는 지정한 적.
+ * 채운 단어도 빈칸(owner blank)으로 남겨 화면에서 흐리게 보일 수 있게 한다. 결과는 실행용이며 상태에 저장하지 않는다.
  */
-export function materialize(board: Board, targetEnemyId: string | null, options: { impliedSubject?: WordId } = {}): Board {
-  const verbEffect = getWord(slotOf(board, 'verb').head.wordId).effect
-  const supportVerb = verbEffect.type === 'verb' && verbEffect.range === 'support'
-  const fill = (slot: SlotState): SlotState => {
-    if (!isBlank(slot.head)) return slot
-    if (slot.role === 'subject') return { ...slot, head: blankWord(options.impliedSubject ?? 'you') }
-    if (slot.role === 'object') return { ...slot, head: supportVerb ? blankWord('you') : blankWord('mark', targetEnemyId) }
-    return slot
-  }
-  return { clauses: board.clauses.map((clause) => ({ ...clause, slots: clause.slots.map(fill) })) }
+export function materialize(board: Board, targetEnemyId: string | null, options: MaterializeOptions = {}): Board {
+  const clauses = board.clauses.map((clause, clauseIndex) => {
+    const verbEffect = getWord(slotOf(board, 'verb', clauseIndex).head.wordId).effect
+    const supportVerb = verbEffect.type === 'verb' && verbEffect.range === 'support'
+    const fill = (slot: SlotState): SlotState => {
+      const borrowed = options.borrowModifiers && clauseIndex > 0
+        ? slotOf(board, slot.role, 0).modifiers.filter((m): m is PlacedWord => m !== null)
+        : []
+      const withBorrowed = borrowed.length > 0 ? { ...slot, modifiers: [...slot.modifiers, ...borrowed] } : slot
+      if (!isBlank(slot.head)) return withBorrowed
+      if (slot.role === 'subject') return { ...withBorrowed, head: blankWord(options.impliedSubject ?? 'you') }
+      if (slot.role === 'object') {
+        return { ...withBorrowed, head: supportVerb ? blankWord('you') : blankWord('mark', targetEnemyId) }
+      }
+      return withBorrowed
+    }
+    return { ...clause, slots: clause.slots.map(fill) }
+  })
+  return { clauses }
 }
 
 /** 적의 예고 문장. 주어를 그 적 하나로 고정한다(같은 종류의 적이 한꺼번에 행동하지 않도록). */

@@ -35,4 +35,6 @@ export type CombatEvent =
   | { readonly type: 'enemyTurn' }
   | { readonly type: 'discarded'; readonly count: number }
   | { readonly type: 'cleared' }
+  | { readonly type: 'connected'; readonly wordId: WordId }
+  | { readonly type: 'disconnected' }
   | { readonly type: 'targetChanged'; readonly entityId: string }
