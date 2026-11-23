@@ -146,6 +146,18 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
     effect: verb('support', { kind: 'block', amount: 8, to: 'subject' }),
   },
 
+  // 정예·보스 전용 (런 spec §5)
+  { id: 'queenBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 18 }) },
+  { id: 'queenNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 12 }) },
+  { id: 'queenCurl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true, effect: verb('support', { kind: 'block', amount: 15, to: 'subject' }) },
+  { id: 'gateCurl', text: '버틴다', kind: 'verbIntransitive', enemyOnly: true, effect: verb('support', { kind: 'block', amount: 20, to: 'subject' }) },
+  { id: 'gateCrush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 22 }) },
+  { id: 'scribeSlash', text: '벤다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 20 }) },
+  {
+    id: 'scribeScold', text: '꾸짖는다', kind: 'verbTransitive', enemyOnly: true,
+    effect: verb('ranged', { kind: 'damage', amount: 12 }, { kind: 'status', status: 'weak', amount: 2, to: 'object' }),
+  },
+
   // 연결어(런 보상). 연결어 칸에 놓으면 둘째 절이 열린다.
   { id: 'and', text: '그리고', kind: 'connective', effect: { type: 'connective', mode: 'and' } },
   { id: 'so', text: '그래서', kind: 'connective', rarity: 'uncommon', effect: { type: 'connective', mode: 'so' } },

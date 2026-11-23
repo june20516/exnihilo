@@ -23,13 +23,15 @@ test('없는 단어 id는 예외', () => {
   expect(() => getWord('nope')).toThrow()
 })
 
-test('조우 3종이 있고, 모든 적의 예고 문장이 문형 슬롯과 허용 품사에 맞는다', () => {
+test('조우 6종이 있고, 모든 적의 예고 문장이 문형 슬롯과 허용 품사에 맞는다', () => {
   const real = Object.keys(RALLY_ENCOUNTERS).filter((id) => !id.startsWith('test-'))
-  expect(real.sort()).toEqual(['slime', 'spider', 'swarm'])
+  expect(real.sort()).toEqual(['gatekeeper', 'queen', 'scribe', 'slime', 'spider', 'swarm'])
   for (const id of real) {
     for (const enemy of RALLY_ENCOUNTERS[id].enemies) {
       expect(enemy.intents.length).toBeGreaterThan(0)
-      for (const clause of enemy.intents) {
+      for (const intent of enemy.intents) {
+        if (intent.kind !== 'clause') continue
+        const clause = intent.clause
         const frame = FRAMES[clause.frameId]
         expect(clause.slots.map((s) => s.role).sort()).toEqual(frame.slots.map((s) => s.role).sort())
         for (const slot of clause.slots) {
@@ -39,4 +41,12 @@ test('조우 3종이 있고, 모든 적의 예고 문장이 문형 슬롯과 허
       }
     }
   }
+})
+
+test('조우 6종: 일반 3, 정예 2, 보스 1', () => {
+  const real = Object.values(RALLY_ENCOUNTERS).filter((e) => !e.id.startsWith('test-'))
+  const count = (tier: string) => real.filter((e) => e.tier === tier).map((e) => e.id).sort()
+  expect(count('normal')).toEqual(['slime', 'spider', 'swarm'])
+  expect(count('elite')).toEqual(['gatekeeper', 'queen'])
+  expect(count('boss')).toEqual(['scribe'])
 })

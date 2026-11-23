@@ -1,5 +1,6 @@
 import type { StatusKind } from '@/kit/core/entity'
 import type { SlotAddress } from '@/game/content/enemies'
+import type { SlotRole } from '@/game/grammar/frames'
 import type { TokenId, WordId } from '@/game/content/words'
 
 export type RejectReason =
@@ -11,6 +12,7 @@ export type RejectReason =
   | 'notPlayerTurn'
   | 'deckEmpty'
   | 'noVerb'
+  | 'slotSealed'
   | 'noDiscardLeft'
 export type FizzleReason = 'noSubject' | 'noObject' | 'frozen'
 
@@ -37,4 +39,5 @@ export type CombatEvent =
   | { readonly type: 'cleared' }
   | { readonly type: 'connected'; readonly wordId: WordId }
   | { readonly type: 'disconnected' }
+  | { readonly type: 'sealed'; readonly role: SlotRole }
   | { readonly type: 'targetChanged'; readonly entityId: string }

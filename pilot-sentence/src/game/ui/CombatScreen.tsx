@@ -5,14 +5,16 @@ import { BALANCE } from '@/game/content/balance'
 import { RALLY_ENCOUNTERS, type SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
+import { attachParticle } from '@/game/grammar/josa'
 import { renderClause } from '@/game/grammar/render'
-import { enemyIntent, type RallyAction, type RallyState } from '@/game/rally/combat'
+import { enemyIntent, nextSealRole, type RallyAction, type RallyState } from '@/game/rally/combat'
 import { sentenceFormula } from '@/game/rally/formula'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
 import { enemyBoard, hasVerb, isBlank, materialize } from '@/game/rally/sentence'
 import { getSlot, type PlacedWord } from '@/game/sentence/board'
 import { Battlefield } from './Battlefield'
+import { ROLE_NAMES } from './describe'
 import { CombatResult } from './CombatResult'
 import { ControlPanel } from './ControlPanel'
 import { Hand } from './Hand'
@@ -49,7 +51,13 @@ function intentTexts(state: RallyState, enemyEvents: readonly CombatEvent[], nam
   const texts: Record<string, string> = {}
   RALLY_ENCOUNTERS[state.encounterId]?.enemies.forEach((_, index) => {
     const id = `e${index}`
-    const sentence = joinTokens(renderClause(enemyBoard(enemyIntent(state, index), id, BALANCE.maxModifiers), 0, nameOf))
+    const intent = enemyIntent(state, index)
+    if (intent.kind === 'seal') {
+      const name = state.entities.find((e) => e.id === id)?.name ?? '적'
+      texts[id] = `${attachParticle(name, 'subject')} 당신의 ${ROLE_NAMES[nextSealRole(state)]} 칸을 봉인한다`
+      return
+    }
+    const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, BALANCE.maxModifiers), 0, nameOf))
     const numbers = enemyEvents.flatMap((e) => {
       if (e.type === 'damaged' && e.sourceId === id) return [`피해 ${e.amount + e.blocked}`]
       if (e.type === 'statusApplied' && e.entityId === id && e.status === 'block') return [`보호 +${e.amount}`]

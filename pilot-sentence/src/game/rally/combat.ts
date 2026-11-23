@@ -4,9 +4,10 @@ import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
 import type { Balance } from '@/game/content/balance'
-import { type ClauseSpec, RALLY_ENCOUNTERS, type RallyEncounterDef, type SlotAddress } from '@/game/content/enemies'
+import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent, type SlotAddress } from '@/game/content/enemies'
 import { type ConnectiveMode, getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
+import type { SlotRole } from '@/game/grammar/frames'
 import { type ClauseHooks, resolveClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
 import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
@@ -47,6 +48,23 @@ export interface RallyState {
   readonly enemyScale: EnemyScale
   /** 연결어 칸의 카드. 있으면 내 문장은 두 절이다. */
   readonly connective: PlacedWord | null
+  /** 지금까지 받은 봉인 수. 다음 봉인 대상(주어 → 목적어 → 동사)을 정한다. */
+  readonly sealCount: number
+}
+
+const SEAL_ORDER: readonly SlotRole[] = ['subject', 'object', 'verb']
+
+/** 다음 봉인이 걸릴 내 슬롯(예고에 보여 준다). */
+export function nextSealRole(state: RallyState): SlotRole {
+  return SEAL_ORDER[state.sealCount % SEAL_ORDER.length]
+}
+
+function setSealed(board: Board, role: SlotRole | null): Board {
+  return {
+    clauses: board.clauses.map((clause, index) =>
+      index !== 0 ? clause : { ...clause, slots: clause.slots.map((slot) => ({ ...slot, sealed: slot.role === role })) },
+    ),
+  }
 }
 
 export interface EnemyScale {
@@ -95,7 +113,7 @@ function getEncounter(id: string): RallyEncounterDef {
 }
 
 /** 이번 턴에 index번째 적이 실행할 예고 문장. */
-export function enemyIntent(state: RallyState, enemyIndex: number): ClauseSpec {
+export function enemyIntent(state: RallyState, enemyIndex: number): RallyIntent {
   const spec = getEncounter(state.encounterId).enemies[enemyIndex]
   if (!spec) throw new Error(`적이 없습니다: ${enemyIndex}`)
   return spec.intents[(state.turn - 1) % spec.intents.length]
@@ -268,6 +286,7 @@ export function startRally(
     build,
     enemyScale,
     connective: null,
+    sealCount: 0,
   }
   return startPlayerTurn(initial, RALLY_RULES.startHand)
 }
@@ -294,6 +313,7 @@ function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }
   const def = getWord(card.wordId)
   if (def.cost === null || def.enemyOnly) return reject(state, 'unplayable', at)
   if (!state.board.clauses[at.clause]) return reject(state, 'slotInactive', at)
+  if (getSlot(state.board, at).sealed) return reject(state, 'slotSealed', at)
 
   let targetEntityId: string | null = null
   if (def.effect.type === 'target' && def.effect.ref.kind === 'chosenEnemy') {
@@ -401,8 +421,10 @@ function runClause(
 /** 적 턴: 보호 소멸 → 적마다 예고 문장 실행 → 상태 처리 → 다음 내 턴. */
 function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
   events.push({ type: 'enemyTurn' })
+  // 적 턴 시작: 적의 보호와 지난 봉인이 사라진다.
   let current: RallyState = {
     ...state,
+    board: setSealed(state.board, null),
     entities: state.entities.map((e) => (e.side === 'enemy' && isAlive(e) ? clearBlock(e) : e)),
   }
   const ended = (outcome: 'won' | 'lost'): Result => {
@@ -413,7 +435,14 @@ function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
   for (const [index, spec] of getEncounter(current.encounterId).enemies.entries()) {
     const enemyId = `e${index}`
     if (!isAliveEnemy(current, enemyId) || !spec) continue
-    const board = enemyBoard(enemyIntent(current, index), enemyId, ENEMY_MODIFIER_SLOTS)
+    const intent = enemyIntent(current, index)
+    if (intent.kind === 'seal') {
+      const role = nextSealRole(current)
+      current = { ...current, board: setSealed(current.board, role), sealCount: current.sealCount + 1 }
+      events.push({ type: 'sealed', role })
+      continue
+    }
+    const board = enemyBoard(intent.clause, enemyId, ENEMY_MODIFIER_SLOTS)
     const executed = runClause(current, board, 0, { damageScale: current.enemyScale.damage }, 'enemy')
     current = executed.state
     events.push(...executed.events)
