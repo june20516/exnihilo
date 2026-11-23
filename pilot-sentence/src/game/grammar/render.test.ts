@@ -35,3 +35,11 @@ test('head와 수식어 토큰에는 주소가 붙는다', () => {
   expect(tokens[0]).toMatchObject({ kind: 'modifier', modifierIndex: 0, address: { clause: 0, role: 'subject' } })
   expect(tokens[1]).toMatchObject({ kind: 'head', address: { clause: 0, role: 'subject' } })
 })
+
+test('자동사 문장은 목적어와 그 조사를 표시하지 않는다', () => {
+  const r = placeWord(board0(), { clause: 0, role: 'verb' }, {
+    wordId: 'rage', owner: 'player', inkLeft: 2, instanceId: 'a', targetEntityId: null,
+  })
+  if (!r.ok) throw new Error('배치 실패')
+  expect(renderClause(r.board, 0, nameOf).map((t) => t.text).join(' ')).toBe('독을 뿜는 거미 가 분노한다')
+})

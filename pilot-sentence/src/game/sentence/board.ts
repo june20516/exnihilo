@@ -34,7 +34,7 @@ export interface Board {
 
 export type PlaceResult =
   | { readonly ok: true; readonly board: Board; readonly displaced: PlacedWord[] }
-  | { readonly ok: false; readonly reason: 'kindMismatch' | 'modifiersFull' }
+  | { readonly ok: false; readonly reason: 'kindMismatch' | 'modifiersFull' | 'slotInactive' }
 
 function enemyWord(wordId: WordId): PlacedWord {
   return { wordId, owner: 'enemy', inkLeft: null, instanceId: null, targetEntityId: null }
@@ -62,6 +62,13 @@ export function getSlot(board: Board, at: SlotAddress): SlotState {
   const slot = board.clauses[at.clause]?.slots.find((s) => s.role === at.role)
   if (!slot) throw new Error(`슬롯이 없습니다: ${at.clause}:${at.role}`)
   return slot
+}
+
+/** 목적어 슬롯은 같은 절의 동사가 타동사일 때만 활성이다(동사가 문형을 결정). */
+export function isSlotActive(board: Board, at: SlotAddress): boolean {
+  if (at.role !== 'object') return true
+  const verb = board.clauses[at.clause]?.slots.find((s) => s.role === 'verb')
+  return verb !== undefined && getWord(verb.head.wordId).kind === 'verbTransitive'
 }
 
 function updateSlot(board: Board, at: SlotAddress, update: (slot: SlotState) => SlotState): Board {
@@ -97,6 +104,7 @@ function withModifierAt(
 export function placeWord(board: Board, at: SlotAddress, word: PlacedWord, modifierIndex?: number): PlaceResult {
   const kind = getWord(word.wordId).kind
   const slot = getSlot(board, at)
+  if (!isSlotActive(board, at)) return { ok: false, reason: 'slotInactive' }
 
   if (isModifierKind(kind)) {
     if (!MODIFIER_TARGET_ROLES[kind].includes(at.role)) return { ok: false, reason: 'kindMismatch' }
@@ -209,4 +217,26 @@ export function playerWordsOnBoard(board: Board): PlacedWord[] {
       [slot.head, ...slot.modifiers].filter((w): w is PlacedWord => w !== null && w.owner === 'player'),
     ),
   )
+}
+
+/** 절의 주어와 목적어 명사구(head + 수식어)를 맞바꾼다. 원문과 봉인은 슬롯에 그대로 남는다. */
+export function swapNounPhrases(board: Board, clause: number): Board {
+  const subject = getSlot(board, { clause, role: 'subject' })
+  const object = getSlot(board, { clause, role: 'object' })
+  const swapped = updateSlot(board, { clause, role: 'subject' }, (s) => ({ ...s, head: object.head, modifiers: object.modifiers }))
+  return updateSlot(swapped, { clause, role: 'object' }, (s) => ({ ...s, head: subject.head, modifiers: subject.modifiers }))
+}
+
+/** 모든 슬롯을 원문으로 되돌린다(낭독 후 소비). 밀려난 단어를 돌려준다. */
+export function revertAll(board: Board): { board: Board; displaced: PlacedWord[] } {
+  let current = board
+  const displaced: PlacedWord[] = []
+  board.clauses.forEach((clause, clauseIndex) => {
+    for (const slot of clause.slots) {
+      const r = revertSlot(current, { clause: clauseIndex, role: slot.role })
+      current = r.board
+      displaced.push(...r.displaced)
+    }
+  })
+  return { board: current, displaced }
 }

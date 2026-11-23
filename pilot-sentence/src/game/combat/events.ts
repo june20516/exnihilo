@@ -2,7 +2,18 @@ import type { StatusKind } from '@/kit/core/entity'
 import type { InterventionStep, SlotAddress } from '@/game/content/encounters'
 import type { TokenId, WordId } from '@/game/content/words'
 
-export type RejectReason = 'kindMismatch' | 'modifiersFull' | 'notEnoughAp' | 'unplayable' | 'noTarget' | 'notPlayerTurn'
+export type RejectReason =
+  | 'kindMismatch'
+  | 'modifiersFull'
+  | 'slotInactive'
+  | 'notEnoughAp'
+  | 'unplayable'
+  | 'noTarget'
+  | 'notPlayerTurn'
+  | 'noSwapLeft'
+  | 'noPaidDraw'
+  | 'deckEmpty'
+  | 'cannotCast'
 export type FizzleReason = 'noSubject' | 'noObject' | 'frozen'
 
 export type CombatEvent =
@@ -16,6 +27,13 @@ export type CombatEvent =
   | { readonly type: 'healed'; readonly entityId: string; readonly amount: number }
   | { readonly type: 'statusApplied'; readonly entityId: string; readonly status: StatusKind; readonly amount: number }
   | { readonly type: 'poisonTick'; readonly entityId: string; readonly amount: number }
+  | { readonly type: 'hpLost'; readonly entityId: string; readonly amount: number }
+  | { readonly type: 'grew'; readonly entityId: string; readonly amount: number }
+  | { readonly type: 'cleansed'; readonly entityId: string }
+  | { readonly type: 'swapped'; readonly clause: number }
+  | { readonly type: 'burned'; readonly wordId: WordId }
+  | { readonly type: 'cast'; readonly by: 'player' | 'enemy' }
+  | { readonly type: 'resourceGained'; readonly amount: number; readonly total: number }
   | { readonly type: 'summoned'; readonly entityId: string; readonly tokenId: TokenId }
   | { readonly type: 'died'; readonly entityId: string }
   | { readonly type: 'dried'; readonly at: SlotAddress; readonly wordId: WordId; readonly modifierIndex: number | null }

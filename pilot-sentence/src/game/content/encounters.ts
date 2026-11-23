@@ -30,14 +30,20 @@ export interface EnemySpec {
 
 export interface EncounterDef {
   readonly id: string
+  readonly name: string
   readonly enemies: readonly EnemySpec[]
   readonly initialSentence: readonly ClauseSpec[]
   readonly interventionLoop: readonly InterventionStep[]
+  /** 낭독 모드(execution: cast)에서 적이 문장을 낭독하는 주기(턴). */
+  readonly castEvery: number
 }
+
+const at = (role: SlotRole): SlotAddress => ({ clause: 0, role })
 
 export const ENCOUNTERS: Record<string, EncounterDef> = {
   spider: {
     id: 'spider',
+    name: '거미',
     enemies: [{ defId: 'spider', name: '거미', hp: 42, row: 'front', portrait: '/assets/spider.jpg' }],
     initialSentence: [
       {
@@ -50,16 +56,65 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
       },
     ],
     interventionLoop: [
-      { kind: 'revert', at: { clause: 0, role: 'subject' } },
-      { kind: 'revert', at: { clause: 0, role: 'verb' } },
+      { kind: 'revert', at: at('subject') },
+      { kind: 'revert', at: at('verb') },
       { kind: 'enrage' },
-      { kind: 'revert', at: { clause: 0, role: 'verb' } },
+      { kind: 'revert', at: at('verb') },
       { kind: 'pollute', word: 'web', count: 1 },
-      { kind: 'revert', at: { clause: 0, role: 'object' } },
+      { kind: 'revert', at: at('object') },
     ],
+    castEvery: 2,
+  },
+  swarm: {
+    id: 'swarm',
+    name: '거미 떼',
+    enemies: [0, 1, 2].map(() => ({ defId: 'spiderling', name: '새끼 거미', hp: 12, row: 'front' as const, portrait: '/assets/spider.jpg' })),
+    initialSentence: [
+      {
+        frameId: 'transitive',
+        slots: [
+          { role: 'subject', head: 'spiderling' },
+          { role: 'object', head: 'you' },
+          { role: 'verb', head: 'nibble' },
+        ],
+      },
+    ],
+    interventionLoop: [
+      { kind: 'revert', at: at('subject') },
+      { kind: 'attach', at: at('verb'), word: 'fiercely' },
+      { kind: 'revert', at: at('object') },
+      { kind: 'revert', at: at('verb') },
+      { kind: 'enrage' },
+    ],
+    castEvery: 2,
+  },
+  slime: {
+    id: 'slime',
+    name: '슬라임',
+    enemies: [{ defId: 'slime', name: '슬라임', hp: 30, row: 'front', portrait: '/assets/spider.jpg' }],
+    initialSentence: [
+      {
+        frameId: 'transitive',
+        slots: [
+          { role: 'subject', head: 'slime' },
+          { role: 'object', head: 'you' },
+          { role: 'verb', head: 'swell' },
+        ],
+      },
+    ],
+    interventionLoop: [
+      { kind: 'replace', at: at('verb'), word: 'crush' },
+      { kind: 'revert', at: at('subject') },
+      { kind: 'revert', at: at('verb') },
+      { kind: 'enrage' },
+      { kind: 'revert', at: at('object') },
+    ],
+    castEvery: 2,
   },
 }
 
+/** spec 10.5 시작 덱(15장). */
 export const STARTER_DECK: readonly WordId[] = [
-  'you', 'you', 'mark', 'scarecrow', 'bite', 'guard', 'mend', 'sleep', 'blind', 'fiercely',
+  'you', 'you', 'mark', 'mark', 'scarecrow', 'bite', 'bite', 'guard', 'mend', 'scare', 'rage', 'hide', 'blind', 'venomous',
+  'fiercely',
 ]

@@ -1,5 +1,5 @@
 import type { SlotAddress } from '@/game/content/encounters'
-import type { Board, PlacedWord } from '@/game/sentence/board'
+import { type Board, isSlotActive, type PlacedWord } from '@/game/sentence/board'
 import { attachParticle } from './josa'
 import { FRAMES } from './frames'
 
@@ -22,6 +22,7 @@ export function renderClause(board: Board, clauseIndex: number, nameOf: (word: P
     const slot = clause.slots.find((s) => s.role === slotDef.role)
     if (!slot) continue
     const address = { clause: clauseIndex, role: slot.role }
+    if (!isSlotActive(board, address)) continue
     slot.modifiers.forEach((modifier, index) => {
       if (modifier) tokens.push({ kind: 'modifier', text: nameOf(modifier), address, word: modifier, modifierIndex: index })
     })

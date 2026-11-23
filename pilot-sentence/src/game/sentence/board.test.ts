@@ -1,7 +1,8 @@
 import { ENCOUNTERS } from '@/game/content/encounters'
 import type { WordId } from '@/game/content/words'
 import {
-  buildBoard, dryInk, enemyAttach, enemyReplace, getSlot, placeWord, playerWordsOnBoard, revertSlot, sealSlot,
+  buildBoard, dryInk, enemyAttach, enemyReplace, getSlot, isSlotActive, placeWord, playerWordsOnBoard, revertAll, revertSlot, sealSlot,
+  swapNounPhrases,
   type PlacedWord,
 } from './board'
 
@@ -35,9 +36,6 @@ test('동사 슬롯에 명사를 놓으면 kindMismatch', () => {
   expect(placeWord(spiderBoard(), V, pw('you'))).toEqual({ ok: false, reason: 'kindMismatch' })
 })
 
-test('자동사는 타동 문형 동사 슬롯에 놓을 수 없다', () => {
-  expect(placeWord(spiderBoard(), V, pw('sleep'))).toEqual({ ok: false, reason: 'kindMismatch' })
-})
 
 test('부사는 명사 슬롯에, 형용사는 동사 슬롯에 붙일 수 없다', () => {
   expect(placeWord(spiderBoard(), S, pw('fiercely'))).toEqual({ ok: false, reason: 'kindMismatch' })
@@ -133,4 +131,39 @@ test('playerWordsOnBoard는 보드 위 플레이어 단어만', () => {
 
 test('수식어가 아닌 단어에 modifierIndex를 주면 kindMismatch (head를 바꾸지 않는다)', () => {
   expect(placeWord(spiderBoard(), S, pw('you'), 1)).toEqual({ ok: false, reason: 'kindMismatch' })
+})
+
+describe('동사가 문형을 결정', () => {
+  test('자동사를 놓으면 목적어 슬롯이 비활성이 된다', () => {
+    const r = placeWord(spiderBoard(), V, pw('rage'))
+    if (!r.ok) throw new Error('배치 실패')
+    expect(isSlotActive(r.board, O)).toBe(false)
+    expect(isSlotActive(r.board, S)).toBe(true)
+  })
+
+  test('비활성 슬롯에 놓으면 slotInactive', () => {
+    const r = placeWord(spiderBoard(), V, pw('rage'))
+    if (!r.ok) throw new Error('배치 실패')
+    expect(placeWord(r.board, O, pw('mark', 2, 'x'))).toEqual({ ok: false, reason: 'slotInactive' })
+  })
+
+  test('타동사로 되돌리면 원래 목적어가 다시 활성', () => {
+    const a = placeWord(spiderBoard(), V, pw('rage', 2, 'a'))
+    if (!a.ok) throw new Error('배치 실패')
+    const b = placeWord(a.board, V, pw('slash', 2, 'b'))
+    if (!b.ok) throw new Error('배치 실패')
+    expect(isSlotActive(b.board, O)).toBe(true)
+    expect(getSlot(b.board, O).head.wordId).toBe('you')
+  })
+})
+
+test('swapNounPhrases는 head와 수식어를 맞바꾸고, revertAll은 전부 원문으로 돌린다', () => {
+  const swapped = swapNounPhrases(spiderBoard(), 0)
+  expect(getSlot(swapped, S).head.wordId).toBe('you')
+  expect(getSlot(swapped, O).modifiers[0]?.wordId).toBe('venomous')
+  const a = placeWord(spiderBoard(), V, pw('slash'))
+  if (!a.ok) throw new Error('배치 실패')
+  const r = revertAll(a.board)
+  expect(r.board).toEqual(spiderBoard())
+  expect(r.displaced.map((d) => d.wordId)).toEqual(['slash'])
 })

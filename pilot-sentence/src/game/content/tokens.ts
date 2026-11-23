@@ -7,4 +7,5 @@ export interface TokenDef {
 
 export const TOKENS: Record<TokenId, TokenDef> = {
   scarecrow: { name: '허수아비', hp: 8 },
+  golem: { name: '돌골렘', hp: 15 },
 }

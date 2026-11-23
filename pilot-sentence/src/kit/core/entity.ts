@@ -110,3 +110,13 @@ export function scaleOutgoing(base: number, source: Entity): number {
 export function scaleIncoming(amount: number, target: Entity): number {
   return amount * (target.statuses.vulnerable > 0 ? VULNERABLE_MULTIPLIER : 1)
 }
+
+/** 보호를 무시하고 HP를 직접 깎는다(자해, 대가 등). */
+export function loseHp(entity: Entity, amount: number): { entity: Entity; lost: number } {
+  const lost = Math.min(entity.hp, Math.max(0, amount))
+  return { entity: { ...entity, hp: entity.hp - lost }, lost }
+}
+
+export function growMaxHp(entity: Entity, amount: number): Entity {
+  return { ...entity, maxHp: entity.maxHp + amount, hp: entity.hp + amount }
+}

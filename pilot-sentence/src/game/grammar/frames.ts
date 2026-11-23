@@ -23,7 +23,7 @@ export const FRAMES: Record<FrameId, Frame> = {
     slots: [
       { role: 'subject', accepts: ['target'], particle: 'subject' },
       { role: 'object', accepts: ['target'], particle: 'object' },
-      { role: 'verb', accepts: ['verbTransitive'], particle: null },
+      { role: 'verb', accepts: ['verbTransitive', 'verbIntransitive'], particle: null },
     ],
   },
 }
