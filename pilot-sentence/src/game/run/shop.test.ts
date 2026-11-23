@@ -1,6 +1,7 @@
 import { createRng } from '@/kit/core/rng'
 import { applyStructure, type BuildState, EMPTY_BUILD, type RelicId } from '@/game/build/build'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
+import { getWord } from '@/game/content/words'
 import { buyFrom, priceOf, rollShop, type ShopState } from './shop'
 
 const roll = (seed: number, build = EMPTY_BUILD, deck = RALLY_STARTER_DECK) => rollShop(createRng(seed), deck, build)[0]
@@ -11,6 +12,19 @@ test('진열 3개는 종류가 서로 다르다(시드 50개)', () => {
     expect(kinds).toHaveLength(3)
     expect(new Set(kinds).size).toBe(3)
   }
+})
+
+test('단어 보상은 조합 재료(형용사·부사·연결어)가 뽑힐 가중치가 3배다: 단어 보상 중 55~72%', () => {
+  let materials = 0
+  let words = 0
+  for (let seed = 1; seed <= 800; seed++) {
+    const word = roll(seed).items.find((i) => i.offer.kind === 'word')?.offer
+    if (word?.kind !== 'word') continue
+    words++
+    if (['adjective', 'adverb', 'connective'].includes(getWord(word.wordId).kind)) materials++
+  }
+  expect(materials / words).toBeGreaterThan(0.55)
+  expect(materials / words).toBeLessThan(0.72)
 })
 
 test('구매마다 남은 값 ×1.5 올림: 8 → 12 → 18', () => {

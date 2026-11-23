@@ -2,7 +2,7 @@ import { nextFloat, nextInt, type RngState, shuffle } from '@/kit/core/rng'
 import { type BuildState, MAX_SLOTS, type RelicId, type StructureId } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import { getWord, type Rarity, WORDS, type WordId } from '@/game/content/words'
-import type { SlotRole } from '@/game/grammar/frames'
+import type { SlotRole, WordKind } from '@/game/grammar/frames'
 
 export type Offer =
   | { readonly kind: 'word'; readonly wordId: WordId }
@@ -26,6 +26,9 @@ export interface ShopState {
 export const BASE_PRICE: Readonly<Record<OfferKind, number>> = { word: 6, upgrade: 8, structure: 12, relic: 15 }
 const RARITY_ADJUST: Readonly<Record<Rarity, number>> = { starter: -3, common: -3, uncommon: 0, rare: 3 }
 const RARITY_WEIGHT: Readonly<Record<Rarity, number>> = { starter: 60, common: 60, uncommon: 30, rare: 10 }
+/** 조합 재료(형용사·부사·연결어)는 단어 보상으로 뽑힐 가중치가 이만큼 크다. 빌드 레이어를 런마다 겪게 하려는 보정. */
+export const MATERIAL_WEIGHT = 3
+const MATERIAL_KINDS: readonly WordKind[] = ['adjective', 'adverb', 'connective']
 export const PRICE_GROWTH = 1.5
 const SHOP_SIZE = 3
 
@@ -79,12 +82,17 @@ function pickUniform<T>(rng: RngState, items: readonly T[]): [T, RngState] {
   return [items[index], next]
 }
 
+function wordWeight(id: WordId): number {
+  const word = getWord(id)
+  return RARITY_WEIGHT[word.rarity] * (MATERIAL_KINDS.includes(word.kind) ? MATERIAL_WEIGHT : 1)
+}
+
 function pickWord(rng: RngState): [WordId, RngState] {
-  const total = WORD_POOL.reduce((sum, id) => sum + RARITY_WEIGHT[getWord(id).rarity], 0)
+  const total = WORD_POOL.reduce((sum, id) => sum + wordWeight(id), 0)
   const [roll, next] = nextFloat(rng)
   let remaining = roll * total
   for (const id of WORD_POOL) {
-    remaining -= RARITY_WEIGHT[getWord(id).rarity]
+    remaining -= wordWeight(id)
     if (remaining < 0) return [id, next]
   }
   return [WORD_POOL[WORD_POOL.length - 1], next]
