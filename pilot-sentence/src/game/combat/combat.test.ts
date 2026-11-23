@@ -1,9 +1,27 @@
 import { BALANCE } from '@/game/content/balance'
-import { STARTER_DECK } from '@/game/content/encounters'
+import { ENCOUNTERS, STARTER_DECK } from '@/game/content/encounters'
 import { getSlot } from '@/game/sentence/board'
 import { type CombatState, currentIntent, reduceCombat, startCombat, upcomingIntents } from './combat'
 
-const start = () => startCombat('spider', STARTER_DECK, 123, BALANCE).state
+/**
+ * 엔진 규칙 테스트용 고정 조우. 실제 거미 데이터는 밸런스 튜닝으로 바뀌므로(게이트가 검증),
+ * 엔진 테스트는 이 고정 루프에 의존한다: 주어 되돌림 → 목적어 되돌림 → 격렬하게 → 오염 → 격앙.
+ */
+const S0 = { clause: 0, role: 'subject' } as const
+ENCOUNTERS['test-spider'] = {
+  ...ENCOUNTERS.spider,
+  id: 'test-spider',
+  enemies: [{ ...ENCOUNTERS.spider.enemies[0], hp: 30 }],
+  interventionLoop: [
+    { kind: 'revert', at: S0 },
+    { kind: 'revert', at: { clause: 0, role: 'object' } },
+    { kind: 'attach', at: { clause: 0, role: 'verb' }, word: 'fiercely' },
+    { kind: 'pollute', word: 'web', count: 1 },
+    { kind: 'enrage' },
+  ],
+}
+
+const start = () => startCombat('test-spider', STARTER_DECK, 123, BALANCE).state
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const hp = (s: CombatState, id: string) => s.entities.find((e) => e.id === id)?.hp
@@ -12,7 +30,7 @@ const withHand = (s: CombatState, hand: { instanceId: string; wordId: string }[]
 })
 
 test('시작: 손패 4, 행동력 3, 첫 예고는 주어 되돌림', () => {
-  const r = startCombat('spider', STARTER_DECK, 123, BALANCE)
+  const r = startCombat('test-spider', STARTER_DECK, 123, BALANCE)
   expect(r.state.deck.hand).toHaveLength(4)
   expect(r.state.ap).toBe(3)
   expect(currentIntent(r.state)).toEqual({ kind: 'revert', at: S })

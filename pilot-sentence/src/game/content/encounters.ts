@@ -38,7 +38,7 @@ export interface EncounterDef {
 export const ENCOUNTERS: Record<string, EncounterDef> = {
   spider: {
     id: 'spider',
-    enemies: [{ defId: 'spider', name: '거미', hp: 30, row: 'front', portrait: '/assets/spider.jpg' }],
+    enemies: [{ defId: 'spider', name: '거미', hp: 42, row: 'front', portrait: '/assets/spider.jpg' }],
     initialSentence: [
       {
         frameId: 'transitive',
@@ -51,10 +51,11 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
     ],
     interventionLoop: [
       { kind: 'revert', at: { clause: 0, role: 'subject' } },
+      { kind: 'revert', at: { clause: 0, role: 'verb' } },
+      { kind: 'enrage' },
       { kind: 'revert', at: { clause: 0, role: 'object' } },
       { kind: 'attach', at: { clause: 0, role: 'verb' }, word: 'fiercely' },
       { kind: 'pollute', word: 'web', count: 1 },
-      { kind: 'enrage' },
     ],
   },
 }
