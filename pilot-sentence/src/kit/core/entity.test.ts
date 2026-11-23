@@ -27,12 +27,26 @@ test('회복은 최대 HP를 넘지 않는다', () => {
   expect(heal(hurt, 10)).toMatchObject({ healed: 3 })
 })
 
-test('턴 종료: 독 피해는 보호를 무시하고 1 감소, 보호는 사라짐', () => {
+test('턴 종료: 독 피해는 보호를 무시하고 1 감소', () => {
   const e = addStatus(addStatus(spider(), 'poison', 3), 'block', 5)
   const r = tickEndOfTurn(e)
   expect(r.poisonDamage).toBe(3)
   expect(r.entity.hp).toBe(27)
-  expect(r.entity.statuses).toMatchObject({ poison: 2, block: 0 })
+  expect(r.entity.statuses.poison).toBe(2)
+})
+
+test('이번 턴에 얻은 보호는 첫 턴 종료 뒤에도 남고, 두 번째 턴 종료에 사라진다', () => {
+  const t1 = tickEndOfTurn(addStatus(spider(), 'block', 5)).entity
+  expect(t1.statuses.block).toBe(5)
+  expect(tickEndOfTurn(t1).entity.statuses.block).toBe(0)
+})
+
+test('피해는 묵은 보호부터 소모한다', () => {
+  const old = tickEndOfTurn(addStatus(spider(), 'block', 3)).entity
+  const both = addStatus(old, 'block', 4)
+  const hit = applyDamage(both, 5).entity
+  expect(hit.statuses.block).toBe(2)
+  expect(tickEndOfTurn(hit).entity.statuses.block).toBe(2)
 })
 
 test('연산은 원본 개체를 바꾸지 않는다', () => {
