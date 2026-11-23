@@ -1,3 +1,4 @@
+import { type BuildState, EMPTY_BUILD, wordLookup } from '@/game/build/build'
 import { clearBlock, createEntity, type Entity, isAlive, tickEndOfTurn } from '@/kit/core/entity'
 import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
@@ -6,7 +7,7 @@ import type { Balance } from '@/game/content/balance'
 import { type ClauseSpec, RALLY_ENCOUNTERS, type RallyEncounterDef, type SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
-import { resolveClause } from '@/game/resolve/resolve'
+import { type ClauseHooks, resolveClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, placeWord, type PlacedWord, revertAll } from '@/game/sentence/board'
 import { blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isDefensiveVerb, materialize } from './sentence'
 
@@ -40,6 +41,23 @@ export interface RallyState {
   readonly rng: RngState
   readonly nextId: number
   readonly log: RallyLog
+  /** 런에서 쌓인 영구 성장. 기본 랠리는 EMPTY_BUILD. */
+  readonly build: BuildState
+  /** 층 배율(적 HP·피해). 기본 1·1. */
+  readonly enemyScale: EnemyScale
+}
+
+export interface EnemyScale {
+  readonly hp: number
+  readonly damage: number
+}
+
+/** 런이 전투를 시작할 때 넘기는 값. 비어 있으면 기본 랠리와 같다. */
+export interface RallyOptions {
+  readonly build?: BuildState
+  readonly playerHp?: number
+  readonly playerMaxHp?: number
+  readonly enemyScale?: EnemyScale
 }
 
 export type RallyAction =
@@ -56,8 +74,11 @@ export type RallyAction =
   | { readonly type: 'cast' }
   | { readonly type: 'endTurn' }
 
-/** spec §1·§4의 규칙 값. */
-export const RALLY_RULES = { startHand: 6, drawPerTurn: 5, handMax: 8, discardsPerTurn: 1 } as const
+/** spec §1·§4의 규칙 값. 손패 상한과 버리기 횟수는 빌드 상태(EMPTY_BUILD 기본 8·1)에 있다. */
+export const RALLY_RULES = { startHand: 6, drawPerTurn: 5 } as const
+
+/** 적 예고 문장의 수식어 칸 수(내 빌드와 무관). */
+const ENEMY_MODIFIER_SLOTS = 2
 
 export const PLAYER_ID = 'p'
 
@@ -102,7 +123,7 @@ function drawCards(state: RallyState, count: number): Result {
     }
     const [card, ...rest] = drawPile
     drawPile = rest
-    if (hand.length >= RALLY_RULES.handMax) {
+    if (hand.length >= state.build.handMax) {
       discardPile = [...discardPile, card]
       burned.push({ type: 'burned', wordId: card.wordId })
     } else {
@@ -119,7 +140,7 @@ function drawCards(state: RallyState, count: number): Result {
 /** 내 턴 시작: 보호 소멸, 버리기 회복, 드로우, 대상 보정. */
 function startPlayerTurn(state: RallyState, drawCount: number): Result {
   const entities = state.entities.map((e) => (e.id === PLAYER_ID ? clearBlock(e) : e))
-  const refreshed: RallyState = { ...state, entities, discardsLeft: RALLY_RULES.discardsPerTurn }
+  const refreshed: RallyState = { ...state, entities, discardsLeft: state.build.discardsPerTurn }
   const drawn = drawCards(refreshed, drawCount)
   const target = drawn.state.entities.find((e) => e.id === drawn.state.targetId)
   const targetId = target && isAlive(target) ? drawn.state.targetId : firstAliveEnemy(drawn.state.entities)
@@ -130,11 +151,22 @@ function startPlayerTurn(state: RallyState, drawCount: number): Result {
   }
 }
 
-export function startRally(encounterId: string, deckWordIds: readonly WordId[], seed: number, balance: Balance): Result {
+export function startRally(
+  encounterId: string,
+  deckWordIds: readonly WordId[],
+  seed: number,
+  balance: Balance,
+  options: RallyOptions = {},
+): Result {
   const encounter = getEncounter(encounterId)
-  const player = createEntity({ id: PLAYER_ID, defId: 'player', name: '탐험가', side: 'ally', hp: balance.playerMaxHp })
+  const build = options.build ?? EMPTY_BUILD
+  const enemyScale = options.enemyScale ?? { hp: 1, damage: 1 }
+  const maxHp = options.playerMaxHp ?? balance.playerMaxHp
+  const player = { ...createEntity({ id: PLAYER_ID, defId: 'player', name: '탐험가', side: 'ally', hp: maxHp }), hp: options.playerHp ?? maxHp }
   const enemies = encounter.enemies.map((spec, index) =>
-    createEntity({ id: `e${index}`, defId: spec.defId, name: spec.name, side: 'enemy', hp: spec.hp, row: spec.row }),
+    createEntity({
+      id: `e${index}`, defId: spec.defId, name: spec.name, side: 'enemy', hp: Math.round(spec.hp * enemyScale.hp), row: spec.row,
+    }),
   )
   const cards = deckWordIds.map((wordId, index) => ({ instanceId: `c${index}`, wordId }))
   const { deck, rng } = createDeck(cards, createRng(seed))
@@ -143,14 +175,16 @@ export function startRally(encounterId: string, deckWordIds: readonly WordId[], 
     turn: 1,
     phase: 'player',
     entities: [player, ...enemies],
-    board: blankSentence(balance.maxModifiers),
+    board: blankSentence(build.slots),
     deck,
     targetId: firstAliveEnemy(enemies),
-    discardsLeft: RALLY_RULES.discardsPerTurn,
+    discardsLeft: build.discardsPerTurn,
     executions: 0,
     rng,
     nextId: cards.length,
     log: { casts: 0, defensiveCasts: 0, deadTurns: 0, bestBurst: 0 },
+    build,
+    enemyScale,
   }
   return startPlayerTurn(initial, RALLY_RULES.startHand)
 }
@@ -233,9 +267,17 @@ function enemyDamageTaken(events: readonly CombatEvent[], entities: readonly Ent
   )
 }
 
-function runClause(state: RallyState, board: Board): { state: RallyState; events: CombatEvent[] } {
+/** 절 하나를 실행한다. 내 절은 강화(lookup)와 빌드 훅, 적 절은 층 배율 훅을 받는다. */
+function runClause(
+  state: RallyState,
+  board: Board,
+  clause: number,
+  hooks: ClauseHooks,
+  side: 'player' | 'enemy',
+): { state: RallyState; events: CombatEvent[] } {
   let nextId = state.nextId
-  const r = resolveClause(board, 0, state.entities, () => `t${nextId++}`, { executions: state.executions })
+  const lookup = side === 'player' ? wordLookup(state.build) : undefined
+  const r = resolveClause(board, clause, state.entities, () => `t${nextId++}`, { executions: state.executions, lookup, hooks })
   return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events }
 }
 
@@ -251,11 +293,11 @@ function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
     return { state: { ...current, phase: outcome }, events }
   }
 
-  const maxModifiers = current.board.clauses[0]?.slots[0]?.modifiers.length ?? 0
   for (const [index, spec] of getEncounter(current.encounterId).enemies.entries()) {
     const enemyId = `e${index}`
     if (!isAliveEnemy(current, enemyId) || !spec) continue
-    const executed = runClause(current, enemyBoard(enemyIntent(current, index), enemyId, maxModifiers))
+    const board = enemyBoard(enemyIntent(current, index), enemyId, ENEMY_MODIFIER_SLOTS)
+    const executed = runClause(current, board, 0, { damageScale: current.enemyScale.damage }, 'enemy')
     current = executed.state
     events.push(...executed.events)
     const outcome = outcomeOf(current.entities)
@@ -283,7 +325,7 @@ function cast(state: RallyState): Result {
   if (!hasVerb(state.board)) return reject(state, 'noVerb')
   const events: CombatEvent[] = [{ type: 'cast', by: 'player' }]
   const verbId = getSlot(state.board, { clause: 0, role: 'verb' }).head.wordId
-  const executed = runClause(state, materialize(state.board, state.targetId))
+  const executed = runClause(state, materialize(state.board, state.targetId), 0, {}, 'player')
   events.push(...executed.events)
   const burst = enemyDamageTaken(executed.events, executed.state.entities)
   const cleared = revertAll(executed.state.board)

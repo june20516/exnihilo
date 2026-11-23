@@ -3,6 +3,7 @@ import { BALANCE } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
+import { EMPTY_BUILD } from '@/game/build/build'
 import { sentenceFormula } from './formula'
 import { previewEvents, previewRound } from './preview'
 import './testFixtures'
@@ -96,4 +97,12 @@ test.each(['spider', 'swarm', 'slime'])('계산식의 값은 실제 첫 피해(�
     }
   }
   expect(checked).toBeGreaterThan(5)
+})
+
+test('계산식은 강화를 반영한다: 물어뜯는다★ + 격렬하게★ → "9 × 2 = 18"', () => {
+  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE, { build: { ...EMPTY_BUILD, upgrades: { bite: 1, fiercely: 1 } } }).state
+  let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'bite' }, { instanceId: 'h1', wordId: 'fiercely' }] } }
+  s = act(s, { type: 'place', instanceId: 'h0', at: V })
+  s = act(s, { type: 'place', instanceId: 'h1', at: V })
+  expect(sentenceFormula(s)?.text).toBe('9 × 2 = 18')
 })

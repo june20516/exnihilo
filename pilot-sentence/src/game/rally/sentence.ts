@@ -1,7 +1,7 @@
 import { type Entity, isAlive } from '@/kit/core/entity'
 import type { ClauseSpec } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
-import { FRAMES } from '@/game/grammar/frames'
+import { FRAMES, type SlotRole } from '@/game/grammar/frames'
 import { type Board, buildBoard, type PlacedWord, type SlotState } from '@/game/sentence/board'
 
 export const BLANK_SUBJECT: WordId = 'impliedSubject'
@@ -18,11 +18,11 @@ export function isBlank(word: PlacedWord): boolean {
   return word.owner === 'blank'
 }
 
-/** 매 턴 시작하는 내 문장: 빈 주어·빈 목적어·빈 동사, 수식어 칸은 모두 비어 있다. */
-export function blankSentence(maxModifiers: number): Board {
+/** 매 턴 시작하는 내 문장: 빈 주어·빈 목적어·빈 동사, 수식어 칸은 슬롯별 칸 수만큼 비어 있다. */
+export function blankSentence(slotCounts: Readonly<Record<SlotRole, number>>): Board {
   const slots: SlotState[] = FRAMES.transitive.slots.map((slotDef) => {
     const head = blankWord(BLANK_HEADS[slotDef.role])
-    const modifiers = Array.from({ length: maxModifiers }, () => null)
+    const modifiers = Array.from({ length: slotCounts[slotDef.role] }, () => null)
     return { role: slotDef.role, head, modifiers, originalHead: head, originalModifiers: modifiers, sealed: false }
   })
   return { clauses: [{ frameId: 'transitive', slots }] }

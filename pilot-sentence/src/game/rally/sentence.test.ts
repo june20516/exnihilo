@@ -4,6 +4,7 @@ import { resolveClause } from '@/game/resolve/resolve'
 import { type Board, type PlacedWord, placeWord } from '@/game/sentence/board'
 import { blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isDefensiveVerb, materialize } from './sentence'
 
+const TWO = { subject: 2, object: 2, verb: 2 }
 const P = createEntity({ id: 'p', defId: 'player', name: '탐험가', side: 'ally', hp: 60 })
 const E0 = createEntity({ id: 'e0', defId: 'spiderling', name: '새끼 거미 1', side: 'enemy', hp: 10 })
 const E1 = createEntity({ id: 'e1', defId: 'spiderling', name: '새끼 거미 2', side: 'enemy', hp: 10 })
@@ -16,18 +17,18 @@ const put = (board: Board, at: SlotAddress, word: PlacedWord) => {
 }
 const run = (board: Board, entities = [P, E0, E1]) => resolveClause(board, 0, entities, () => 'x', { executions: 0 })
 
-test('빈 문장에는 동사가 없다', () => expect(hasVerb(blankSentence(2))).toBe(false))
+test('빈 문장에는 동사가 없다', () => expect(hasVerb(blankSentence(TWO))).toBe(false))
 
-test('동사를 놓으면 동사가 있다', () => expect(hasVerb(put(blankSentence(2), V, card('bite')))).toBe(true))
+test('동사를 놓으면 동사가 있다', () => expect(hasVerb(put(blankSentence(TWO), V, card('bite')))).toBe(true))
 
 test('동사 한 장만 놓으면: (당신이) (지정한 적을) 물어뜯는다', () => {
-  const r = run(materialize(put(blankSentence(2), V, card('bite')), 'e1'))
+  const r = run(materialize(put(blankSentence(TWO), V, card('bite')), 'e1'))
   expect(r.events).toContainEqual({ type: 'damaged', entityId: 'e1', amount: 6, blocked: 0, sourceId: 'p' })
 })
 
 test('지원 동사의 빈 목적어는 당신이다', () => {
   const hurt = { ...P, hp: 50 }
-  const r = run(materialize(put(blankSentence(2), V, card('mend')), 'e0'), [hurt, E0])
+  const r = run(materialize(put(blankSentence(TWO), V, card('mend')), 'e0'), [hurt, E0])
   expect(r.events).toContainEqual({ type: 'healed', entityId: 'p', amount: 6 })
 })
 

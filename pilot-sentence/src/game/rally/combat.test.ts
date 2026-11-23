@@ -2,7 +2,8 @@ import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import { getSlot, playerWordsOnBoard } from '@/game/sentence/board'
-import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
+import { applyStructure, type BuildState, EMPTY_BUILD } from '@/game/build/build'
+import { type CardInst, type RallyAction, type RallyOptions, type RallyState, reduceRally, startRally } from './combat'
 import { hasVerb } from './sentence'
 import './testFixtures'
 
@@ -180,4 +181,37 @@ test('카드 보존: 무작위 행동 200회 동안 내 카드 instanceId 집합
     expect(ids(s)).toEqual(expected)
   }
   expect(getSlot(s.board, V)).toBeDefined()
+})
+
+describe('빌드와 전투 옵션', () => {
+  const withBuild = (build: BuildState, options: Omit<RallyOptions, 'build'> = {}) =>
+    startRally('test-dummy', DECK, 123, BALANCE, { ...options, build })
+
+  test('동사 칸 +1이면 동사 수식어 칸이 3개', () => {
+    const s = withBuild(applyStructure(EMPTY_BUILD, 'verbSlot')).state
+    expect(getSlot(s.board, V).modifiers).toHaveLength(3)
+  })
+
+  test('손패 상한 9, 버리기 2회', () => {
+    const s = withBuild(applyStructure(applyStructure(EMPTY_BUILD, 'handSize'), 'discard')).state
+    expect(s.discardsLeft).toBe(2)
+    const full = withHand(s, ['bite', 'bite', 'bite', 'guard', 'guard', 'hide', 'rage', 'scare'], cards(['mend', 'slash', 'hungry', 'cracked', 'venomous'], 'd'))
+    expect(act(full, { type: 'endTurn' }).state.deck.hand).toHaveLength(9)
+  })
+
+  test('강화한 물어뜯는다로 낭독하면 피해 9', () => {
+    const r = castVerb(withBuild({ ...EMPTY_BUILD, upgrades: { bite: 1 } }).state, 'bite')
+    expect(hp(r.state, 'e0')).toBe(21)
+  })
+
+  test('옵션: HP 30/60으로 시작', () => {
+    const p = withBuild(EMPTY_BUILD, { playerHp: 30, playerMaxHp: 60 }).state.entities.find((e) => e.id === 'p')
+    expect(p).toMatchObject({ hp: 30, maxHp: 60 })
+  })
+
+  test('옵션: 적 HP ×1.3, 적 피해 ×1.2 (30 → 39, 7 → 8)', () => {
+    const s = withBuild(EMPTY_BUILD, { enemyScale: { hp: 1.3, damage: 1.2 } }).state
+    expect(hp(s, 'e0')).toBe(39)
+    expect(hp(act(s, { type: 'endTurn' }).state, 'p')).toBe(52)
+  })
 })

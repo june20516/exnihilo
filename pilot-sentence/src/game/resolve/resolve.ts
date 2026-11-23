@@ -2,13 +2,19 @@ import {
   addStatus, applyDamage, createEntity, type Entity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing,
 } from '@/kit/core/entity'
 import { TOKENS } from '@/game/content/tokens'
-import { type ActionTarget, type AdjectiveMod, getWord, type TokenId, type VerbAction } from '@/game/content/words'
+import { type ActionTarget, type AdjectiveMod, getWord, type TokenId, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
 import { type Board, getSlot, isSlotActive, type PlacedWord, type SlotState } from '@/game/sentence/board'
 
 /** 대상 단어가 가리키는 개체 id. 토큰이 없으면 summon으로 소환을 요청한다. */
-export function resolveTargets(word: PlacedWord, entities: readonly Entity[]): { ids: string[]; summon: TokenId | null } {
-  const effect = getWord(word.wordId).effect
+export type WordLookup = (id: WordId) => WordDef
+
+export function resolveTargets(
+  word: PlacedWord,
+  entities: readonly Entity[],
+  lookup: WordLookup = getWord,
+): { ids: string[]; summon: TokenId | null } {
+  const effect = lookup(word.wordId).effect
   if (effect.type !== 'target') return { ids: [], summon: null }
   const ref = effect.ref
   const alive = entities.filter(isAlive)
@@ -40,9 +46,9 @@ export interface SlotMods {
   readonly selfDamageAfter: number
 }
 
-export function collectSlotMods(slot: SlotState): SlotMods {
+export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord): SlotMods {
   const mods: AdjectiveMod[] = slot.modifiers.flatMap((m) => {
-    const effect = m ? getWord(m.wordId).effect : null
+    const effect = m ? lookup(m.wordId).effect : null
     return effect?.type === 'adjective' ? effect.mods : []
   })
   const product = (kind: 'outgoingDamageMul' | 'incomingMul') =>
@@ -66,9 +72,9 @@ export interface AdverbSummary {
   readonly ignoreFreeze: boolean
 }
 
-export function collectAdverbs(verbSlot: SlotState): AdverbSummary {
+export function collectAdverbs(verbSlot: SlotState, lookup: WordLookup = getWord): AdverbSummary {
   const mods = verbSlot.modifiers.flatMap((m) => {
-    const effect = m ? getWord(m.wordId).effect : null
+    const effect = m ? lookup(m.wordId).effect : null
     return effect?.type === 'adverb' ? effect.mods : []
   })
   return {
@@ -121,9 +127,32 @@ class EntityTable {
   }
 }
 
+/**
+ * 빌드 레이어(유물·연결어·층 배율)가 해석에 끼어드는 자리. 모두 선택이며, 없으면 기본 규칙과 같다.
+ */
+export interface ClauseHooks {
+  /** 피해 동작 기본값 가산. */
+  readonly damageBonus?: number
+  /** 보호·회복 동작 기본값 가산. */
+  readonly supportBonus?: number
+  /** 한 슬롯에 형용사가 2개 이상이면 그 슬롯 배율 ×2(수식의 사슬). */
+  readonly chainBoost?: boolean
+  /** 부사 세기를 두 번 적용(강세). */
+  readonly adverbTwice?: boolean
+  /** 독을 거는 효과 가산. */
+  readonly poisonBonus?: number
+  /** 반복 횟수 가산. */
+  readonly repeatBonus?: number
+  /** 피해 동작 기본값 배율(층 배율). 기본 1. */
+  readonly damageScale?: number
+}
+
 export interface ResolveContext {
   /** 이번 전투에서 지금까지 실행된 절의 수([거듭]용). */
   readonly executions: number
+  /** 단어 정의 조회(강화 반영). 기본은 원래 정의. */
+  readonly lookup?: WordLookup
+  readonly hooks?: ClauseHooks
 }
 
 /** 절 하나를 실행한다. 동사가 자동사면 목적어 슬롯은 무시된다. */
@@ -137,7 +166,9 @@ export function resolveClause(
   const subjectSlot = getSlot(board, { clause, role: 'subject' })
   const objectSlot = getSlot(board, { clause, role: 'object' })
   const verbSlot = getSlot(board, { clause, role: 'verb' })
-  const verbEffect = getWord(verbSlot.head.wordId).effect
+  const lookup = context.lookup ?? getWord
+  const hooks = context.hooks ?? {}
+  const verbEffect = lookup(verbSlot.head.wordId).effect
   const actions = verbEffect.type === 'verb' ? verbEffect.actions : []
   const objectActive = isSlotActive(board, { clause, role: 'object' })
 
@@ -146,7 +177,7 @@ export function resolveClause(
   const finish = () => ({ entities: table.all(), events })
 
   const resolveSlot = (slot: SlotState): string[] => {
-    const { ids, summon } = resolveTargets(slot.head, table.all())
+    const { ids, summon } = resolveTargets(slot.head, table.all(), lookup)
     if (!summon) return ids
     const id = newId()
     table.add(createEntity({ id, defId: summon, name: TOKENS[summon].name, side: 'ally', hp: TOKENS[summon].hp }))
@@ -165,9 +196,9 @@ export function resolveClause(
     return finish()
   }
 
-  const subjectMods = collectSlotMods(subjectSlot)
-  const objectMods = collectSlotMods(objectSlot)
-  const adverbs = collectAdverbs(verbSlot)
+  const subjectMods = collectSlotMods(subjectSlot, lookup)
+  const objectMods = collectSlotMods(objectSlot, lookup)
+  const adverbs = collectAdverbs(verbSlot, lookup)
   const scaled = (amount: number) => Math.floor(amount * adverbs.power)
 
   /** 피해 한 번: 공격자 슬롯의 outgoing 수식과 피격자 슬롯의 incoming 수식을 적용한다. */
@@ -194,7 +225,7 @@ export function resolveClause(
     switch (action.kind) {
       case 'damage':
         for (const objectId of table.alive(objects)) {
-          const dealt = dealDamage(subjectId, subjectMods, objectId, objectMods, action.amount)
+          const dealt = dealDamage(subjectId, subjectMods, objectId, objectMods, Math.round(action.amount * (hooks.damageScale ?? 1)))
           if (action.lifesteal && dealt > 0) {
             const subject = table.get(subjectId)
             if (subject && isAlive(subject)) {

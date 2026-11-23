@@ -18,7 +18,7 @@
       }
     },
     {
-      "files": ["src/game/grammar/**", "src/game/content/**", "src/game/sentence/**", "src/game/resolve/**", "src/game/combat/**", "src/game/rally/**"],
+      "files": ["src/game/grammar/**", "src/game/content/**", "src/game/sentence/**", "src/game/resolve/**", "src/game/combat/**", "src/game/rally/**", "src/game/build/**", "src/game/run/**"],
       "rules": {
         "no-restricted-imports": ["error", { "patterns": [
           { "group": ["react", "react-dom", "react/*", "react-dom/*"], "message": "엔진은 React에 의존하지 않습니다." }

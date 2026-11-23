@@ -1,5 +1,6 @@
 import { type Entity, scaleIncoming, scaleOutgoing } from '@/kit/core/entity'
-import { getWord, type VerbAction } from '@/game/content/words'
+import { wordLookup } from '@/game/build/build'
+import type { VerbAction } from '@/game/content/words'
 import { collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
 import { getSlot } from '@/game/sentence/board'
 import type { RallyState } from './combat'
@@ -59,13 +60,14 @@ function pickAction(actions: readonly VerbAction[]): AmountAction | null {
 export function sentenceFormula(state: RallyState): { text: string; value: number } | null {
   if (!hasVerb(state.board)) return null
   const board = materialize(state.board, state.targetId)
+  const lookup = wordLookup(state.build)
   const verbSlot = getSlot(board, { clause: 0, role: 'verb' })
-  const effect = getWord(verbSlot.head.wordId).effect
+  const effect = lookup(verbSlot.head.wordId).effect
   if (effect.type !== 'verb') return null
   const action = pickAction(effect.actions)
   if (!action) return null
 
-  const adverbs = collectAdverbs(verbSlot)
+  const adverbs = collectAdverbs(verbSlot, lookup)
   const repeat = adverbs.repeat > 1 ? ` (×${adverbs.repeat}회)` : ''
 
   if (action.kind !== 'damage') {
@@ -76,11 +78,11 @@ export function sentenceFormula(state: RallyState): { text: string; value: numbe
   const subjectSlot = getSlot(board, { clause: 0, role: 'subject' })
   const objectSlot = getSlot(board, { clause: 0, role: 'object' })
   const firstEntity = (slot: typeof subjectSlot): Entity | undefined =>
-    state.entities.find((e) => e.id === resolveTargets(slot.head, state.entities).ids[0])
+    state.entities.find((e) => e.id === resolveTargets(slot.head, state.entities, lookup).ids[0])
   const source = firstEntity(subjectSlot)
   const target = firstEntity(objectSlot)
-  const sourceMods = collectSlotMods(subjectSlot)
-  const targetMods = collectSlotMods(objectSlot)
+  const sourceMods = collectSlotMods(subjectSlot, lookup)
+  const targetMods = collectSlotMods(objectSlot, lookup)
   const bonus = adverbs.executionBonus ? state.executions : 0
   const strength = source?.statuses.strength ?? 0
   const weak = (source?.statuses.weak ?? 0) > 0 ? WEAK_MULTIPLIER : 1
