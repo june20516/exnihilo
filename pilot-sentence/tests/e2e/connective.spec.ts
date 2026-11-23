@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
+import { expectInViewport } from './viewport.js'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -25,8 +26,7 @@ test('연결어를 연결어 칸에 놓으면 둘째 절이 열리고, 한 화�
   await page.getByTestId('connective-slot').click()
   await expect(page.getByTestId('connective-slot')).toContainText('그리고')
   await expect(page.locator('[data-testid="sentence"] [data-clause="1"]')).toBeVisible()
-  const { scrollH, innerH } = await page.evaluate(() => ({ scrollH: document.documentElement.scrollHeight, innerH: window.innerHeight }))
-  expect(scrollH).toBeLessThanOrEqual(innerH)
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula'])
 })
 
 test('두 절에 동사를 놓으면 계산식이 절마다 한 줄씩 보인다', async ({ page }) => {

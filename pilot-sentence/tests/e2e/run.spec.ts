@@ -1,14 +1,11 @@
 import { expect, type Page, test } from '@playwright/test'
+import { expectInViewport } from './viewport.js'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
 /** 시드 5: 1층은 슬라임 하나, 시작 손패에 물어뜯는다가 있다. 개발 플래그로 적 HP를 1로 만든다. */
 const RUN_URL = '/?seed=5&debugEnemyHp=1'
 
-const noScroll = async (page: Page) => {
-  const { scrollH, innerH } = await page.evaluate(() => ({ scrollH: document.documentElement.scrollHeight, innerH: window.innerHeight }))
-  expect(scrollH).toBeLessThanOrEqual(innerH)
-}
 const priceOf = async (page: Page, index: number) => Number((await page.getByTestId('offer-price').nth(index).innerText()).replace(/\D/g, ''))
 const gold = async (page: Page) => Number((await page.getByTestId('run-gold').innerText()).replace(/\D/g, ''))
 
@@ -28,7 +25,7 @@ test('런 시작: 상단에 층·HP·화폐가 보이고 한 화면에 들어간
   await expect(page.getByTestId('run-floor')).toContainText('1/7')
   await expect(page.getByTestId('run-gold')).toContainText('0')
   await expect(page.getByTestId('run-hp')).toContainText('60')
-  await noScroll(page)
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula'])
 })
 
 test('1층 승리: 연출이 끝난 뒤 상점이 열리고 화폐 25를 받는다', async ({ page }) => {
@@ -37,7 +34,7 @@ test('1층 승리: 연출이 끝난 뒤 상점이 열리고 화폐 25를 받는�
   await expect(page.getByTestId('leave-shop')).toBeVisible({ timeout: 10_000 })
   await expect(page.getByTestId('run-gold')).toContainText('25')
   await expect(page.getByTestId('offer')).toHaveCount(3)
-  await noScroll(page)
+  await expectInViewport(page, ['leave-shop', 'offer', 'shop-deck'])
 })
 
 test('상점: 사면 화폐가 줄고 남은 값이 ×1.5(올림) 오르며, 화폐가 모자란 보상은 누를 수 없다', async ({ page }) => {
@@ -76,3 +73,22 @@ test('샌드박스 덱이 저장돼 있어도 런은 시작 덱 15장으로 한�
   await winFloorOne(page)
   await expect(page.getByTestId('shop-deck')).toContainText('덱 15장', { timeout: 10_000 })
 })
+
+test('연출이 끝나기 전에는 상단 바가 정산 결과(화폐)를 먼저 보여 주지 않는다', async ({ page }) => {
+  await winFloorOne(page)
+  await expect(page.getByTestId('end-turn')).toBeVisible()
+  await expect(page.getByTestId('run-gold')).toContainText('화폐 0')
+  await expect(page.getByTestId('leave-shop')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('run-gold')).toContainText('화폐 25')
+})
+
+test('새 런은 두 번 눌러야 시작되고, 연출 중에는 누를 수 없다', async ({ page }) => {
+  await page.getByTestId('new-run').click()
+  await expect(page.getByTestId('new-run')).toContainText('한 번 더')
+  await expect(page.getByTestId('run-seed')).toContainText('seed 5')
+  await page.getByTestId('new-run').click()
+  await expect(page.getByTestId('run-seed')).toContainText('seed 6')
+  await page.getByTestId('end-turn').click()
+  await expect(page.getByTestId('new-run')).toBeDisabled()
+})
+

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { expectInViewport } from './viewport.js'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -25,11 +26,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('1440×900에서 스크롤 없이 한 화면, 예고·미리보기가 보인다', async ({ page }) => {
-  const { scrollH, innerH } = await page.evaluate(() => ({
-    scrollH: document.documentElement.scrollHeight,
-    innerH: window.innerHeight,
-  }))
-  expect(scrollH).toBeLessThanOrEqual(innerH)
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula'])
   await expect(page.getByTestId('intent-e0')).toBeInViewport()
   await expect(page.getByTestId('intent-e0')).toContainText('물어뜯는다')
   await expect(page.getByTestId('preview-enemy')).toBeInViewport()

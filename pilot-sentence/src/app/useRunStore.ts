@@ -8,6 +8,8 @@ import { isCombatEvent, reduceRun, type RunAction, type RunEvent, type RunState,
 
 export interface RunStore {
   readonly state: RunState
+  /** 화면 요약(상단 바)에 보일 상태: 연출이 재생 중이면 행동 직전 상태, 끝나면 지금 상태. 정산 결과가 연출보다 먼저 드러나지 않게 한다. */
+  readonly shown: RunState
   readonly busy: boolean
   readonly lastEvents: readonly RunEvent[]
   dispatch(action: RunAction): void
@@ -27,6 +29,7 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
   )
   const [state, setState] = useState(() => debug(null, startRun(seed, BALANCE).state))
   const stateRef = useRef(state)
+  const [shown, setShown] = useState(state)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [lastEvents, setLastEvents] = useState<readonly RunEvent[]>([])
@@ -41,12 +44,17 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
       setState(next)
       setLastEvents(result.events)
       const combatEvents = result.events.filter(isCombatEvent)
-      if (combatEvents.length === 0) return
+      if (combatEvents.length === 0) {
+        setShown(next)
+        return
+      }
+      setShown(before)
       busyRef.current = true
       setBusy(true)
       void playerRef.current?.play(combatEvents).finally(() => {
         busyRef.current = false
         setBusy(false)
+        setShown(stateRef.current)
       })
     },
     [debug],
@@ -57,10 +65,11 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
       const next = debug(null, startRun(nextSeed, BALANCE).state)
       stateRef.current = next
       setState(next)
+      setShown(next)
       setLastEvents([])
     },
     [debug],
   )
 
-  return { state, busy, lastEvents, dispatch, restart }
+  return { state, shown, busy, lastEvents, dispatch, restart }
 }
