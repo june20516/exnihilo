@@ -53,9 +53,9 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
       { kind: 'revert', at: { clause: 0, role: 'subject' } },
       { kind: 'revert', at: { clause: 0, role: 'verb' } },
       { kind: 'enrage' },
-      { kind: 'revert', at: { clause: 0, role: 'object' } },
-      { kind: 'attach', at: { clause: 0, role: 'verb' }, word: 'fiercely' },
+      { kind: 'revert', at: { clause: 0, role: 'verb' } },
       { kind: 'pollute', word: 'web', count: 1 },
+      { kind: 'revert', at: { clause: 0, role: 'object' } },
     ],
   },
 }

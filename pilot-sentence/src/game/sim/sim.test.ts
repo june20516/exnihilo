@@ -55,3 +55,13 @@ test('수식어 단어는 칸을 명시한 후보만 나온다(중복 없음)', 
   expect(keys).not.toContain('place:blind@0:subject')
   expect(new Set(keys).size).toBe(keys.length)
 })
+
+test('점수는 이월되는 보호를 반영한다: 적 보호는 감점, 내 보호는 가점', () => {
+  const s = game.start(1)
+  const withBlock = (id: string, block: number) => ({
+    ...s,
+    entities: s.entities.map((e) => (e.id === id ? { ...e, statuses: { ...e.statuses, block } } : e)),
+  })
+  expect(scoreState(withBlock('e0', 6))).toBeLessThan(scoreState(s))
+  expect(scoreState(withBlock('p', 6))).toBeGreaterThan(scoreState(s))
+})

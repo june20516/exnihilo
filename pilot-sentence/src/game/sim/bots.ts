@@ -6,14 +6,19 @@ import type { SimCombatAction } from './combatGame'
 type CombatPolicy = Policy<CombatState, SimCombatAction>
 
 const ENEMY_HP_WEIGHT = 1.5
+/** 다음 턴까지 이월되는 보호의 가치(HP 대비). */
+const BLOCK_WEIGHT = 0.5
 const OUTCOME_BONUS = 1000
 
-/** 상태 평가: 내 HP는 높게, 적 HP는 낮게, 승패는 압도적으로. */
+/** 상태 평가: 내 HP·보호는 높게, 적 HP·보호는 낮게, 승패는 압도적으로. */
 export function scoreState(state: CombatState): number {
-  const playerHp = state.entities.find((e) => e.id === PLAYER_ID)?.hp ?? 0
-  const enemyHp = state.entities.filter((e) => e.side === 'enemy').reduce((sum, e) => sum + e.hp, 0)
+  const player = state.entities.find((e) => e.id === PLAYER_ID)
+  const playerValue = player ? player.hp + BLOCK_WEIGHT * player.statuses.block : 0
+  const enemyValue = state.entities
+    .filter((e) => e.side === 'enemy')
+    .reduce((sum, e) => sum + e.hp + BLOCK_WEIGHT * e.statuses.block, 0)
   const outcome = state.phase === 'won' ? OUTCOME_BONUS : state.phase === 'lost' ? -OUTCOME_BONUS : 0
-  return playerHp - ENEMY_HP_WEIGHT * enemyHp + outcome
+  return playerValue - ENEMY_HP_WEIGHT * enemyValue + outcome
 }
 
 function endTurnOf(actions: readonly SimCombatAction[]): SimCombatAction {
