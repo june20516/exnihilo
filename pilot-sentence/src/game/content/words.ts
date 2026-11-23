@@ -133,8 +133,19 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'spider', text: '거미', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'spider' }) },
   { id: 'spiderling', text: '새끼 거미', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'spiderling' }) },
   { id: 'slime', text: '슬라임', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'slime' }) },
-  { id: 'nibble', text: '깨문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 2 }) },
-  { id: 'crush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 8 }) },
+  { id: 'nibble', text: '깨문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 3 }) },
+  { id: 'crush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 10 }) },
+  { id: 'spiderBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 7 }) },
+  { id: 'spiderNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 5 }) },
+  {
+    id: 'curl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true,
+    effect: verb('support', { kind: 'block', amount: 8, to: 'subject' }),
+  },
+
+  // 내 문장의 빈칸(v2 기본 랠리). 낭독할 때 materialize가 실제 대상으로 채운다.
+  { id: 'impliedSubject', text: '당신', kind: 'target', enemyOnly: true, effect: target({ kind: 'player' }) },
+  { id: 'impliedObject', text: '대상', kind: 'target', enemyOnly: true, effect: target({ kind: 'chosenEnemy' }) },
+  { id: 'blankVerb', text: '___', kind: 'verbTransitive', enemyOnly: true, effect: verb('support') },
   { id: 'web', text: '거미줄', kind: 'junk', cost: null, enemyOnly: true, effect: { type: 'junk' } },
 ])
 

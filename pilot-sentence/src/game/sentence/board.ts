@@ -4,7 +4,8 @@ import { type FrameId, FRAMES, MODIFIER_TARGET_ROLES, type SlotRole } from '@/ga
 
 export interface PlacedWord {
   readonly wordId: WordId
-  readonly owner: 'player' | 'enemy'
+  /** blank: 내 문장의 빈칸(생략된 주어·목적어, 빈 동사). */
+  readonly owner: 'player' | 'enemy' | 'blank'
   /** 남은 실행 횟수. 적 단어는 null(마르지 않음). */
   readonly inkLeft: number | null
   /** 플레이어 카드의 instanceId. 적 단어는 null. */

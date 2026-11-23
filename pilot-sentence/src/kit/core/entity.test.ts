@@ -1,4 +1,4 @@
-import { addStatus, applyDamage, createEntity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing, tickEndOfTurn } from './entity'
+import { addStatus, applyDamage, clearBlock, createEntity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing, tickEndOfTurn } from './entity'
 
 const spider = () => createEntity({ id: 'e1', defId: 'spider', name: '거미', side: 'enemy', hp: 30 })
 
@@ -84,4 +84,9 @@ test('loseHp는 보호를 무시하고 HP를 깎는다', () => {
 
 test('growMaxHp는 최대 HP와 HP를 함께 올린다', () => {
   expect(growMaxHp(spider(), 6)).toMatchObject({ hp: 36, maxHp: 36 })
+})
+
+test('clearBlock은 보호와 이번 턴 보호를 0으로', () => {
+  const e = addStatus(createEntity({ id: 'a', defId: 'a', name: 'a', side: 'ally', hp: 10 }), 'block', 5)
+  expect(clearBlock(e)).toMatchObject({ statuses: { block: 0 }, freshBlock: 0 })
 })

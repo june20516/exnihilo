@@ -128,3 +128,8 @@ export function loseHp(entity: Entity, amount: number): { entity: Entity; lost: 
 export function growMaxHp(entity: Entity, amount: number): Entity {
   return { ...entity, maxHp: entity.maxHp + amount, hp: entity.hp + amount }
 }
+
+/** 보호를 모두 없앤다(턴 시작에 보호가 사라지는 규칙). */
+export function clearBlock(entity: Entity): Entity {
+  return { ...entity, statuses: { ...entity.statuses, block: 0 }, freshBlock: 0 }
+}
