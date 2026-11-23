@@ -13,6 +13,8 @@ export type RejectReason =
   | 'deckEmpty'
   | 'noVerb'
   | 'slotSealed'
+  | 'notEnoughGold'
+  | 'soldOut'
   | 'noDiscardLeft'
 export type FizzleReason = 'noSubject' | 'noObject' | 'frozen'
 
