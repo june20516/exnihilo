@@ -3,7 +3,7 @@ import type { SlotAddress } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
 import { type CardInst, clauseHooks, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
-import { sentenceFormula } from '@/game/rally/formula'
+import { sentenceFormula } from '@/game/rally/formulaText'
 import '@/game/rally/testFixtures'
 import { EMPTY_BUILD, type RelicId } from './build'
 import { RELICS } from './relics'
@@ -79,4 +79,22 @@ test('울림: 낭독한 동사 카드는 버림 더미 대신 손패로 돌아�
   const r = cast(setup(['resonance'], [['bite', V], ['fiercely', V, 0]]))
   expect(r.state.deck.hand.map((c) => c.instanceId)).toContain('h0')
   expect(r.state.deck.discardPile.map((c) => c.instanceId)).toContain('h1')
+})
+
+test('긴 문장: 실행되지 않는 칸(자동사의 목적어)의 카드는 세지 않는다', () => {
+  // 금이 간을 목적어에 깔고 숨는다(자동사)를 놓으면 목적어 칸은 꺼진다 → 실제로 실행되는 단어는 숨는다 1장.
+  const s = setup(['longSentence'], [['cracked', O, 0], ['hide', V]])
+  expect(clauseHooks(s, 0).supportBonus).toBe(2)
+})
+
+test('긴 문장: 연결어 카드도 문장에 놓인 단어로 센다', () => {
+  let s = setup(['longSentence'], [['bite', V]])
+  s = { ...s, deck: { ...s.deck, hand: [...s.deck.hand, { instanceId: 'c0', wordId: 'and' }, { instanceId: 'c1', wordId: 'bite' }] } }
+  s = reduceRally(s, { type: 'connect', instanceId: 'c0' }, BALANCE).state
+  s = reduceRally(s, { type: 'place', instanceId: 'c1', at: { clause: 1, role: 'verb' } }, BALANCE).state
+  expect(clauseHooks(s, 0).damageBonus).toBe(6)
+})
+
+test('메아리 문구는 실제 동작(첫 절의 반복 횟수 +1)과 같다', () => {
+  expect(RELICS.echo.text).toContain('반복 횟수 +1')
 })

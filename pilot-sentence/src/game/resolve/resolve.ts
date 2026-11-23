@@ -211,6 +211,8 @@ export function resolveClause(
   const poisonBonus = hooks.poisonBonus ?? 0
   const supportBonus = hooks.supportBonus ?? 0
   const scaled = (amount: number) => Math.floor(amount * adverbs.power)
+  /** 피해 동작의 기본값: 층 배율(적)과 유물·그래서 보너스를 더한다. */
+  const damageBase = (amount: number) => Math.round(amount * (hooks.damageScale ?? 1)) + (hooks.damageBonus ?? 0)
 
   /** 피해 한 번: 공격자 슬롯의 outgoing 수식과 피격자 슬롯의 incoming 수식을 적용한다. */
   const dealDamage = (sourceId: string, sourceMods: SlotMods, targetId: string, targetMods: SlotMods, base: number) => {
@@ -237,8 +239,7 @@ export function resolveClause(
     switch (action.kind) {
       case 'damage':
         for (const objectId of table.alive(objects)) {
-          const base = Math.round(action.amount * (hooks.damageScale ?? 1)) + (hooks.damageBonus ?? 0)
-          const dealt = dealDamage(subjectId, subjectMods, objectId, objectMods, base)
+          const dealt = dealDamage(subjectId, subjectMods, objectId, objectMods, damageBase(action.amount))
           if (action.lifesteal && dealt > 0) {
             const subject = table.get(subjectId)
             if (subject && isAlive(subject)) {
@@ -251,7 +252,8 @@ export function resolveClause(
         return
       case 'mutualDamage':
         for (const objectId of table.alive(objects)) {
-          dealDamage(subjectId, subjectMods, objectId, objectMods, action.amount)
+          // 내가 주는 피해에는 층 배율·유물 보너스가 붙고, 되받는 피해는 카드 수치 그대로다.
+          dealDamage(subjectId, subjectMods, objectId, objectMods, damageBase(action.amount))
           dealDamage(objectId, objectMods, subjectId, subjectMods, action.amount)
         }
         return

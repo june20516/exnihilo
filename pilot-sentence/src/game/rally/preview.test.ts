@@ -2,10 +2,10 @@ import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import { BALANCE } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
-import { type CardInst, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
+import { type CardInst, PLAYER_ID, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
 import { type BuildState, EMPTY_BUILD, type RelicId } from '@/game/build/build'
 import type { CombatEvent } from '@/game/combat/events'
-import { sentenceFormula } from './formula'
+import { sentenceFormula } from './formulaText'
 import { previewEvents, previewRound } from './preview'
 import './testFixtures'
 
@@ -209,4 +209,29 @@ test('계산식: 값이 적의 남은 HP 이상이면 처치와 남은 HP를 밝
   const weak = (s: RallyState): RallyState => ({ ...s, entities: s.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 3 } : e)) })
   expect(biteWith(weak)).toBe('6 = 6 → 처치(남은 HP 3)')
   expect(biteWith((s) => s)).toBe('6 = 6')
+})
+
+test('끌어안는다: 내 쪽 피해에는 유물 보너스가 붙고(되받는 피해는 그대로), 계산식도 보인다', () => {
+  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE, { build: { ...EMPTY_BUILD, relics: ['ellipsis'] } }).state
+  let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'embrace' }] } }
+  s = act(s, { type: 'place', instanceId: 'h0', at: V })
+  const hits = previewEvents(s, BALANCE).mine.filter((e) => e.type === 'damaged')
+  expect(hits.map((e) => (e.type === 'damaged' ? [e.entityId, e.amount] : []))).toEqual([['e0', 8], [PLAYER_ID, 4]])
+  expect(sentenceFormula(s)[0]?.text).toBe('4 + 유물 4 = 8')
+})
+
+test('계산식: 무효가 될 절은 값 대신 이유를 보인다(대상이 먼저 쓰러짐, 주어 빙결)', () => {
+  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE).state
+  const hand: CardInst[] = [{ instanceId: 'h0', wordId: 'bite' }, { instanceId: 'h1', wordId: 'and' }, { instanceId: 'h2', wordId: 'bite' }]
+  let s: RallyState = { ...base, entities: base.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 3 } : e)), deck: { drawPile: [], discardPile: [], hand } }
+  s = act(s, { type: 'place', instanceId: 'h0', at: V })
+  s = act(s, { type: 'connect', instanceId: 'h1' })
+  s = act(s, { type: 'place', instanceId: 'h2', at: { clause: 1, role: 'verb' } })
+  expect(sentenceFormula(s).map((f) => f.text)).toEqual(['6 = 6 → 처치(남은 HP 3)', '무효(대상 없음)'])
+
+  const frozen = act(
+    { ...withHand(['bite']), entities: withHand(['bite']).entities.map((e) => (e.side === 'ally' ? { ...e, statuses: { ...e.statuses, freeze: 1 } } : e)) },
+    { type: 'place', instanceId: 'h0', at: V },
+  )
+  expect(sentenceFormula(frozen)[0]).toMatchObject({ text: '무효(빙결)', value: 0 })
 })

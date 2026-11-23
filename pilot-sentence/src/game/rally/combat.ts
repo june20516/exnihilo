@@ -9,7 +9,7 @@ import { type ConnectiveMode, getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
 import { type ClauseHooks, resolveClause } from '@/game/resolve/resolve'
-import { type Board, getSlot, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
+import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
 import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
 
 export interface CardInst extends CardInstance {
@@ -104,8 +104,7 @@ export type RallyAction =
 /** spec §1·§4의 규칙 값. 손패 상한과 버리기 횟수는 빌드 상태(EMPTY_BUILD 기본 8·1)에 있다. */
 export const RALLY_RULES = { startHand: 6, drawPerTurn: 5 } as const
 
-/** 적 예고 문장의 수식어 칸 수(내 빌드와 무관). */
-/** 적 예고 문장의 수식어 칸 수. 예고 문장 표시(rally/text)도 이 값을 쓴다. */
+/** 적 예고 문장의 수식어 칸 수(내 빌드와 무관). 예고 문장 표시(rally/text)도 이 값을 쓴다. */
 export const ENEMY_MODIFIER_SLOTS = 2
 
 export const PLAYER_ID = 'p'
@@ -131,11 +130,22 @@ const has = (state: RallyState, relic: BuildState['relics'][number]) => state.bu
  * 낭독할 내 절에 끼어드는 빌드 훅(유물). 기본값과 같은 필드는 넣지 않는다.
  * 미리보기와 계산식도 이 함수를 쓴다.
  */
+/** 긴 문장이 세는 단어: 실행되는(켜진) 칸에 놓인 내 단어와 연결어 카드. */
+function countedWords(state: RallyState): number {
+  const onActiveSlots = state.board.clauses.flatMap((c, clause) =>
+    c.slots
+      .filter((slot) => isSlotActive(state.board, { clause, role: slot.role }))
+      .flatMap((slot) => [slot.head, ...slot.modifiers])
+      .filter((w) => w !== null && w.owner === 'player'),
+  )
+  return onActiveSlots.length + (state.connective ? 1 : 0)
+}
+
 export function clauseHooks(state: RallyState, clause: number): ClauseHooks {
   const hooks: { -readonly [K in keyof ClauseHooks]: ClauseHooks[K] } = {}
   let damageBonus = 0
   if (has(state, 'longSentence')) {
-    const bonus = playerWordsOnBoard(state.board).length * 2
+    const bonus = countedWords(state) * 2
     damageBonus += bonus
     if (bonus > 0) hooks.supportBonus = bonus
   }

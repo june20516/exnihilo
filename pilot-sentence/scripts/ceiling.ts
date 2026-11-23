@@ -21,7 +21,9 @@ import { type AdjectiveMod, type AdverbMod, getWord, type WordId } from '@/game/
 import { FLOORS, REWARD_GOLD } from '@/game/run/floors'
 import { buyFrom, type Offer, priceOf, rollShop, type ShopState, STRUCTURES, WORD_POOL } from '@/game/run/shop'
 import { PLAYER_ID, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from '@/game/rally/combat'
+import { readFileSync } from 'node:fs'
 import { type ShopPolicy, simulateRun } from '@/game/sim/runSim'
+import { type ShopWeights, weightedShopBot } from '@/game/sim/shopBots'
 
 // ───────────────────────── 카드 분류 ─────────────────────────
 
@@ -207,7 +209,8 @@ function bonusFor(build: BuildState, wordsOnBoard: number): number {
 const NEUTRAL: Omit<ClauseContext, 'damageBonus'> = { strength: 0, vulnerable: false, repeatBonus: 0, borrowed: null }
 
 function evaluate(mode: Mode, clauses: readonly ClauseCfg[], build: BuildState): number {
-  const words = clauses.reduce((s, c) => s + cardsOf(c), 0)
+  // 긴 문장은 연결어 카드도 센다(해석식은 꺼진 칸에 카드를 두지 않는다).
+  const words = clauses.reduce((s, c) => s + cardsOf(c), 0) + (mode === 'single' ? 0 : 1)
   const bonus = bonusFor(build, words)
   if (mode === 'single') {
     return clauseBurst(clauses[0], { ...NEUTRAL, damageBonus: bonus, repeatBonus: has(build, 'echo') ? 1 : 0 }, build)
@@ -306,9 +309,16 @@ function engineBurst(s: Sentence, build: BuildState): number {
 
 // ───────────────────────── 시나리오 ─────────────────────────
 
-const argValue = (name: string, fallback: number) => {
-  const i = process.argv.indexOf(name)
-  return i >= 0 ? Number(process.argv[i + 1]) : fallback
+/** 0 이상의 정수 인자. 잘못된 값이면 이유를 말하고 끝낸다. */
+function argValue(name: string, fallback: number): number {
+  const index = process.argv.indexOf(name)
+  if (index < 0) return fallback
+  const value = Number.parseInt(process.argv[index + 1] ?? '', 10)
+  if (!Number.isInteger(value) || value < 0) {
+    console.error(`${name}는 0 이상의 정수여야 합니다.`)
+    process.exit(1)
+  }
+  return value
 }
 const RUNS = argValue('--runs', 200)
 const GOAL = 180
@@ -426,6 +436,7 @@ for (const handMax of [10, 13]) {
 // 4. 마음대로 고르는 상점(탐욕): 매 구매마다 천장을 가장 많이 올리는 것
 section('4. 마음대로 고르는 상점 — 구매할 때마다 천장을 가장 올리는 것을 산다 (상점 운 무시)')
 console.log('구매  누적 기본가   천장  (산 것)  → 문장')
+let greedyFinal: { deck: WordId[]; build: BuildState } = { deck: [...RALLY_STARTER_DECK], build: EMPTY_BUILD }
 {
   let deck: WordId[] = [...RALLY_STARTER_DECK]
   let build = EMPTY_BUILD
@@ -434,7 +445,7 @@ console.log('구매  누적 기본가   천장  (산 것)  → 문장')
     let pick: { offer: Offer; burst: number; deck: WordId[]; build: BuildState } | null = null
     for (const offer of everyOffer(deck, build)) {
       const next = applyOffer(deck, build, offer)
-      const burst = deckCeiling(next.deck, next.build, false).burst
+      const burst = deckCeiling(next.deck, next.build).burst
       if (!pick || burst > pick.burst || (burst === pick.burst && priceOf(offer) < priceOf(pick.offer))) {
         pick = { offer, burst, ...next }
       }
@@ -446,6 +457,7 @@ console.log('구매  누적 기본가   천장  (산 것)  → 문장')
     const s = deckCeiling(deck, build)
     console.log(`${String(n).padStart(3)} ${fmt(spent)}      ${fmt(s.burst)}  (${offerName(pick.offer)})  → ${describe(s)}`)
   }
+  greedyFinal = { deck, build }
 }
 const totalGold = FLOORS.slice(0, -1).reduce((s, f) => s + REWARD_GOLD[f.tier], 0)
 console.log(`런 전체 화폐: ${totalGold} (같은 상점에서 둘째 구매는 ×1.5, 셋째는 ×2.25)`)
@@ -458,13 +470,13 @@ interface Purchase { readonly deck: WordId[]; readonly build: BuildState; readon
 /** 상점 하나에서 살 수 있는 모든 순서를 따져 천장이 가장 높아지는 구매(같으면 덜 쓰는 쪽). */
 function bestShopping(shop: ShopState, start: Purchase): Purchase {
   let best = start
-  let bestScore = deckCeiling(start.deck, start.build, false).burst
+  let bestScore = deckCeiling(start.deck, start.build).burst
   const walk = (state: ShopState, current: Purchase) => {
     state.items.forEach((item, index) => {
       if (item.sold || item.price > current.gold) return
       const applied = applyOffer(current.deck, current.build, item.offer)
       const next: Purchase = { ...applied, gold: current.gold - item.price, bought: [...current.bought, item.offer] }
-      const score = deckCeiling(next.deck, next.build, false).burst
+      const score = deckCeiling(next.deck, next.build).burst
       if (score > bestScore || (score === bestScore && next.gold > best.gold)) {
         best = next
         bestScore = score
@@ -518,6 +530,7 @@ section('6. 엔진 대조')
 const checks: [string, Sentence, BuildState][] = [
   ['시작 덱 최고', starter, EMPTY_BUILD],
   ['이론 천장(손패 8)', theoretical, maxBuild],
+  ['탐욕 구매 마지막(두 절)', deckCeiling(greedyFinal.deck, greedyFinal.build), greedyFinal.build],
 ]
 let mismatch = 0
 for (const [label, s, b] of checks) {
@@ -545,5 +558,14 @@ if (SIM_RUNS > 0) {
   const won = results.filter((r) => r.outcome === 'won').length
   console.log(`완주 ${((won / SIM_RUNS) * 100).toFixed(0)}% · 평균 도달 층 ${(results.reduce((a, r) => a + r.floorReached, 0) / SIM_RUNS).toFixed(1)}`)
   row('런 최고 한 방', bursts)
-  console.log(`비교(학습 봇, 지난 측정): 완주 47% · 한 방 상위 25% 62`)
+  const parsed: unknown = JSON.parse(readFileSync(new URL('../src/game/sim/learnedWeights.json', import.meta.url), 'utf8'))
+  if (!isShopWeights(parsed)) throw new Error('learnedWeights.json 형식이 맞지 않습니다.')
+  const learned = Array.from({ length: SIM_RUNS }, (_, i) => simulateRun(1001 + i, weightedShopBot(parsed), BALANCE))
+  const learnedWon = learned.filter((r) => r.outcome === 'won').length
+  console.log(`비교(같은 시드, 학습 봇): 완주 ${((learnedWon / SIM_RUNS) * 100).toFixed(0)}%`)
+  row('  학습 봇 런 최고 한 방', learned.map((r) => r.bestBurst))
+}
+
+function isShopWeights(value: unknown): value is ShopWeights {
+  return typeof value === 'object' && value !== null && 'kinds' in value && 'saveThreshold' in value
 }
