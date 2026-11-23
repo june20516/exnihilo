@@ -8,7 +8,7 @@ import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent, type SlotAd
 import { type ConnectiveMode, getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
-import { type ClauseHooks, lingeringMods, resolveClause, resolveTargets } from '@/game/resolve/resolve'
+import { type ClauseHooks, lingeringMods, resolveClause, type ResolvedClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
 import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
 
@@ -193,15 +193,14 @@ export interface ClauseRun {
 }
 
 /**
- * 내 문장의 절들을 순서대로 실행한다. 그래서이면 절 1의 피해 절반을 절 2의 피해 기본값에 더한다.
- * 실제 낭독과 계산식이 같은 함수를 쓴다.
+ * 실행된 절의 주어·목적어 칸에서 지속 enemyTurn 형용사를 모은다. 대상은 해석기가 그 절에서 실제로 해석한 개체다
+ * (이번 절에서 불러낸 토큰 포함). 같은 카드는 한 개체에 한 번만 남긴다.
  */
-/** 실행된 절의 주어·목적어 칸에서 지속 enemyTurn 형용사를 모은다. 같은 카드는 한 개체에 한 번만 남긴다. */
 function collectLingering(
   state: RallyState,
   board: Board,
   clause: number,
-  entities: readonly Entity[],
+  resolved: ResolvedClause['targets'],
   into: Record<string, WordId[]>,
   seen: Set<string>,
 ): void {
@@ -210,7 +209,7 @@ function collectLingering(
     const at = { clause, role }
     if (!isSlotActive(board, at)) continue
     const slot = getSlot(board, at)
-    const targets = resolveTargets(slot.head, entities, lookup).ids
+    const targets = resolved[role]
     for (const word of slot.modifiers) {
       if (!word || word.owner !== 'player') continue
       const effect = lookup(word.wordId).effect
@@ -231,6 +230,10 @@ function mergeLingering(a: RallyState['lingering'], b: Record<string, WordId[]>)
   return merged
 }
 
+/**
+ * 내 문장의 절들을 순서대로 실행한다. 그래서이면 절 1의 피해 절반을 절 2의 피해 기본값에 더한다.
+ * 실제 낭독과 계산식이 같은 함수를 쓴다.
+ */
 export function runSentence(state: RallyState): {
   state: RallyState
   events: CombatEvent[]
@@ -255,7 +258,7 @@ export function runSentence(state: RallyState): {
     clauses.push({ hooks, entitiesBefore: current.entities, executionsBefore: current.executions, soBonus })
     const executed = runClause(current, board, clause, hooks, 'player')
     const fizzled = executed.events.some((e) => e.type === 'fizzled' && e.clause === clause)
-    if (!fizzled) collectLingering(state, board, clause, current.entities, lingering, seen)
+    if (!fizzled) collectLingering(state, board, clause, executed.targets, lingering, seen)
     current = executed.state
     events.push(...executed.events)
     previousBurst = enemyDamageTaken(executed.events, current.entities)
@@ -486,14 +489,14 @@ function runClause(
   clause: number,
   hooks: ClauseHooks,
   side: 'player' | 'enemy',
-): { state: RallyState; events: CombatEvent[] } {
+): { state: RallyState; events: CombatEvent[]; targets: ResolvedClause['targets'] } {
   let nextId = state.nextId
   const lookup = side === 'player' ? wordLookup(state.build) : undefined
   // 적 절에는 개체에 남은 형용사 상태를 넘긴다. 남은 형용사는 내 카드라 내 빌드(강화)로 읽는다.
   const playerLookup = wordLookup(state.build)
   const lingering = side === 'enemy' ? (id: string) => lingeringMods(state.lingering[id] ?? [], playerLookup) : undefined
   const r = resolveClause(board, clause, state.entities, () => `t${nextId++}`, { executions: state.executions, lookup, hooks, lingering })
-  return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events }
+  return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events, targets: r.targets }
 }
 
 /** 적 턴: 보호 소멸 → 적마다 예고 문장 실행 → 상태 처리 → 다음 내 턴. */

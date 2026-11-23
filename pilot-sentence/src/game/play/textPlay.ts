@@ -361,3 +361,21 @@ export function renderRun(state: RunState, balance: Balance): string {
   if (state.phase === 'shop') return renderShop(state)
   return state.combat ? renderCombat(state, state.combat, balance) : header(state, '전투 없음')
 }
+
+// ───────────────────────── 저장 파일 ─────────────────────────
+
+/** 저장 파일이 런 상태 모양인지 가볍게 확인한다. */
+function isRunState(value: unknown): value is RunState {
+  return typeof value === 'object' && value !== null && 'phase' in value && 'floor' in value && 'deck' in value && 'build' in value
+}
+
+/**
+ * 저장 파일을 지금 런 상태로 읽는다. 런 상태 모양이 아니면 null.
+ * 이전 버전에서 저장한 파일에 없는 필드를 기본값으로 채운다(형용사 상태 lingering).
+ */
+export function migrateRunState(value: unknown): RunState | null {
+  if (!isRunState(value)) return null
+  const combat = value.combat
+  if (!combat || Object.hasOwn(combat, 'lingering')) return value
+  return { ...value, combat: { ...combat, lingering: {} } }
+}

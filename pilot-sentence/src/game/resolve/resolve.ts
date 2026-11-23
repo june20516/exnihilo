@@ -193,13 +193,19 @@ export interface ResolveContext {
 }
 
 /** 절 하나를 실행한다. 동사가 자동사면 목적어 슬롯은 무시된다. */
+export interface ResolvedClause {
+  readonly entities: Entity[]
+  readonly events: CombatEvent[]
+  readonly targets: { readonly subject: readonly string[]; readonly object: readonly string[] }
+}
+
 export function resolveClause(
   board: Board,
   clause: number,
   entities: readonly Entity[],
   newId: () => string,
   context: ResolveContext,
-): { entities: Entity[]; events: CombatEvent[] } {
+): ResolvedClause {
   const subjectSlot = getSlot(board, { clause, role: 'subject' })
   const objectSlot = getSlot(board, { clause, role: 'object' })
   const verbSlot = getSlot(board, { clause, role: 'verb' })
@@ -211,7 +217,9 @@ export function resolveClause(
 
   const events: CombatEvent[] = [{ type: 'clauseExecuted', clause }]
   const table = new EntityTable(entities, events)
-  const finish = () => ({ entities: table.all(), events })
+  /** 칸별로 실제 해석한 대상(이번 절에서 불러낸 토큰 포함). 형용사 상태가 이 개체들에 남는다. */
+  const targets = { subject: [] as string[], object: [] as string[] }
+  const finish = (): ResolvedClause => ({ entities: table.all(), events, targets })
 
   const resolveSlot = (slot: SlotState): string[] => {
     const { ids, summon } = resolveTargets(slot.head, table.all(), lookup)
@@ -223,11 +231,13 @@ export function resolveClause(
   }
 
   const subjects = table.alive(resolveSlot(subjectSlot))
+  targets.subject = subjects
   if (subjects.length === 0) {
     events.push({ type: 'fizzled', clause, reason: 'noSubject' })
     return finish()
   }
   const objects = objectActive ? table.alive(resolveSlot(objectSlot)) : []
+  targets.object = objects
   if (objectActive && needsObject(actions) && objects.length === 0) {
     events.push({ type: 'fizzled', clause, reason: 'noObject' })
     return finish()

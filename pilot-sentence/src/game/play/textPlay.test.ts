@@ -4,7 +4,7 @@ import { PLAYER_ID } from '@/game/rally/combat'
 import { REJECT_MESSAGES } from '@/game/rally/text'
 import type { RunState } from '@/game/run/run'
 import { getSlot } from '@/game/sentence/board'
-import { parseCommand, type PlayCommand, renderRun, runCommand } from './textPlay'
+import { migrateRunState, parseCommand, type PlayCommand, renderRun, runCommand } from './textPlay'
 
 const run = (state: RunState | null, command: PlayCommand) => runCommand(state, command, BALANCE)
 const fresh = (seed = 7): RunState => {
@@ -192,4 +192,13 @@ test('내 HP 줄에도 낭독하면 남을 형용사 상태가 보인다', () =>
   s = run(s, { type: 'place', hand: 't0', clause: 1, role: 'verb', modifier: null }).state ?? s
   const r = run(s, { type: 'place', hand: 't1', clause: 1, role: 'subject', modifier: null })
   expect(r.output).toMatch(/^HP 60\/60[^\n]*단단함 · 적 차례까지/m)
+})
+
+test('형용사 상태 이전에 저장한 파일(lingering 없음)도 보정해 읽는다', () => {
+  const s = fresh()
+  const legacy: unknown = JSON.parse(JSON.stringify(s, (key, value: unknown) => (key === 'lingering' ? undefined : value)))
+  const migrated = migrateRunState(legacy)
+  expect(migrated?.combat?.lingering).toEqual({})
+  expect(() => run(migrated, { type: 'show' })).not.toThrow()
+  expect(migrateRunState({ hello: 1 })).toBeNull()
 })

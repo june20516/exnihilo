@@ -1,10 +1,7 @@
 import { TOKENS } from '@/game/content/tokens'
-import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type ConnectiveMode, type Lasts, type VerbAction, type WordDef } from '@/game/content/words'
+import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type ConnectiveMode, LASTS_TEXT, type VerbAction, type WordDef } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
-
-/** 지속 시간의 화면 이름(임시, docs/lab/naming). */
-export const LASTS_TEXT: Record<Lasts, string> = { cast: '이번 낭독', enemyTurn: '적 차례까지' }
 
 export const ROLE_NAMES: Record<SlotRole, string> = { subject: '주어', object: '목적어', verb: '동사' }
 

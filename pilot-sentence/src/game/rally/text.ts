@@ -1,12 +1,11 @@
 import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
-import { getWord } from '@/game/content/words'
+import { getWord, type Lasts, LASTS_TEXT } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
 import { renderClause, type RenderToken } from '@/game/grammar/render'
 import { getSlot, type PlacedWord } from '@/game/sentence/board'
 import { wordLookup } from '@/game/build/build'
-import { LASTS_TEXT } from '@/game/ui/describe'
 import { ENEMY_MODIFIER_SLOTS, enemyIntent, materializeFor, nextSealRole, type RallyState, runSentence } from './combat'
 import { enemyBoard, hasVerb } from './sentence'
 
@@ -111,14 +110,17 @@ export function lingeringTexts(state: RallyState): Record<string, string[]> {
   const ids = new Set([...Object.keys(state.lingering), ...Object.keys(pending)])
   const texts: Record<string, string[]> = {}
   for (const id of ids) {
-    const counts = new Map<string, number>()
+    // 같은 상태 이름·같은 지속 시간끼리 묶어 센다.
+    const counts = new Map<string, { name: string; lasts: Lasts; n: number }>()
     for (const wordId of [...(state.lingering[id] ?? []), ...(pending[id] ?? [])]) {
       const effect = wordLookup(state.build)(wordId).effect
       if (effect.type !== 'adjective' || !effect.stateName) continue
-      counts.set(effect.stateName, (counts.get(effect.stateName) ?? 0) + 1)
+      const key = `${effect.stateName}|${effect.lasts}`
+      const entry = counts.get(key) ?? { name: effect.stateName, lasts: effect.lasts, n: 0 }
+      counts.set(key, { ...entry, n: entry.n + 1 })
     }
     if (counts.size === 0) continue
-    texts[id] = [...counts].map(([name, n]) => `${name}${n > 1 ? ` ×${n}` : ''} · ${LASTS_TEXT.enemyTurn}`)
+    texts[id] = [...counts.values()].map(({ name, lasts, n }) => `${name}${n > 1 ? ` ×${n}` : ''} · ${LASTS_TEXT[lasts]}`)
   }
   return texts
 }

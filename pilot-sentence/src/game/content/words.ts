@@ -56,6 +56,9 @@ export type WordEffect =
  */
 export type Lasts = 'cast' | 'enemyTurn'
 
+/** 지속 시간의 화면 이름(임시, docs/lab/naming). */
+export const LASTS_TEXT: Readonly<Record<Lasts, string>> = { cast: '이번 낭독', enemyTurn: '적 차례까지' }
+
 /** 연결어: 그리고(따로 실행), 그래서(절 1 피해의 절반을 절 2 위력에), 그러면서(절 1 수식어를 절 2에도). */
 export type ConnectiveMode = 'and' | 'so' | 'while'
 

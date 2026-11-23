@@ -35,10 +35,10 @@ const SHOP_SIZE = 3
 export const STRUCTURES: readonly StructureId[] = ['subjectSlot', 'objectSlot', 'verbSlot', 'handSize', 'discard']
 const SLOT_ROLE: Partial<Record<StructureId, SlotRole>> = { subjectSlot: 'subject', objectSlot: 'object', verbSlot: 'verb' }
 
-/** 상점에 나올 수 있는 단어: 플레이어용, 오염 아님. */
 /** 상점에 내지 않는 단어: 천천히(부사, v2에서 손해만 줌. 형용사 상태 spec §6). */
 const SHOP_EXCLUDED: readonly WordId[] = ['slowly']
 
+/** 상점에 나올 수 있는 단어: 플레이어용, 오염 아님, 제외 목록 밖. */
 export const WORD_POOL: readonly WordId[] = Object.values(WORDS)
   .filter((w) => !w.enemyOnly && w.kind !== 'junk' && !SHOP_EXCLUDED.includes(w.id))
   .map((w) => w.id)
