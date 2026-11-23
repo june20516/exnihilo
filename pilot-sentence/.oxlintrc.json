@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "typescript/no-explicit-any": "error",
+    "no-restricted-properties": ["error", { "object": "Math", "property": "random", "message": "시드 RNG(@/kit/core/rng)를 쓰세요." }]
+  },
+  "overrides": [
+    {
+      "files": ["src/kit/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [
+          { "group": ["@/game/*", "@/app/*", "**/game/**", "**/app/**"], "message": "kit은 game/app을 import할 수 없습니다." },
+          { "group": ["react", "react-dom", "react/*", "react-dom/*"], "message": "kit은 React에 의존하지 않습니다." }
+        ] }]
+      }
+    },
+    {
+      "files": ["src/game/grammar/**", "src/game/content/**", "src/game/sentence/**", "src/game/resolve/**", "src/game/combat/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [
+          { "group": ["react", "react-dom", "react/*", "react-dom/*"], "message": "엔진은 React에 의존하지 않습니다." }
+        ] }]
+      }
+    }
+  ]
+}
