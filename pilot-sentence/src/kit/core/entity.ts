@@ -1,6 +1,9 @@
 export type Side = 'ally' | 'enemy'
 export type Row = 'front' | 'back'
-export type StatusKind = 'block' | 'poison' | 'freeze'
+export type StatusKind = 'block' | 'poison' | 'freeze' | 'strength' | 'weak' | 'vulnerable'
+
+const WEAK_MULTIPLIER = 0.75
+const VULNERABLE_MULTIPLIER = 1.5
 
 export interface Entity {
   readonly id: string
@@ -33,7 +36,7 @@ export function createEntity(params: CreateEntityParams): Entity {
     row: params.row ?? 'front',
     hp: params.hp,
     maxHp: params.hp,
-    statuses: { block: 0, poison: 0, freeze: 0 },
+    statuses: { block: 0, poison: 0, freeze: 0, strength: 0, weak: 0, vulnerable: 0 },
     freshBlock: 0,
   }
 }
@@ -88,10 +91,22 @@ export function tickEndOfTurn(entity: Entity): { entity: Entity; poisonDamage: n
       statuses: {
         ...entity.statuses,
         poison: Math.max(0, entity.statuses.poison - 1),
-        block: entity.freshBlock,
+        weak: Math.max(0, entity.statuses.weak - 1),
+        vulnerable: Math.max(0, entity.statuses.vulnerable - 1),
+        block: Math.min(entity.statuses.block, entity.freshBlock),
       },
       freshBlock: 0,
     },
     poisonDamage,
   }
+}
+
+/** 공격자의 상태를 반영한 피해: (기본 + 힘) × (약화면 0.75). 반올림은 호출자가 마지막에 한다. */
+export function scaleOutgoing(base: number, source: Entity): number {
+  return (base + source.statuses.strength) * (source.statuses.weak > 0 ? WEAK_MULTIPLIER : 1)
+}
+
+/** 피격자의 상태를 반영한 피해: 취약이면 1.5배. 반올림은 호출자가 마지막에 한다. */
+export function scaleIncoming(amount: number, target: Entity): number {
+  return amount * (target.statuses.vulnerable > 0 ? VULNERABLE_MULTIPLIER : 1)
 }

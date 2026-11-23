@@ -1,11 +1,11 @@
-import { addStatus, applyDamage, createEntity, heal, isAlive, tickEndOfTurn } from './entity'
+import { addStatus, applyDamage, createEntity, heal, isAlive, scaleIncoming, scaleOutgoing, tickEndOfTurn } from './entity'
 
 const spider = () => createEntity({ id: 'e1', defId: 'spider', name: '거미', side: 'enemy', hp: 30 })
 
 test('기본값: 전열, 상태 모두 0, 살아 있음', () => {
   const e = spider()
   expect(e.row).toBe('front')
-  expect(e.statuses).toEqual({ block: 0, poison: 0, freeze: 0 })
+  expect(e.statuses).toEqual({ block: 0, poison: 0, freeze: 0, strength: 0, weak: 0, vulnerable: 0 })
   expect(isAlive(e)).toBe(true)
 })
 
@@ -55,4 +55,20 @@ test('연산은 원본 개체를 바꾸지 않는다', () => {
   addStatus(e, 'poison', 2)
   expect(e.hp).toBe(30)
   expect(e.statuses.poison).toBe(0)
+})
+
+test('약화·취약은 턴 종료마다 1 줄고, 힘은 유지된다', () => {
+  const e = addStatus(addStatus(addStatus(spider(), 'weak', 2), 'vulnerable', 1), 'strength', 3)
+  const t = tickEndOfTurn(e).entity
+  expect(t.statuses).toMatchObject({ weak: 1, vulnerable: 0, strength: 3 })
+})
+
+test('scaleOutgoing: 힘을 더하고 약화면 0.75배', () => {
+  expect(scaleOutgoing(6, addStatus(spider(), 'strength', 2))).toBe(8)
+  expect(scaleOutgoing(8, addStatus(spider(), 'weak', 1))).toBe(6)
+})
+
+test('scaleIncoming: 취약이면 1.5배', () => {
+  expect(scaleIncoming(6, spider())).toBe(6)
+  expect(scaleIncoming(6, addStatus(spider(), 'vulnerable', 1))).toBe(9)
 })
