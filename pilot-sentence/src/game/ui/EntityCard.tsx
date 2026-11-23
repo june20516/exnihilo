@@ -19,9 +19,11 @@ interface EntityCardProps {
   targeted?: boolean
   /** 적이 이번 턴에 실행할 예고 문장. */
   intent?: string
+  /** 낭독하면(또는 이미) 이 개체에 남는 형용사 상태. 예: '눈멂 · 적 차례까지'. */
+  states?: readonly string[]
 }
 
-export function EntityCard({ entity, portrait, onPick, targeted = false, intent }: EntityCardProps) {
+export function EntityCard({ entity, portrait, onPick, targeted = false, intent, states = [] }: EntityCardProps) {
   const dead = entity.hp <= 0
   const hpRatio = entity.maxHp > 0 ? entity.hp / entity.maxHp : 0
   return (
@@ -72,6 +74,15 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent 
           </span>
         ))}
       </div>
+      {states.length > 0 && (
+        <div data-testid={`states-${entity.id}`} className="flex flex-wrap gap-1 font-label text-[11px]">
+          {states.map((text) => (
+            <span key={text} className="rounded bg-tertiary/20 px-1 text-tertiary">
+              {text}
+            </span>
+          ))}
+        </div>
+      )}
     </button>
   )
 }

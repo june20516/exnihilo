@@ -3,7 +3,7 @@ import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
 import { previewEvents } from './preview'
-import { intentTexts, REJECT_MESSAGES, sentenceText, wordNamer } from './text'
+import { intentTexts, lingeringTexts, REJECT_MESSAGES, sentenceText, wordNamer } from './text'
 import { intentClause } from './testFixtures'
 
 RALLY_ENCOUNTERS['test-text-seal'] = {
@@ -65,4 +65,15 @@ test('적 예고: 얼어 있는 적은 빙결로 무효라고 말하고, 봉인 
     e0: '필경사 1이 당신의 주어 칸을 봉인한다 — 빙결로 무효',
     e1: '필경사 2가 당신의 주어 칸을 봉인한다',
   })
+})
+
+test('남을 상태: 지금 문장대로 낭독하면 남을 형용사 상태를 개체별로 보인다', () => {
+  const base = withHand(startRally('test-dummy', DECK, 1, BALANCE).state, ['bite', 'blind', 'blind'])
+  const verb = act(base, { type: 'place', instanceId: 'h0', at: { clause: 0, role: 'verb' } })
+  const one = act(verb, { type: 'place', instanceId: 'h1', at: { clause: 0, role: 'object' } })
+  expect(lingeringTexts(one)).toEqual({ e0: ['눈멂 · 적 차례까지'] })
+  const two = act(one, { type: 'place', instanceId: 'h2', at: { clause: 0, role: 'object' } })
+  expect(lingeringTexts(two)).toEqual({ e0: ['눈멂 ×2 · 적 차례까지'] })
+  const noVerb = act(base, { type: 'place', instanceId: 'h1', at: { clause: 0, role: 'object' } })
+  expect(lingeringTexts(noVerb)).toEqual({})
 })

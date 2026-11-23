@@ -173,3 +173,23 @@ test('강화: 산 뒤에는 단계 화살표 대신 빌드 요약에 지금 단�
   expect(bought.output).toContain('강화: 격렬하게 1단계')
 })
 
+
+test('적 줄에 낭독하면 남을 형용사 상태가 보인다', () => {
+  let s = withHand(fresh(), ['bite', 'blind'])
+  s = run(s, { type: 'place', hand: 't0', clause: 1, role: 'verb', modifier: null }).state ?? s
+  const r = run(s, { type: 'place', hand: 't1', clause: 1, role: 'object', modifier: null })
+  expect(r.output).toMatch(/1\. 거미 HP [^\n]*눈멂 · 적 차례까지/)
+})
+
+test('남은 형용사 상태도 JSON으로 저장했다 읽으면 같다', () => {
+  const s = fresh()
+  const withLingering: RunState = { ...s, combat: s.combat && { ...s.combat, lingering: { e0: ['blind'] } } }
+  expect(JSON.parse(JSON.stringify(withLingering))).toEqual(withLingering)
+})
+
+test('내 HP 줄에도 낭독하면 남을 형용사 상태가 보인다', () => {
+  let s = withHand(fresh(), ['bite', 'sturdy'])
+  s = run(s, { type: 'place', hand: 't0', clause: 1, role: 'verb', modifier: null }).state ?? s
+  const r = run(s, { type: 'place', hand: 't1', clause: 1, role: 'subject', modifier: null })
+  expect(r.output).toMatch(/^HP 60\/60[^\n]*단단함 · 적 차례까지/m)
+})

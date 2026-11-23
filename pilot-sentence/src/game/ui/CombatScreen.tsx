@@ -8,7 +8,7 @@ import { sentenceFormula } from '@/game/rally/formulaText'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
 import { hasVerb, isBlank } from '@/game/rally/sentence'
-import { intentTexts, REJECT_MESSAGES, wordNamer } from '@/game/rally/text'
+import { intentTexts, lingeringTexts, REJECT_MESSAGES, wordNamer } from '@/game/rally/text'
 import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
 import { ControlPanel } from './ControlPanel'
@@ -47,6 +47,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state, BALANCE) : null), [state])
   const formulas = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : []), [state])
   const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
+  const states = useMemo(() => (state.phase === 'player' ? lingeringTexts(state) : {}), [state])
   const verbPlaced = hasVerb(state.board)
 
   /** 배치 이외의 행동: 선택과 버리기 표시를 풀고 보낸다. */
@@ -112,6 +113,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
           portraits={portraits}
           targetId={state.targetId}
           intents={intents}
+          states={states}
           onPickEnemy={canAct ? (entityId) => run({ type: 'target', entityId }) : null}
         />
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_320px] gap-2">

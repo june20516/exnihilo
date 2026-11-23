@@ -5,7 +5,9 @@ import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
 import { renderClause, type RenderToken } from '@/game/grammar/render'
 import { getSlot, type PlacedWord } from '@/game/sentence/board'
-import { ENEMY_MODIFIER_SLOTS, enemyIntent, materializeFor, nextSealRole, type RallyState } from './combat'
+import { wordLookup } from '@/game/build/build'
+import { LASTS_TEXT } from '@/game/ui/describe'
+import { ENEMY_MODIFIER_SLOTS, enemyIntent, materializeFor, nextSealRole, type RallyState, runSentence } from './combat'
 import { enemyBoard, hasVerb } from './sentence'
 
 /** 화면과 텍스트 플레이가 함께 쓰는 문장·문구. */
@@ -97,5 +99,26 @@ export function intentTexts(
     })
     texts[id] = frozenNote ? `${sentence}${frozenNote}` : numbers.length > 0 ? `${sentence} — ${numbers.join(', ')}` : sentence
   })
+  return texts
+}
+
+/**
+ * 개체별 형용사 상태 표시: 이미 남은 상태와, 지금 문장대로 낭독하면 남을 상태.
+ * 낭독과 적 차례는 한 번에 처리되므로 화면은 "남을 상태"를 놓는 순간부터 보여 준다. 예: { e0: ['눈멂 ×2 · 적 차례까지'] }
+ */
+export function lingeringTexts(state: RallyState): Record<string, string[]> {
+  const pending = hasVerb(state.board) ? runSentence(state).lingering : {}
+  const ids = new Set([...Object.keys(state.lingering), ...Object.keys(pending)])
+  const texts: Record<string, string[]> = {}
+  for (const id of ids) {
+    const counts = new Map<string, number>()
+    for (const wordId of [...(state.lingering[id] ?? []), ...(pending[id] ?? [])]) {
+      const effect = wordLookup(state.build)(wordId).effect
+      if (effect.type !== 'adjective' || !effect.stateName) continue
+      counts.set(effect.stateName, (counts.get(effect.stateName) ?? 0) + 1)
+    }
+    if (counts.size === 0) continue
+    texts[id] = [...counts].map(([name, n]) => `${name}${n > 1 ? ` ×${n}` : ''} · ${LASTS_TEXT.enemyTurn}`)
+  }
   return texts
 }

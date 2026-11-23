@@ -14,7 +14,7 @@ import { PLAYER_ID, type RallyAction, type RallyState } from '@/game/rally/comba
 import { sentenceFormula } from '@/game/rally/formulaText'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
-import { intentTexts, REJECT_MESSAGES, sentenceText, wordNamer } from '@/game/rally/text'
+import { intentTexts, lingeringTexts, REJECT_MESSAGES, sentenceText, wordNamer } from '@/game/rally/text'
 import { FLOORS } from '@/game/run/floors'
 import { type RunAction, type RunEvent, type RunState, reduceRun, startRun } from '@/game/run/run'
 import { cardText, offerDetail, offerName, upgradeSummary } from '@/game/run/labels'
@@ -284,17 +284,18 @@ function renderCombat(state: RunState, combat: RallyState, balance: Balance): st
   const nameOf = wordNamer(combat)
   const preview = previewEvents(combat, balance)
   const intents = intentTexts(combat, preview.enemy, nameOf)
+  const states = lingeringTexts(combat)
   const out: string[] = []
 
   out.push(`━━ ${state.floor}/${FLOORS.length}층 · ${TIER_NAMES[encounter?.tier ?? 'normal']} · ${encounter?.name ?? combat.encounterId} ━━`)
   out.push(
-    `HP ${player?.hp ?? 0}/${player?.maxHp ?? state.maxHp}${player ? statusText(player) : ''} · 화폐 ${state.gold} · 턴 ${combat.turn}` +
+    `HP ${player?.hp ?? 0}/${player?.maxHp ?? state.maxHp}${player ? statusText(player) : ''}${(states[PLAYER_ID] ?? []).map((t) => ` · ${t}`).join('')} · 화폐 ${state.gold} · 턴 ${combat.turn}` +
       ` · 남은 버리기 ${combat.discardsLeft} · 뽑을 더미 ${combat.deck.drawPile.length} · 버림 더미 ${combat.deck.discardPile.length}`,
   )
   out.push('', '적')
   enemies.forEach((e, i) => {
     const alive = e.hp > 0
-    out.push(`  ${i + 1}. ${e.name} HP ${e.hp}/${e.maxHp}${statusText(e)}${combat.targetId === e.id ? ' [지정]' : ''}${alive ? '' : ' (쓰러짐)'}`)
+    out.push(`  ${i + 1}. ${e.name} HP ${e.hp}/${e.maxHp}${statusText(e)}${(states[e.id] ?? []).map((t) => ` · ${t}`).join('')}${combat.targetId === e.id ? ' [지정]' : ''}${alive ? '' : ' (쓰러짐)'}`)
     if (alive && intents[e.id]) out.push(`     예고: ${intents[e.id]}`)
   })
 

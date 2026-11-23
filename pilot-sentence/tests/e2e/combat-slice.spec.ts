@@ -100,3 +100,16 @@ test('연출이 끝나기 전에는 HP와 턴이 낭독 전 상태로 보이고,
   await expect(page.getByTestId('hp-e0')).toContainText('HP 39 / 45')
   await expect(page.getByTestId('turn')).toContainText('턴 2')
 })
+
+test('형용사 상태: 금이 간을 목적어에 놓으면 적 카드에 남을 상태가 보이고, 연출 중에도 남아 있다', async ({ page }) => {
+  await page.getByTestId('tile-bite').click()
+  await page.getByTestId('slot-0-verb').click()
+  await expect(page.getByTestId('states-e0')).toHaveCount(0)
+  await page.getByTestId('tile-cracked').click()
+  await page.getByTestId('mod-0-object-0').click()
+  await expect(page.getByTestId('states-e0')).toContainText('금이 감 · 적 차례까지')
+  await page.getByTestId('cast').click()
+  await expect(page.getByTestId('states-e0')).toContainText('금이 감')
+  await expect(page.getByTestId('end-turn')).toBeEnabled({ timeout: 10_000 })
+  await expect(page.getByTestId('states-e0')).toHaveCount(0)
+})
