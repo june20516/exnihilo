@@ -1,16 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 
-test('당신을 주어에 놓고 턴을 끝내면 예고대로 되돌려져 내가 맞는다', async ({ page }) => {
-  await page.goto('/?seed=123')
-  await expect(page.getByTestId('slot-0-subject')).toContainText('거미')
-  await page.getByTestId('tile-you').first().click()
-  await page.getByTestId('slot-0-subject').click()
-  await expect(page.getByTestId('slot-0-subject')).toContainText('당신')
-  await expect(page.getByTestId('particle-0-subject')).toHaveText('이')
-  await page.getByTestId('end-turn').click()
-  await expect(page.getByTestId('hp-p')).toContainText('52')
-  await expect(page.getByTestId('slot-0-subject')).toContainText('거미')
-})
+test.use({ viewport: { width: 1440, height: 900 } })
 
 /** 사람처럼 여러 단계로 끈다. dnd-kit은 6px 이상 움직여야 드래그로 인식한다. */
 async function dragBySteps(page: Page, from: Locator, to: Locator) {
@@ -24,15 +14,56 @@ async function dragBySteps(page: Page, from: Locator, to: Locator) {
   await page.mouse.up()
 }
 
+for (const preset of ['A', 'B', 'C']) {
+  test(`프리셋 ${preset}: 1440×900에서 스크롤 없이 한 화면`, async ({ page }) => {
+    await page.goto(`/?seed=123&preset=${preset}`)
+    await expect(page.getByTestId('end-turn')).toBeVisible()
+    const { scrollH, innerH } = await page.evaluate(() => ({
+      scrollH: document.documentElement.scrollHeight,
+      innerH: window.innerHeight,
+    }))
+    expect(scrollH).toBeLessThanOrEqual(innerH)
+    await expect(page.getByTestId('intent')).toBeInViewport()
+    await expect(page.getByTestId('preview')).toBeInViewport()
+  })
+}
+
+test('뒤바꾸기: 주어와 목적어가 맞바뀌고 미리보기가 갱신된다', async ({ page }) => {
+  await page.goto('/?seed=123&preset=A')
+  await expect(page.getByTestId('slot-0-subject')).toContainText('거미')
+  await page.getByTestId('swap').click()
+  await expect(page.getByTestId('slot-0-subject')).toContainText('당신')
+  await expect(page.getByTestId('slot-0-object')).toContainText('거미')
+  await expect(page.getByTestId('preview')).toContainText('탐험가 → 거미')
+})
+
 test('드래그로 단어를 슬롯에 놓을 수 있다', async ({ page }) => {
-  await page.goto('/?seed=123')
-  await dragBySteps(page, page.getByTestId('tile-you').first(), page.getByTestId('slot-0-object'))
-  await expect(page.getByTestId('slot-0-object')).toContainText('당신')
-  await expect(page.getByTestId('ap')).toContainText('2 / 3')
+  await page.goto('/?seed=123&preset=A')
+  await dragBySteps(page, page.getByTestId('tile-you').first(), page.getByTestId('slot-0-subject'))
+  await expect(page.getByTestId('slot-0-subject')).toContainText('당신')
+  await expect(page.getByTestId('particle-0-subject')).toHaveText('이')
+})
+
+test('낭독(프리셋 C): 누르면 문장이 실행되고 다음 턴으로 넘어간다', async ({ page }) => {
+  await page.goto('/?seed=123&preset=C')
+  await page.getByTestId('cast').click()
+  await expect(page.getByTestId('hp-p')).not.toContainText('HP 60 / 60')
+  await expect(page.getByTestId('end-turn')).toBeEnabled({ timeout: 10_000 })
+})
+
+test('덱 편집: 카드를 빼고 저장하면 덱 장수가 바뀐다', async ({ page }) => {
+  await page.goto('/?seed=123&preset=B')
+  await page.evaluate(() => window.localStorage.clear())
+  await page.reload()
+  await page.getByTestId('open-deck').click()
+  await page.getByTestId('minus-bite').click()
+  await expect(page.getByTestId('deck-count')).toContainText('14장')
+  await page.getByTestId('deck-save').click()
+  await expect(page.getByTestId('open-deck')).toContainText('14장')
 })
 
 test('연출 재생 중에는 턴 종료 버튼이 잠긴다', async ({ page }) => {
-  await page.goto('/?seed=123')
+  await page.goto('/?seed=123&preset=A')
   await page.getByTestId('end-turn').click()
   await expect(page.getByTestId('end-turn')).toBeDisabled()
   await expect(page.getByTestId('end-turn')).toBeEnabled({ timeout: 10_000 })

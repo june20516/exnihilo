@@ -33,9 +33,9 @@ export function WordTile({ def, instanceId, selected, disabled, playable, onSele
       style={dragStyle}
       {...attributes}
       {...listeners}
-      className={`flex h-52 w-40 flex-col justify-between rounded-xl bg-surface-container p-3 text-left shadow-lg
+      className={`flex h-40 w-32 flex-col justify-between rounded-xl bg-surface-container p-2 text-left shadow-lg
         ${isDragging ? 'shadow-2xl ring-2 ring-secondary' : 'transition-all duration-200'}
-        ${selected && !isDragging ? '-translate-y-4 ring-2 ring-secondary shadow-2xl' : 'hover:-translate-y-2'}
+        ${selected && !isDragging ? '-translate-y-2 ring-2 ring-secondary shadow-2xl' : 'hover:-translate-y-1'}
         ${playable ? '' : 'opacity-50'} disabled:cursor-not-allowed`}
     >
       <div className="flex items-center justify-between">
@@ -46,8 +46,10 @@ export function WordTile({ def, instanceId, selected, disabled, playable, onSele
           {KIND_LABELS[def.kind]}
         </span>
       </div>
-      <span className={`text-center font-headline text-2xl font-black tracking-tight ${style.text}`}>{def.text}</span>
-      <p className="rounded bg-surface-container-lowest/60 p-1.5 text-xs leading-tight text-on-surface-variant">
+      <span className={`text-center font-headline text-lg font-black leading-tight tracking-tight ${style.text}`}>
+        {def.text}
+      </span>
+      <p className="rounded bg-surface-container-lowest/60 p-1 text-[11px] leading-tight text-on-surface-variant">
         {describeWord(def)}
         {!playable && def.cost !== null && (
           <span className="mt-1 block text-error" data-testid="unplayable-note">

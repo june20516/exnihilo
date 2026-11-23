@@ -16,7 +16,8 @@ test('알 수 없는 드롭 id는 null', () => {
 
 test('canPlayAnywhere: 현재 문장 어디에도 놓을 수 없는 단어를 가려낸다', () => {
   const board = buildBoard(ENCOUNTERS.spider.initialSentence, 2)
-  expect(canPlayAnywhere(board, 'sleep')).toBe(false)
+  // 동사가 문형을 결정하므로 자동사도 언제나 놓을 수 있다
+  expect(canPlayAnywhere(board, 'sleep')).toBe(true)
   expect(canPlayAnywhere(board, 'web')).toBe(false)
   expect(canPlayAnywhere(board, 'bite')).toBe(true)
   expect(canPlayAnywhere(board, 'blind')).toBe(true)

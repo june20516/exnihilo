@@ -1,24 +1,72 @@
 import type { InterventionStep } from '@/game/content/encounters'
 import { TOKENS } from '@/game/content/tokens'
-import { getWord, type VerbAction, type WordDef } from '@/game/content/words'
+import { type AdjectiveMod, type AdverbMod, type AppliedStatus, getWord, type VerbAction, type WordDef } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle, hasFinalConsonant } from '@/game/grammar/josa'
 
 export const ROLE_NAMES: Record<SlotRole, string> = { subject: '주어', object: '목적어', verb: '동사' }
 
 const RANGE_NAMES = { melee: '근접', ranged: '원거리', support: '지원' } as const
+const STATUS_NAMES: Record<AppliedStatus, string> = { poison: '독', weak: '약화', vulnerable: '취약', strength: '힘' }
+
+/** 조사 부분만(예: '거미' + object → '를'). */
+const particleOf = (word: string, kind: Parameters<typeof attachParticle>[1]) => attachParticle(word, kind).slice(word.length)
 
 function describeAction(action: VerbAction): string {
-  const who = (to: 'subject' | 'object') => ROLE_NAMES[to]
+  const role = (to: 'subject' | 'object') => ROLE_NAMES[to]
   switch (action.kind) {
     case 'damage':
-      return `피해 ${action.amount}`
+      return action.lifesteal ? `피해 ${action.amount}, 준 만큼 회복` : `피해 ${action.amount}`
+    case 'mutualDamage':
+      return `서로 피해 ${action.amount}`
+    case 'loseHp':
+      return `${role(action.to)} HP −${action.amount}`
     case 'block':
-      return `${who(action.to)}에게 보호 ${action.amount}`
+      return `${role(action.to)}에게 보호 ${action.amount}`
     case 'heal':
-      return `${who(action.to)} 회복 ${action.amount}`
+      return `${role(action.to)} 회복 ${action.amount}`
     case 'freeze':
-      return `${attachParticle(who(action.to), 'subject')} 다음 행동을 못 한다`
+      return `${attachParticle(role(action.to), 'subject')} 다음 행동을 못 한다`
+    case 'status': {
+      const amount = action.status === 'strength' ? `+${action.amount}` : `${action.amount}`
+      return `${role(action.to)}에게 ${STATUS_NAMES[action.status]} ${amount}`
+    }
+    case 'grow':
+      return `${role(action.to)} 최대 HP +${action.amount}`
+    case 'cleanse':
+      return `${role(action.to)}의 독·약화·빙결 제거`
+  }
+}
+
+function describeAdjective(mod: AdjectiveMod): string {
+  switch (mod.kind) {
+    case 'outgoingDamageMul':
+      return `주는 피해 ×${mod.value}`
+    case 'outgoingFlat':
+      return `주는 피해 +${mod.amount}`
+    case 'incomingFlat':
+      return `받는 피해 −${mod.amount}`
+    case 'incomingMul':
+      return `받는 피해 ×${mod.value}`
+    case 'onHitPoison':
+      return `피해를 주면 독 ${mod.amount}`
+    case 'selfDamageAfter':
+      return `실행 후 자신 HP −${mod.amount}`
+  }
+}
+
+function describeAdverb(mod: AdverbMod): string {
+  switch (mod.kind) {
+    case 'powerMul':
+      return `동사 위력 ×${mod.value}`
+    case 'repeat':
+      return `동사를 ${mod.count}번 실행`
+    case 'executionBonus':
+      return '지금까지 실행 횟수만큼 위력 +1'
+    case 'ignoreFreeze':
+      return '잠든 주어도 실행한다'
+    case 'inkBonus':
+      return `잉크 유지 +${mod.amount}`
   }
 }
 
@@ -28,31 +76,35 @@ export function describeWord(def: WordDef): string {
   switch (effect.type) {
     case 'junk':
       return '사용할 수 없다'
-    case 'target':
-      switch (effect.ref.kind) {
+    case 'target': {
+      const ref = effect.ref
+      switch (ref.kind) {
         case 'player':
           return '나 자신을 가리킨다'
         case 'chosenEnemy':
           return '적 하나를 가리킨다'
         case 'enemyDef':
           return '적을 가리킨다'
+        case 'allies':
+          return '나와 아군 전원을 가리킨다'
+        case 'everyone':
+          return '적까지 포함한 전원을 가리킨다'
         case 'token': {
-          const token = TOKENS[effect.ref.tokenId]
-          return `${token.name}(HP ${token.hp})를 불러낸다`
+          const token = TOKENS[ref.tokenId]
+          return `${token.name}(HP ${token.hp})${particleOf(token.name, 'object')} 불러낸다`
         }
       }
       break
+    }
     case 'verb': {
       const text = effect.actions.map(describeAction).join(', ')
       if (def.kind === 'verbIntransitive') return `${text} (자동사)`
-      return effect.range === 'melee' || effect.range === 'ranged' ? `${text} (${RANGE_NAMES[effect.range]})` : text
+      return effect.range === 'support' ? text : `${text} (${RANGE_NAMES[effect.range]})`
     }
     case 'adjective':
-      return effect.mods
-        .map((mod) => (mod.kind === 'outgoingDamageMul' ? `주는 피해 ×${mod.value}` : `피해를 주면 독 ${mod.amount}`))
-        .join(', ')
+      return effect.mods.map(describeAdjective).join(', ')
     case 'adverb':
-      return effect.mods.map((mod) => `동사 위력 ×${mod.value}`).join(', ')
+      return effect.mods.map(describeAdverb).join(', ')
   }
   return ''
 }
@@ -70,7 +122,7 @@ export function describeIntent(step: InterventionStep, roleName: (role: SlotRole
       return `↺ ${attachParticle(roleName(step.at.role), 'object')} 원문으로 되돌림`
     case 'attach': {
       const text = getWord(step.word).text
-      return `＋ ${roleName(step.at.role)}에 [${text}]${attachParticle(text, 'object').slice(text.length)} 붙임`
+      return `＋ ${roleName(step.at.role)}에 [${text}]${particleOf(text, 'object')} 붙임`
     }
     case 'replace': {
       const text = getWord(step.word).text

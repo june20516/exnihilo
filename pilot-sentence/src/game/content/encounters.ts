@@ -67,7 +67,7 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
   swarm: {
     id: 'swarm',
     name: '거미 떼',
-    enemies: [0, 1, 2].map(() => ({ defId: 'spiderling', name: '새끼 거미', hp: 9, row: 'front' as const, portrait: '/assets/spider.jpg' })),
+    enemies: [1, 2, 3].map((n) => ({ defId: 'spiderling', name: `새끼 거미 ${n}`, hp: 9, row: 'front' as const, portrait: '/assets/spider.jpg' })),
     initialSentence: [
       {
         frameId: 'transitive',

@@ -76,6 +76,30 @@ export const fxRegistry: EffectHandlers<CombatEvent> = {
     const el = query('[data-testid="discard"]')
     if (el) await shake(el, 6, speed)
   },
+  async hpLost(event, speed) {
+    const el = portrait(event.entityId)
+    if (el) await Promise.all([shake(el, 4, speed), popNumber(el, `HP −${event.amount}`, 'damage', speed)])
+  },
+  async grew(event, speed) {
+    const el = portrait(event.entityId)
+    if (el) await popNumber(el, `최대 HP +${event.amount}`, 'heal', speed)
+  },
+  async cleansed(event, speed) {
+    const el = portrait(event.entityId)
+    if (el) await popNumber(el, '정화', 'heal', speed)
+  },
+  async swapped(event, speed) {
+    const slots = [query(`[data-slot="${event.clause}-subject"]`), query(`[data-slot="${event.clause}-object"]`)]
+    await Promise.all(slots.filter((el): el is Element => el !== null).map((el) => inkSpread(el, speed)))
+  },
+  async cast(event, speed) {
+    const sentence = query('[data-testid="sentence"]')
+    if (sentence) await flash(sentence, event.by === 'player' ? '#fcba5b' : '#ff5a52', speed)
+  },
+  async burned(_event, speed) {
+    const el = query('[data-testid="hand"]')
+    if (el) await shake(el, 5, speed)
+  },
   async combatEnded(_event, speed) {
     await wait(300, speed)
   },
