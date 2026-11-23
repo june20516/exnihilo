@@ -8,7 +8,7 @@ import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent, type SlotAd
 import { type ConnectiveMode, getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
-import { type ClauseHooks, resolveClause } from '@/game/resolve/resolve'
+import { type ClauseHooks, lingeringMods, resolveClause, resolveTargets } from '@/game/resolve/resolve'
 import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
 import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
 
@@ -50,6 +50,11 @@ export interface RallyState {
   readonly connective: PlacedWord | null
   /** 지금까지 받은 봉인 수. 다음 봉인 대상(주어 → 목적어 → 동사)을 정한다. */
   readonly sealCount: number
+  /**
+   * 개체에 남은 형용사 상태(지속 enemyTurn): 개체 id → 형용사 단어 id. 낭독이 끝나면 생기고 적 차례가 끝나면 비운다.
+   * 적 차례의 피해 계산에만 쓴다(형용사 상태 spec §3).
+   */
+  readonly lingering: Readonly<Record<string, readonly WordId[]>>
 }
 
 const SEAL_ORDER: readonly SlotRole[] = ['subject', 'object', 'verb']
@@ -191,7 +196,49 @@ export interface ClauseRun {
  * 내 문장의 절들을 순서대로 실행한다. 그래서이면 절 1의 피해 절반을 절 2의 피해 기본값에 더한다.
  * 실제 낭독과 계산식이 같은 함수를 쓴다.
  */
-export function runSentence(state: RallyState): { state: RallyState; events: CombatEvent[]; burst: number; clauses: ClauseRun[] } {
+/** 실행된 절의 주어·목적어 칸에서 지속 enemyTurn 형용사를 모은다. 같은 카드는 한 개체에 한 번만 남긴다. */
+function collectLingering(
+  state: RallyState,
+  board: Board,
+  clause: number,
+  entities: readonly Entity[],
+  into: Record<string, WordId[]>,
+  seen: Set<string>,
+): void {
+  const lookup = wordLookup(state.build)
+  for (const role of ['subject', 'object'] as const) {
+    const at = { clause, role }
+    if (!isSlotActive(board, at)) continue
+    const slot = getSlot(board, at)
+    const targets = resolveTargets(slot.head, entities, lookup).ids
+    for (const word of slot.modifiers) {
+      if (!word || word.owner !== 'player') continue
+      const effect = lookup(word.wordId).effect
+      if (effect.type !== 'adjective' || effect.lasts !== 'enemyTurn') continue
+      for (const id of targets) {
+        const key = `${id}:${word.instanceId ?? word.wordId}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        into[id] = [...(into[id] ?? []), word.wordId]
+      }
+    }
+  }
+}
+
+function mergeLingering(a: RallyState['lingering'], b: Record<string, WordId[]>): RallyState['lingering'] {
+  const merged: Record<string, WordId[]> = Object.fromEntries(Object.entries(a).map(([id, words]) => [id, [...words]]))
+  for (const [id, words] of Object.entries(b)) merged[id] = [...(merged[id] ?? []), ...words]
+  return merged
+}
+
+export function runSentence(state: RallyState): {
+  state: RallyState
+  events: CombatEvent[]
+  burst: number
+  clauses: ClauseRun[]
+  /** 이 낭독으로 개체에 남을 형용사 상태(실행된 절만). */
+  lingering: Record<string, WordId[]>
+} {
   const board = materializeFor(state)
   const mode = connectiveMode(state)
   let current = state
@@ -199,18 +246,22 @@ export function runSentence(state: RallyState): { state: RallyState; events: Com
   let previousBurst = 0
   const events: CombatEvent[] = []
   const clauses: ClauseRun[] = []
+  const lingering: Record<string, WordId[]> = {}
+  const seen = new Set<string>()
   board.clauses.forEach((_, clause) => {
     const base = clauseHooks(state, clause)
     const soBonus = clause > 0 && mode === 'so' ? soBonusFrom(previousBurst) : 0
     const hooks = soBonus > 0 ? { ...base, damageBonus: (base.damageBonus ?? 0) + soBonus } : base
     clauses.push({ hooks, entitiesBefore: current.entities, executionsBefore: current.executions, soBonus })
     const executed = runClause(current, board, clause, hooks, 'player')
+    const fizzled = executed.events.some((e) => e.type === 'fizzled' && e.clause === clause)
+    if (!fizzled) collectLingering(state, board, clause, current.entities, lingering, seen)
     current = executed.state
     events.push(...executed.events)
     previousBurst = enemyDamageTaken(executed.events, current.entities)
     burst += previousBurst
   })
-  return { state: current, events, burst, clauses }
+  return { state: current, events, burst, clauses, lingering }
 }
 
 /**
@@ -312,6 +363,7 @@ export function startRally(
     enemyScale,
     connective: null,
     sealCount: 0,
+    lingering: {},
   }
   return startPlayerTurn(initial, RALLY_RULES.startHand)
 }
@@ -437,7 +489,10 @@ function runClause(
 ): { state: RallyState; events: CombatEvent[] } {
   let nextId = state.nextId
   const lookup = side === 'player' ? wordLookup(state.build) : undefined
-  const r = resolveClause(board, clause, state.entities, () => `t${nextId++}`, { executions: state.executions, lookup, hooks })
+  // 적 절에는 개체에 남은 형용사 상태를 넘긴다. 남은 형용사는 내 카드라 내 빌드(강화)로 읽는다.
+  const playerLookup = wordLookup(state.build)
+  const lingering = side === 'enemy' ? (id: string) => lingeringMods(state.lingering[id] ?? [], playerLookup) : undefined
+  const r = resolveClause(board, clause, state.entities, () => `t${nextId++}`, { executions: state.executions, lookup, hooks, lingering })
   return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events }
 }
 
@@ -482,6 +537,8 @@ function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
 
   current = {
     ...current,
+    // 적 차례가 끝나면 형용사 상태가 사라진다(독 처리와 같은 시점).
+    lingering: {},
     entities: current.entities.map((entity) => {
       if (!isAlive(entity)) return entity
       const r = tickEndOfTurn(entity)
@@ -513,6 +570,7 @@ function cast(state: RallyState): Result {
   const afterCast = addToDiscard(executed.state.deck, spent)
   let current: RallyState = {
     ...executed.state,
+    lingering: mergeLingering(state.lingering, executed.lingering),
     board: cleared.board,
     connective: null,
     deck: { ...afterCast, hand: [...afterCast.hand, ...returned] },

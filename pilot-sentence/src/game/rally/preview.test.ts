@@ -235,3 +235,10 @@ test('계산식: 무효가 될 절은 값 대신 이유를 보인다(대상이 �
   )
   expect(sentenceFormula(frozen)[0]).toMatchObject({ text: '무효(빙결)', value: 0 })
 })
+
+test('미리보기의 적 차례 피해에 남은 상태(눈먼)가 반영된다', () => {
+  const base = withHand(['bite', 'blind'])
+  let s = act(base, { type: 'place', instanceId: 'h0', at: V })
+  s = act(s, { type: 'place', instanceId: 'h1', at: O })
+  expect(texts(previewRound(s, BALANCE).enemy)).toEqual(['거미 → 탐험가: 피해 3'])
+})

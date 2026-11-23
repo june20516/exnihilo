@@ -59,6 +59,11 @@ export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord, c
     const effect = m ? lookup(m.wordId).effect : null
     return effect?.type === 'adjective' ? effect.mods : []
   })
+  return combineMods(mods, chain)
+}
+
+/** 형용사 효과 목록을 하나의 수식으로: 배율은 곱하고 가산은 더한다. chain은 배율에 곱하는 사슬 배율. */
+export function combineMods(mods: readonly AdjectiveMod[], chain = 1): SlotMods {
   const product = (kind: 'outgoingDamageMul' | 'incomingMul') =>
     mods.reduce((p, m) => (m.kind === kind ? p * m.value : p), 1)
   const sum = (kind: 'outgoingFlat' | 'incomingFlat' | 'onHitPoison' | 'selfDamageAfter') =>
@@ -156,12 +161,35 @@ export interface ClauseHooks {
   readonly damageScale?: number
 }
 
+export const NO_MODS: SlotMods = combineMods([])
+
+/** 개체에 남은 형용사(지속 enemyTurn)의 수식. 사슬은 붙이지 않는다(형용사 상태 spec §3). */
+export function lingeringMods(wordIds: readonly WordId[], lookup: WordLookup = getWord): SlotMods {
+  return combineMods(wordIds.flatMap((id) => {
+    const effect = lookup(id).effect
+    return effect.type === 'adjective' && effect.lasts === 'enemyTurn' ? effect.mods : []
+  }))
+}
+
+function mergeMods(a: SlotMods, b: SlotMods): SlotMods {
+  return {
+    outgoingMul: a.outgoingMul * b.outgoingMul,
+    outgoingFlat: a.outgoingFlat + b.outgoingFlat,
+    incomingMul: a.incomingMul * b.incomingMul,
+    incomingFlat: a.incomingFlat + b.incomingFlat,
+    onHitPoison: a.onHitPoison + b.onHitPoison,
+    selfDamageAfter: a.selfDamageAfter + b.selfDamageAfter,
+  }
+}
+
 export interface ResolveContext {
   /** 이번 전투에서 지금까지 실행된 절의 수([거듭]용). */
   readonly executions: number
   /** 단어 정의 조회(강화 반영). 기본은 원래 정의. */
   readonly lookup?: WordLookup
   readonly hooks?: ClauseHooks
+  /** 개체에 남은 형용사 상태의 수식(적 차례에만 넘긴다). 피해를 주고받을 때 칸의 수식과 합친다. */
+  readonly lingering?: (entityId: string) => SlotMods
 }
 
 /** 절 하나를 실행한다. 동사가 자동사면 목적어 슬롯은 무시된다. */
@@ -215,7 +243,9 @@ export function resolveClause(
   const damageBase = (amount: number) => Math.round(amount * (hooks.damageScale ?? 1)) + (hooks.damageBonus ?? 0)
 
   /** 피해 한 번: 공격자 슬롯의 outgoing 수식과 피격자 슬롯의 incoming 수식을 적용한다. */
-  const dealDamage = (sourceId: string, sourceMods: SlotMods, targetId: string, targetMods: SlotMods, base: number) => {
+  const dealDamage = (sourceId: string, slotSourceMods: SlotMods, targetId: string, slotTargetMods: SlotMods, base: number) => {
+    const sourceMods = mergeMods(slotSourceMods, context.lingering?.(sourceId) ?? NO_MODS)
+    const targetMods = mergeMods(slotTargetMods, context.lingering?.(targetId) ?? NO_MODS)
     const source = table.get(sourceId)
     const target = table.get(targetId)
     if (!source || !target || !isAlive(target)) return 0
