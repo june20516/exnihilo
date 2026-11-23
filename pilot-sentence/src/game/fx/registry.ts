@@ -100,6 +100,10 @@ export const fxRegistry: EffectHandlers<CombatEvent> = {
     const el = query('[data-testid="hand"]')
     if (el) await shake(el, 5, speed)
   },
+  async enemyTurn(_event, speed) {
+    const enemies = Array.from(document.querySelectorAll('[data-portrait^="e"]'))
+    await Promise.all(enemies.map((el) => shake(el, 3, speed)))
+  },
   async combatEnded(_event, speed) {
     await wait(300, speed)
   },

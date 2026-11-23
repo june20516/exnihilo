@@ -4,11 +4,15 @@ import { EntityCard } from './EntityCard'
 interface BattlefieldProps {
   entities: readonly Entity[]
   portraits: Readonly<Record<string, string>>
-  /** 대상 선택 모드면 고를 수 있는 적을 누를 때 호출된다. */
+  /** 내 문장의 빈 목적어가 가리키는 적. */
+  targetId: string | null
+  /** 적 id → 이번 턴 예고 문장. */
+  intents: Readonly<Record<string, string>>
+  /** 적을 눌러 대상을 바꾼다. 행동할 수 없을 때는 null. */
   onPickEnemy: ((entityId: string) => void) | null
 }
 
-export function Battlefield({ entities, portraits, onPickEnemy }: BattlefieldProps) {
+export function Battlefield({ entities, portraits, targetId, intents, onPickEnemy }: BattlefieldProps) {
   const allies = entities.filter((e) => e.side === 'ally')
   const enemies = entities.filter((e) => e.side === 'enemy')
   return (
@@ -23,17 +27,14 @@ export function Battlefield({ entities, portraits, onPickEnemy }: BattlefieldPro
           <EntityCard key={e.id} entity={e} portrait={portraits[e.defId] ?? null} />
         ))}
       </div>
-      {onPickEnemy && (
-        <span className="relative z-10 self-center rounded-lg bg-secondary px-3 py-1 font-label text-sm font-bold text-on-secondary">
-          지목할 적을 고르세요
-        </span>
-      )}
       <div className="relative z-10 flex items-end gap-3">
         {enemies.map((e) => (
           <EntityCard
             key={e.id}
             entity={e}
             portrait={portraits[e.defId] ?? null}
+            targeted={e.id === targetId && e.hp > 0}
+            intent={intents[e.id]}
             onPick={onPickEnemy && e.hp > 0 ? () => onPickEnemy(e.id) : undefined}
           />
         ))}

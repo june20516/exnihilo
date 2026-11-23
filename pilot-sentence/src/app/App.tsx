@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { PRESETS, type PresetId } from '@/game/content/rules'
 import type { WordId } from '@/game/content/words'
 import { CombatScreen } from '@/game/ui/CombatScreen'
 import { DECK_STORAGE_KEY, loadDeck } from '@/game/ui/deck'
@@ -12,13 +11,7 @@ function readInitialSeed(): number {
   return Number.isFinite(parsed) ? parsed : Date.now() % 1_000_000_000
 }
 
-function readInitialPreset(): PresetId {
-  const param = new URLSearchParams(window.location.search).get('preset')
-  return param === 'A' || param === 'B' || param === 'C' ? param : 'B'
-}
-
 export default function App() {
-  const [presetId, setPresetId] = useState<PresetId>(readInitialPreset)
   const [encounterId, setEncounterId] = useState('spider')
   const [seed, setSeed] = useState(readInitialSeed)
   const [deck, setDeck] = useState<WordId[]>(() => loadDeck(window.localStorage.getItem(DECK_STORAGE_KEY)))
@@ -35,20 +28,17 @@ export default function App() {
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-container-lowest">
       <TopBar
-        presetId={presetId}
         encounterId={encounterId}
         seed={seed}
         deckSize={deck.length}
-        onPreset={(id) => setPresetId(id)}
         onEncounter={(id) => setEncounterId(id)}
         onRestart={() => setSeed((s) => s + 1)}
         onOpenDeck={() => setDeckOpen(true)}
       />
       <CombatScreen
-        key={`${presetId}:${encounterId}:${seed}:${round}`}
+        key={`${encounterId}:${seed}:${round}`}
         encounterId={encounterId}
         seed={seed}
-        rules={PRESETS[presetId]}
         deck={deck}
         onRestart={() => setSeed((s) => s + 1)}
       />

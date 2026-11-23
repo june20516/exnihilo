@@ -13,11 +13,15 @@ const STATUS_BADGES: { kind: StatusKind; icon: string; label: string; tone: stri
 interface EntityCardProps {
   entity: Entity
   portrait: string | null
-  /** 대상 선택 모드에서 고를 수 있으면 클릭 핸들러가 주어진다. */
+  /** 고를 수 있으면 클릭 핸들러가 주어진다(적: 대상 지정). */
   onPick?: () => void
+  /** 지금 내 문장의 대상인 적. */
+  targeted?: boolean
+  /** 적이 이번 턴에 실행할 예고 문장. */
+  intent?: string
 }
 
-export function EntityCard({ entity, portrait, onPick }: EntityCardProps) {
+export function EntityCard({ entity, portrait, onPick, targeted = false, intent }: EntityCardProps) {
   const dead = entity.hp <= 0
   const hpRatio = entity.maxHp > 0 ? entity.hp / entity.maxHp : 0
   return (
@@ -27,9 +31,17 @@ export function EntityCard({ entity, portrait, onPick }: EntityCardProps) {
       disabled={!onPick}
       onClick={onPick}
       className={`flex w-40 flex-col gap-1 rounded-xl p-1 text-left transition ${dead ? 'opacity-30 grayscale' : ''} ${
-        onPick ? 'cursor-pointer ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.6)]' : 'cursor-default'
-      }`}
+        targeted ? 'ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.6)]' : ''
+      } ${onPick ? 'cursor-pointer hover:ring-2 hover:ring-secondary/60' : 'cursor-default'}`}
     >
+      {intent !== undefined && !dead && (
+        <span
+          data-testid={`intent-${entity.id}`}
+          className="rounded-md bg-error-container/70 px-2 py-1 text-center text-xs font-semibold leading-tight text-on-error-container shadow"
+        >
+          {intent}
+        </span>
+      )}
       <div
         data-portrait={entity.id}
         className="relative h-28 w-full overflow-hidden rounded-lg bg-surface-container shadow-xl"

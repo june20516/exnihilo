@@ -1,5 +1,5 @@
-import type { CardInst } from '@/game/combat/combat'
 import { getWord } from '@/game/content/words'
+import type { CardInst } from '@/game/rally/combat'
 import type { Board } from '@/game/sentence/board'
 import { canPlayAnywhere } from './placement'
 import { WordTile } from './WordTile'
@@ -7,13 +7,14 @@ import { WordTile } from './WordTile'
 interface HandProps {
   hand: readonly CardInst[]
   board: Board
-  resource: number
   selectedId: string | null
+  /** 버리기 모드에서 표시한 카드. 버리기 모드가 아니면 null. */
+  marked: ReadonlySet<string> | null
   disabled: boolean
   onSelect: (instanceId: string) => void
 }
 
-export function Hand({ hand, board, resource, selectedId, disabled, onSelect }: HandProps) {
+export function Hand({ hand, board, selectedId, marked, disabled, onSelect }: HandProps) {
   return (
     <div className="flex min-w-0 flex-1 items-end justify-center gap-2" data-testid="hand">
       {hand.map((card) => {
@@ -24,8 +25,10 @@ export function Hand({ hand, board, resource, selectedId, disabled, onSelect }: 
             def={def}
             instanceId={card.instanceId}
             selected={card.instanceId === selectedId}
+            marked={marked?.has(card.instanceId) ?? false}
             disabled={disabled}
-            playable={canPlayAnywhere(board, card.wordId) && (def.cost ?? Number.POSITIVE_INFINITY) <= resource}
+            draggable={marked === null}
+            playable={!def.enemyOnly && canPlayAnywhere(board, card.wordId)}
             onSelect={() => onSelect(card.instanceId)}
           />
         )

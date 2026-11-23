@@ -43,6 +43,8 @@ function Droppable({
   return <>{children(isOver, setNodeRef)}</>
 }
 
+const HEAD_LABELS = { player: '내 단어', enemy: '원문', implied: '생략', emptyVerb: '비어 있음' } as const
+
 const HIGHLIGHT = 'ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.5)] cursor-pointer'
 
 export function SlotView(props: SlotViewProps) {
@@ -111,12 +113,12 @@ export function SlotView(props: SlotViewProps) {
               <span
                 className={`font-headline text-xl font-black tracking-tight ${
                   isVerb ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
-                }`}
+                } ${slot.head.owner === 'blank' ? 'opacity-40' : ''}`}
               >
                 {nameOf(slot.head)}
               </span>
               <span className="flex items-center gap-1 font-label text-[10px] text-on-surface-variant">
-                {slot.head.owner === 'enemy' ? '원문' : '내 단어'}
+                {HEAD_LABELS[slot.head.owner === 'blank' ? (isVerb ? 'emptyVerb' : 'implied') : slot.head.owner]}
                 <InkDots word={slot.head} />
               </span>
             </button>
