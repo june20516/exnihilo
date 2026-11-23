@@ -27,7 +27,7 @@ export function BuildSummary({ build, deck }: { build: BuildState; deck: readonl
           ))}
         </ul>
       </section>
-      <section className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3" data-testid="shop-deck">
+      <section className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3" data-testid="build-deck">
         <h3 className="font-headline text-base font-bold">덱 {deck.length}장</h3>
         <p className="leading-relaxed text-on-surface-variant">
           {[...counts]

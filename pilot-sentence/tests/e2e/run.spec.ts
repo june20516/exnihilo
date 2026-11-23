@@ -34,7 +34,7 @@ test('1층 승리: 연출이 끝난 뒤 상점이 열리고 화폐 25를 받는�
   await expect(page.getByTestId('leave-shop')).toBeVisible({ timeout: 10_000 })
   await expect(page.getByTestId('run-gold')).toContainText('25')
   await expect(page.getByTestId('offer')).toHaveCount(3)
-  await expectInViewport(page, ['leave-shop', 'offer', 'shop-deck'])
+  await expectInViewport(page, ['leave-shop', 'offer', 'build-deck'])
 })
 
 test('상점: 사면 화폐가 줄고 남은 값이 ×1.5(올림) 오르며, 화폐가 모자란 보상은 누를 수 없다', async ({ page }) => {
@@ -71,7 +71,7 @@ test('샌드박스 덱이 저장돼 있어도 런은 시작 덱 15장으로 한�
   await page.evaluate(() => window.localStorage.setItem('pilot-sentence.deck.v2', JSON.stringify(Array(12).fill('slash'))))
   await page.reload()
   await winFloorOne(page)
-  await expect(page.getByTestId('shop-deck')).toContainText('덱 15장', { timeout: 10_000 })
+  await expect(page.getByTestId('build-deck')).toContainText('덱 15장', { timeout: 10_000 })
 })
 
 test('연출이 끝나기 전에는 상단 바가 정산 결과(화폐)를 먼저 보여 주지 않는다', async ({ page }) => {
@@ -92,3 +92,35 @@ test('새 런은 두 번 눌러야 시작되고, 연출 중에는 누를 수 없
   await expect(page.getByTestId('new-run')).toBeDisabled()
 })
 
+test('1층에서 새 런을 시작하면 전투 화면의 선택·버리기 모드가 초기화된다', async ({ page }) => {
+  await page.getByTestId('discard').click()
+  await expect(page.getByTestId('discard-confirm')).toBeVisible()
+  await page.getByTestId('new-run').click()
+  await page.getByTestId('new-run').click()
+  await expect(page.getByTestId('run-seed')).toContainText('seed 6')
+  await expect(page.getByTestId('discard-confirm')).toHaveCount(0)
+})
+
+test('화폐가 모자란 보상은 마우스를 올려도 강조되지 않는다', async ({ page }) => {
+  await winFloorOne(page)
+  await expect(page.getByTestId('leave-shop')).toBeVisible({ timeout: 10_000 })
+  const offers = page.getByTestId('offer')
+  // 살 수 있는 가장 싼 보상을 계속 사서, 화폐가 모자란 보상을 만든다.
+  for (let round = 0; round < 3 && (await page.locator('[data-testid="offer"][data-poor="true"]').count()) === 0; round++) {
+    let cheapest = -1
+    let best = Infinity
+    for (let i = 0; i < 3; i++) {
+      if (!(await offers.nth(i).isEnabled())) continue
+      const price = await priceOf(page, i)
+      if (price < best) [best, cheapest] = [price, i]
+    }
+    if (cheapest < 0) break
+    await offers.nth(cheapest).click()
+  }
+  const poor = page.locator('[data-testid="offer"][data-poor="true"]').first()
+  await expect(poor).toBeVisible()
+  const shadow = () => poor.evaluate((el) => getComputedStyle(el).boxShadow)
+  const before = await shadow()
+  await poor.hover({ force: true })
+  expect(await shadow()).toBe(before)
+})

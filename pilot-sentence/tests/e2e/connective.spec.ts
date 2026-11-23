@@ -64,3 +64,10 @@ test('차 있는 연결어 칸을 누르면 연결어가 손패로 돌아온다'
   await page.getByTestId('connective-slot').click()
   await expect(page.locator('[data-testid="sentence"] [data-clause="1"]')).toHaveCount(0)
 })
+
+test('연결어가 아닌 카드를 고른 채 연결어 칸을 누르면 거부 문구가 보인다', async ({ page }) => {
+  await page.goto('/?mode=rally&seed=5')
+  await page.getByTestId('tile-bite').first().click()
+  await page.getByTestId('connective-slot').click()
+  await expect(page.getByTestId('message')).toContainText('그 자리에는 이 품사를 놓을 수 없습니다')
+})

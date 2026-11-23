@@ -1,5 +1,5 @@
 import { EMPTY_BUILD } from '@/game/build/build'
-import { offerDetail, offerName, upgradeSummary } from './labels'
+import { offerDetail, offerName, offerTitle, upgradeSummary } from './labels'
 
 test('보상 이름: 강화는 아직 사지 않았을 때만 단계 화살표를 붙인다', () => {
   expect(offerName({ kind: 'upgrade', wordId: 'fiercely' }, EMPTY_BUILD, true)).toBe('[강화] 격렬하게 0→1단계')
@@ -16,4 +16,10 @@ test('보상 설명: 강화는 지금 값과 다음 값을 함께 보인다', ()
 
 test('강화 요약: 단어와 지금 단계', () => {
   expect(upgradeSummary({ ...EMPTY_BUILD, upgrades: { fiercely: 2 } })).toEqual(['격렬하게 2단계'])
+})
+
+test('보상 제목: 종류 접두어 없이 이름만(상점 카드용)', () => {
+  expect(offerTitle({ kind: 'upgrade', wordId: 'fiercely' }, EMPTY_BUILD, true)).toBe('격렬하게 0→1단계')
+  expect(offerTitle({ kind: 'relic', id: 'stress' }, EMPTY_BUILD)).toBe('강세')
+  expect(offerName({ kind: 'relic', id: 'stress' }, EMPTY_BUILD)).toBe('[유물] 강세')
 })

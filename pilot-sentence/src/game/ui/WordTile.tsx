@@ -32,6 +32,7 @@ export function WordTile({ def, instanceId, selected, marked, disabled, draggabl
       type="button"
       data-testid={`tile-${def.id}`}
       data-instance-id={instanceId}
+      data-selected={selected}
       onClick={onSelect}
       disabled={disabled}
       style={dragStyle}

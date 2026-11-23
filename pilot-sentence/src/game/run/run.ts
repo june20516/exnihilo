@@ -49,11 +49,12 @@ export type RunEvent =
   | { readonly type: 'bought'; readonly offer: Offer; readonly price: number }
   | { readonly type: 'runEnded'; readonly outcome: 'won' | 'lost' }
 
-const RUN_ONLY_EVENTS: readonly RunEvent['type'][] = ['floorCleared', 'bought', 'runEnded']
+/** 런 전용 이벤트 종류. 런 이벤트를 새로 만들면 여기 빠뜨린 것을 컴파일러가 잡는다. */
+const RUN_ONLY_EVENTS: Record<Exclude<RunEvent['type'], CombatEvent['type']>, true> = { floorCleared: true, bought: true, runEnded: true }
 
 /** 런 이벤트 중 전투 이벤트(연출 큐에 넣을 것). */
 export function isCombatEvent(event: RunEvent): event is CombatEvent {
-  return !RUN_ONLY_EVENTS.includes(event.type)
+  return !(event.type in RUN_ONLY_EVENTS)
 }
 
 type Result = Reduced<RunState, RunEvent>

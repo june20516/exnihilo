@@ -20,7 +20,7 @@ export function RunScreen({ seed, debugEnemyHp }: { seed: number; debugEnemyHp: 
       <RunTopBar state={shown} busy={busy} onNewRun={newRun} />
       {showCombat && state.combat ? (
         <CombatScreen
-          key={`${state.floor}`}
+          key={`${state.seed}:${state.floor}`}
           state={state.combat}
           busy={busy}
           lastEvents={combatEvents}

@@ -1,5 +1,5 @@
 import { FLOORS } from '@/game/run/floors'
-import { offerDetail, offerName } from '@/game/run/labels'
+import { offerDetail, offerTitle } from '@/game/run/labels'
 import type { RunState } from '@/game/run/run'
 import { BuildSummary } from './BuildSummary'
 
@@ -42,10 +42,11 @@ export function ShopScreen({ state, disabled, onBuy, onLeave }: ShopScreenProps)
               key={index}
               type="button"
               data-testid="offer"
+              data-poor={poor}
               disabled={disabled || item.sold || poor}
               onClick={() => onBuy(index)}
               className={`flex h-56 flex-col justify-between rounded-xl p-4 text-left shadow-xl transition ${
-                item.sold ? 'bg-surface-container opacity-40' : 'bg-surface-container-high hover:ring-2 hover:ring-secondary'
+                item.sold ? 'bg-surface-container opacity-40' : 'bg-surface-container-high enabled:hover:ring-2 enabled:hover:ring-secondary'
               } disabled:cursor-not-allowed`}
             >
               <div className="flex flex-col gap-2">
@@ -53,7 +54,7 @@ export function ShopScreen({ state, disabled, onBuy, onLeave }: ShopScreenProps)
                   {KIND_LABELS[item.offer.kind]}
                 </span>
                 <span className="font-headline text-xl font-black">
-                  {offerName(item.offer, state.build, !item.sold).replace(/^\[[^\]]+\] /, '')}
+                  {offerTitle(item.offer, state.build, !item.sold)}
                 </span>
                 {!item.sold && <span className="text-sm leading-snug text-on-surface-variant">{offerDetail(item.offer, state.build)}</span>}
               </div>

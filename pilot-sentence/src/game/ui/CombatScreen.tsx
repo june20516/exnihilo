@@ -81,7 +81,8 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   }
   const onConnectiveClick = () => {
     if (state.connective) run({ type: 'disconnect' })
-    else if (selectedCard && isConnectiveWord(selectedCard.wordId)) connect(selectedCard.instanceId)
+    // 연결어가 아닌 카드도 엔진에 보내, 끌어다 놓을 때와 같은 거부 문구를 보인다.
+    else if (selectedCard) connect(selectedCard.instanceId)
   }
   const sentenceEmpty =
     state.connective === null &&

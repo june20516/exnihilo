@@ -19,19 +19,27 @@ export function cardText(wordId: WordId, build: BuildState): string {
   return `${def.text}${level ? `+${level}` : ''} [${KIND_NAMES[def.kind]}] ${describeWord(def)}`
 }
 
-/** withLevel이면 강화 보상에 '지금→다음 단계'를 붙인다(아직 사지 않은 상점 보상에만). */
-export function offerName(offer: Offer, build: BuildState, withLevel = false): string {
+const KIND_TAGS: Record<Offer['kind'], string> = { word: '단어', upgrade: '강화', structure: '구조', relic: '유물' }
+
+/** 보상 이름(종류 접두어 없음). withLevel이면 강화 보상에 '지금→다음 단계'를 붙인다(아직 사지 않은 상점 보상에만). */
+export function offerTitle(offer: Offer, build: BuildState, withLevel = false): string {
   switch (offer.kind) {
     case 'word':
-      return `[단어] ${getWord(offer.wordId).text}`
-    case 'upgrade':
-      if (!withLevel) return `[강화] ${getWord(offer.wordId).text}`
-      return `[강화] ${getWord(offer.wordId).text} ${build.upgrades[offer.wordId] ?? 0}→${(build.upgrades[offer.wordId] ?? 0) + 1}단계`
+      return getWord(offer.wordId).text
+    case 'upgrade': {
+      const level = build.upgrades[offer.wordId] ?? 0
+      return withLevel ? `${getWord(offer.wordId).text} ${level}→${level + 1}단계` : getWord(offer.wordId).text
+    }
     case 'structure':
-      return `[구조] ${STRUCTURE_NAMES[offer.id]}`
+      return STRUCTURE_NAMES[offer.id]
     case 'relic':
-      return `[유물] ${RELICS[offer.id].name}`
+      return RELICS[offer.id].name
   }
+}
+
+/** 종류 접두어를 붙인 보상 이름. 예: '[유물] 강세'. */
+export function offerName(offer: Offer, build: BuildState, withLevel = false): string {
+  return `[${KIND_TAGS[offer.kind]}] ${offerTitle(offer, build, withLevel)}`
 }
 
 export function offerDetail(offer: Offer, build: BuildState): string {
