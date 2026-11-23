@@ -91,7 +91,7 @@ export const RALLY_ENCOUNTERS: Record<string, RallyEncounterDef> = {
     tier: 'elite',
     enemies: [
       {
-        defId: 'spider', name: '거미 여왕', hp: 80, row: 'front', portrait: '/assets/spider.jpg',
+        defId: 'spider', name: '거미 여왕', hp: 55, row: 'front', portrait: '/assets/spider.jpg',
         intents: [intent('spider', 'queenBite'), intent('spider', 'queenNip', ['venomous']), intent('spider', 'queenCurl')],
       },
     ],
@@ -102,7 +102,7 @@ export const RALLY_ENCOUNTERS: Record<string, RallyEncounterDef> = {
     tier: 'elite',
     enemies: [
       {
-        defId: 'slime', name: '문지기', hp: 110, row: 'front', portrait: '/assets/spider.jpg',
+        defId: 'slime', name: '문지기', hp: 80, row: 'front', portrait: '/assets/spider.jpg',
         intents: [intent('slime', 'gateCurl'), intent('slime', 'gateCrush'), intent('slime', 'gateCrush')],
       },
     ],
@@ -113,7 +113,7 @@ export const RALLY_ENCOUNTERS: Record<string, RallyEncounterDef> = {
     tier: 'boss',
     enemies: [
       {
-        defId: 'spider', name: '필경사', hp: 160, row: 'front', portrait: '/assets/spider.jpg',
+        defId: 'spider', name: '필경사', hp: 120, row: 'front', portrait: '/assets/spider.jpg',
         intents: [intent('spider', 'scribeSlash'), SEAL, intent('spider', 'scribeScold')],
       },
     ],

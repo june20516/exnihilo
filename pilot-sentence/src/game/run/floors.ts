@@ -24,7 +24,7 @@ export const NORMAL_ENCOUNTERS: readonly string[] = ['spider', 'swarm', 'slime']
 /** 정예·보스는 층으로 고정한다. */
 export const FIXED_ENCOUNTERS: Readonly<Record<number, string>> = { 3: 'queen', 6: 'gatekeeper', 7: 'scribe' }
 
-export const REWARD_GOLD: Readonly<Record<EncounterTier, number>> = { normal: 10, elite: 20, boss: 0 }
+export const REWARD_GOLD: Readonly<Record<EncounterTier, number>> = { normal: 25, elite: 40, boss: 0 }
 export const HEAL_RATIO = 0.2
 
 /** 화폐 보너스 항목(콤보·오버킬 등). 이번 단계에서는 늘 빈 목록이다. */

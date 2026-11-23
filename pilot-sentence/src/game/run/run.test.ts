@@ -1,6 +1,7 @@
 import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import type { CardInst } from '@/game/rally/combat'
+import { REWARD_GOLD } from './floors'
 import { type RunAction, type RunState, reduceRun, startRun } from './run'
 
 const act = (s: RunState, a: RunAction) => reduceRun(s, a, BALANCE)
@@ -27,9 +28,9 @@ test('시작: 1층 전투, HP 60, 화폐 0', () => {
   expect(s.combat?.encounterId).toMatch(/^(spider|swarm|slime)$/)
 })
 
-test('1층 승리 → 화폐 10, 회복 20%(최대 HP 초과 없음), 상점', () => {
+test('1층 승리 → 일반 화폐, 회복 20%(최대 HP 초과 없음), 상점', () => {
   const r = winFloor(hurt(startRun(1, BALANCE).state, 30))
-  expect(r).toMatchObject({ phase: 'shop', gold: 10, hp: 42 })
+  expect(r).toMatchObject({ phase: 'shop', gold: REWARD_GOLD.normal, hp: 42 })
   expect(r.shop?.items).toHaveLength(3)
   expect(winFloor(hurt(startRun(1, BALANCE).state, 55)).hp).toBe(60)
 })
@@ -78,11 +79,11 @@ test('3층은 거미 여왕, 6층은 문지기, 7층은 필경사. 4·5층은 �
   expect(s.shop).toBeNull()
 })
 
-test('정예 승리는 화폐 20', () => {
+test('정예 승리는 정예 화폐', () => {
   let s = startRun(6, BALANCE).state
   for (let floor = 1; floor <= 2; floor++) s = act(winFloor(s), { type: 'leave' }).state
   const before = s.gold
-  expect(winFloor(s).gold - before).toBe(20)
+  expect(winFloor(s).gold - before).toBe(REWARD_GOLD.elite)
 })
 
 test('패배 → lost, 이후 행동 거부', () => {
