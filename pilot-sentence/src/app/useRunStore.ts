@@ -1,12 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
 import { BALANCE } from '@/game/content/balance'
 import { weakenNewCombat } from '@/game/run/debug'
+import { resolvesTurn } from '@/game/combat/events'
 import { usePlaybackLock } from './usePlaybackLock'
 import { isCombatEvent, reduceRun, type RunAction, type RunEvent, type RunState, startRun } from '@/game/run/run'
 
 export interface RunStore {
   readonly state: RunState
-  /** 화면 요약(상단 바)에 보일 상태: 연출이 재생 중이면 행동 직전 상태, 끝나면 지금 상태. 정산 결과가 연출보다 먼저 드러나지 않게 한다. */
+  /** 화면에 보일 상태: 차례가 넘어가는 행동의 연출이 재생 중이면 행동 직전 상태, 끝나면 지금 상태. 결과가 연출보다 먼저 드러나지 않게 한다. */
   readonly shown: RunState
   readonly busy: boolean
   readonly lastEvents: readonly RunEvent[]
@@ -44,7 +45,8 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
         setShown(next)
         return
       }
-      setShown(before)
+      // 차례가 넘어가는 행동이면 연출이 끝날 때까지 행동 직전 상태를 보인다(카드 놓기 등은 바로 보인다).
+      setShown(resolvesTurn(combatEvents) ? before : next)
       play(combatEvents, () => setShown(stateRef.current))
     },
     [applyDebugOverrides, isBusy, play],

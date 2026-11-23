@@ -89,3 +89,14 @@ test('덱 편집: 카드를 빼고 저장하면 덱 장수가 바뀐다', async 
   await page.getByTestId('deck-save').click()
   await expect(page.getByTestId('open-deck')).toContainText('14장')
 })
+
+test('연출이 끝나기 전에는 HP와 턴이 낭독 전 상태로 보이고, 끝나면 바뀐다', async ({ page }) => {
+  await page.getByTestId('tile-bite').click()
+  await page.getByTestId('slot-0-verb').click()
+  await page.getByTestId('cast').click()
+  await expect(page.getByTestId('hp-e0')).toContainText('HP 45 / 45')
+  await expect(page.getByTestId('turn')).toContainText('턴 1')
+  await expect(page.getByTestId('end-turn')).toBeEnabled({ timeout: 10_000 })
+  await expect(page.getByTestId('hp-e0')).toContainText('HP 39 / 45')
+  await expect(page.getByTestId('turn')).toContainText('턴 2')
+})

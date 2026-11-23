@@ -43,3 +43,8 @@ export type CombatEvent =
   | { readonly type: 'disconnected' }
   | { readonly type: 'sealed'; readonly role: SlotRole }
   | { readonly type: 'targetChanged'; readonly entityId: string }
+
+/** 낭독·턴 종료처럼 차례가 넘어가는 행동의 이벤트인가. 화면은 이때 연출이 끝날 때까지 행동 직전 상태를 보여 준다. */
+export function resolvesTurn(events: readonly CombatEvent[]): boolean {
+  return events.some((e) => e.type === 'cast' || e.type === 'enemyTurn')
+}

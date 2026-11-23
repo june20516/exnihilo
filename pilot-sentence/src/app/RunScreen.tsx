@@ -10,31 +10,32 @@ import { useRunStore } from './useRunStore'
  * 런 화면: 전투 → 상점 → … → 결과. 연출이 재생 중이면 전투 화면을 유지하고, 끝난 뒤 다음 화면으로 넘어간다.
  */
 export function RunScreen({ seed, debugEnemyHp }: { seed: number; debugEnemyHp: number | null }) {
-  const { state, shown, busy, lastEvents, dispatch, restart } = useRunStore(seed, debugEnemyHp)
+  const { shown, busy, lastEvents, dispatch, restart } = useRunStore(seed, debugEnemyHp)
   const combatEvents = useMemo(() => lastEvents.filter(isCombatEvent), [lastEvents])
-  const showCombat = state.combat !== null && (state.phase === 'combat' || busy)
-  const newRun = () => restart(state.seed + 1)
+  // 연출 중에는 shown이 행동 직전 상태라, 마지막 낭독의 연출이 끝날 때까지 전투 화면이 남는다.
+  const showCombat = shown.phase === 'combat' && shown.combat !== null
+  const newRun = () => restart(shown.seed + 1)
 
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-container-lowest" data-testid="run-screen">
       <RunTopBar state={shown} busy={busy} onNewRun={newRun} />
-      {showCombat && state.combat ? (
+      {showCombat && shown.combat ? (
         <CombatScreen
-          key={`${state.seed}:${state.floor}`}
-          state={state.combat}
+          key={`${shown.seed}:${shown.floor}`}
+          state={shown.combat}
           busy={busy}
           lastEvents={combatEvents}
           dispatch={(action) => dispatch({ type: 'combat', action })}
         />
-      ) : state.phase === 'shop' ? (
+      ) : shown.phase === 'shop' ? (
         <ShopScreen
-          state={state}
+          state={shown}
           disabled={busy}
           onBuy={(index) => dispatch({ type: 'buy', index })}
           onLeave={() => dispatch({ type: 'leave' })}
         />
       ) : (
-        <RunResult state={state} onNewRun={newRun} />
+        <RunResult state={shown} onNewRun={newRun} />
       )}
     </div>
   )

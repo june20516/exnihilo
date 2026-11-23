@@ -16,7 +16,7 @@ interface RallyProps {
 /** 조우·시드·덱이 바뀌면 key로 새로 마운트되어 전투를 새로 시작한다. */
 function RallyCombat({ encounterId, seed, deck, onRestart }: RallyProps) {
   const store = useCombatStore(encounterId, seed, deck)
-  return <CombatScreen {...store} onRestart={onRestart} />
+  return <CombatScreen state={store.shown} busy={store.busy} lastEvents={store.lastEvents} dispatch={store.dispatch} onRestart={onRestart} />
 }
 
 /** 샌드박스(?mode=rally): 적을 골라 전투 한 판, 덱을 직접 편집한다. 런과 덱을 공유하지 않는다. */

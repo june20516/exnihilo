@@ -5,6 +5,8 @@ interface SidePanelProps {
   enemy: readonly PreviewLine[]
   /** 동사가 없어 낭독할 수 없으면 false: 첫 목록에 안내를 보여 준다. */
   canCast: boolean
+  /** 이 낭독으로 전투에서 이긴다(적의 차례가 오지 않는다). */
+  winsNow: boolean
 }
 
 const TONE_CLASS: Record<PreviewLine['tone'], string> = {
@@ -30,7 +32,7 @@ function PreviewList({ testId, title, lines, empty }: { testId: string; title: s
 }
 
 /** 오른쪽: 이번 라운드에 일어날 일(실제 엔진으로 미리 계산). */
-export function SidePanel({ mine, enemy, canCast }: SidePanelProps) {
+export function SidePanel({ mine, enemy, canCast, winsNow }: SidePanelProps) {
   return (
     <aside className="flex min-h-0 flex-col gap-2">
       <PreviewList
@@ -39,7 +41,7 @@ export function SidePanel({ mine, enemy, canCast }: SidePanelProps) {
         lines={mine}
         empty={canCast ? '아무 일도 일어나지 않는다' : '동사가 없어 낭독할 수 없다'}
       />
-      <PreviewList testId="preview-enemy" title="이어서 적의 차례" lines={enemy} empty="적이 아무것도 하지 않는다" />
+      <PreviewList testId="preview-enemy" title="이어서 적의 차례" lines={enemy} empty={winsNow ? '적이 모두 쓰러져 적의 차례가 없다' : '적이 아무것도 하지 않는다'} />
     </aside>
   )
 }

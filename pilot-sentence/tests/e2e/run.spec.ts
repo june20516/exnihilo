@@ -124,3 +124,9 @@ test('화폐가 모자란 보상은 마우스를 올려도 강조되지 않는�
   await poor.hover({ force: true })
   expect(await shadow()).toBe(before)
 })
+
+test('낭독으로 이기면 미리보기의 적 칸은 적의 차례가 없다고 말한다', async ({ page }) => {
+  await page.getByTestId('tile-bite').first().click()
+  await page.getByTestId('slot-0-verb').click()
+  await expect(page.getByTestId('preview-enemy')).toContainText('적이 모두 쓰러져 적의 차례가 없다')
+})

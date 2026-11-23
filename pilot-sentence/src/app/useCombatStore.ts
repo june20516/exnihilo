@@ -1,12 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
 import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
-import type { CombatEvent } from '@/game/combat/events'
+import { type CombatEvent, resolvesTurn } from '@/game/combat/events'
 import { type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
 import { usePlaybackLock } from './usePlaybackLock'
 
 export interface CombatStore {
   readonly state: RallyState
+  /** 화면에 보일 상태: 차례가 넘어가는 행동의 연출이 재생 중이면 행동 직전 상태, 끝나면 지금 상태. */
+  readonly shown: RallyState
   readonly busy: boolean
   readonly lastEvents: readonly CombatEvent[]
   dispatch(action: RallyAction): void
@@ -20,19 +22,22 @@ export function useCombatStore(encounterId: string, seed: number, deck: readonly
   const { busy, isBusy, play } = usePlaybackLock()
   const [state, setState] = useState(() => startRally(encounterId, deck, seed, BALANCE).state)
   const stateRef = useRef(state)
+  const [shown, setShown] = useState(state)
   const [lastEvents, setLastEvents] = useState<readonly CombatEvent[]>([])
 
   const dispatch = useCallback(
     (action: RallyAction) => {
       if (isBusy()) return
-      const result = reduceRally(stateRef.current, action, BALANCE)
+      const before = stateRef.current
+      const result = reduceRally(before, action, BALANCE)
       stateRef.current = result.state
       setState(result.state)
       setLastEvents(result.events)
-      play(result.events)
+      setShown(resolvesTurn(result.events) ? before : result.state)
+      play(result.events, () => setShown(stateRef.current))
     },
     [isBusy, play],
   )
 
-  return { state, busy, lastEvents, dispatch }
+  return { state, shown, busy, lastEvents, dispatch }
 }

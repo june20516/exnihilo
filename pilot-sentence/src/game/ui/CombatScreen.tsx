@@ -149,6 +149,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             mine={preview ? linesFromEvents(preview.mine, preview.after.entities) : []}
             enemy={preview ? linesFromEvents(preview.enemy, preview.after.entities) : []}
             canCast={verbPlaced}
+            winsNow={preview?.after.phase === 'won'}
           />
         </div>
         <section className="flex items-end gap-3 rounded-xl bg-surface-container-lowest p-2 shadow-2xl">
