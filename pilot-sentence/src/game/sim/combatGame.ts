@@ -42,14 +42,19 @@ export function placementsFor(state: RallyState, instanceId: string, wordId: Wor
   return actions
 }
 
-function legalActions(state: RallyState, balance: Balance): SimCombatAction[] {
+/** 지금 상태의 합법 행동(같은 단어는 한 장만). 연결어 카드는 connect로 나온다. */
+export function legalCombatActions(state: RallyState, balance: Balance): SimCombatAction[] {
   if (state.phase !== 'player') return [END_TURN]
   const actions: SimCombatAction[] = []
   const seenWords = new Set<WordId>()
   for (const card of state.deck.hand) {
     if (seenWords.has(card.wordId)) continue
     seenWords.add(card.wordId)
-    actions.push(...placementsFor(state, card.instanceId, card.wordId, balance))
+    if (getWord(card.wordId).kind === 'connective') {
+      actions.push({ action: { type: 'connect', instanceId: card.instanceId }, key: `connect:${card.wordId}` })
+    } else {
+      actions.push(...placementsFor(state, card.instanceId, card.wordId, balance))
+    }
     if (state.discardsLeft > 0) actions.push({ action: { type: 'discard', instanceIds: [card.instanceId] }, key: `discard:${card.wordId}` })
   }
   for (const enemy of state.entities) {
@@ -68,7 +73,7 @@ export function combatGame(
   return {
     start: (seed) => startRally(encounterId, deck, seed, balance).state,
     apply: (state, a) => reduceRally(state, a.action, balance).state,
-    legalActions: (state) => legalActions(state, balance),
+    legalActions: (state) => legalCombatActions(state, balance),
     outcome: (state) => (state.phase === 'player' ? null : state.phase),
     turn: (state) => state.turn,
     actionKey: (a) => a.key,
