@@ -3,13 +3,13 @@
  * 순수 모듈이다. 상태 파일 읽기·쓰기는 scripts/play.ts가 맡는다.
  */
 import type { Entity, StatusKind } from '@/kit/core/entity'
-import { type BuildState, effectiveWord, type StructureId } from '@/game/build/build'
+import type { BuildState } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import type { Balance } from '@/game/content/balance'
 import { type EncounterTier, RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
-import type { SlotRole, WordKind } from '@/game/grammar/frames'
+import type { SlotRole } from '@/game/grammar/frames'
 import { PLAYER_ID, type RallyAction, type RallyState } from '@/game/rally/combat'
 import { sentenceFormula } from '@/game/rally/formula'
 import { linesFromEvents } from '@/game/rally/lines'
@@ -17,7 +17,7 @@ import { previewEvents } from '@/game/rally/preview'
 import { intentTexts, REJECT_MESSAGES, sentenceText, wordNamer } from '@/game/rally/text'
 import { FLOORS } from '@/game/run/floors'
 import { type RunAction, type RunEvent, type RunState, reduceRun, startRun } from '@/game/run/run'
-import type { Offer } from '@/game/run/shop'
+import { cardText, offerDetail, offerName, upgradeSummary } from '@/game/run/labels'
 import { describeWord, ROLE_NAMES } from '@/game/ui/describe'
 
 // ───────────────────────── 명령 ─────────────────────────
@@ -244,50 +244,7 @@ function markerLine(event: CombatEvent): string | null {
 // ───────────────────────── 화면 ─────────────────────────
 
 const TIER_NAMES: Record<EncounterTier, string> = { normal: '일반', elite: '정예', boss: '보스' }
-const KIND_NAMES: Record<WordKind, string> = {
-  target: '명사', verbTransitive: '타동사', verbIntransitive: '자동사', adjective: '형용사', adverb: '부사', junk: '오염', connective: '연결어',
-}
-const STRUCTURE_NAMES: Record<StructureId, string> = {
-  subjectSlot: '주어 수식어 칸 +1', objectSlot: '목적어 수식어 칸 +1', verbSlot: '동사 수식어 칸 +1', handSize: '손패 상한 +1', discard: '턴당 버리기 +1',
-}
 const STATUS_NAMES: Record<StatusKind, string> = { block: '보호', poison: '독', freeze: '빙결', strength: '힘', weak: '약화', vulnerable: '취약' }
-
-function cardLine(wordId: WordId, build: BuildState): string {
-  const def = effectiveWord(wordId, build)
-  const level = build.upgrades[wordId]
-  return `${def.text}${level ? `+${level}` : ''} [${KIND_NAMES[def.kind]}] ${describeWord(def)}`
-}
-
-/** withLevel이면 강화 보상에 '지금→다음 단계'를 붙인다(아직 사지 않은 상점 보상에만). */
-function offerName(offer: Offer, build: BuildState, withLevel = false): string {
-  switch (offer.kind) {
-    case 'word':
-      return `[단어] ${getWord(offer.wordId).text}`
-    case 'upgrade':
-      if (!withLevel) return `[강화] ${getWord(offer.wordId).text}`
-      return `[강화] ${getWord(offer.wordId).text} ${build.upgrades[offer.wordId] ?? 0}→${(build.upgrades[offer.wordId] ?? 0) + 1}단계`
-    case 'structure':
-      return `[구조] ${STRUCTURE_NAMES[offer.id]}`
-    case 'relic':
-      return `[유물] ${RELICS[offer.id].name}`
-  }
-}
-
-function offerDetail(offer: Offer, build: BuildState): string {
-  switch (offer.kind) {
-    case 'word':
-      return cardLine(offer.wordId, build)
-    case 'upgrade': {
-      const level = build.upgrades[offer.wordId] ?? 0
-      const next: BuildState = { ...build, upgrades: { ...build.upgrades, [offer.wordId]: level >= 1 ? 2 : 1 } }
-      return `${describeWord(effectiveWord(offer.wordId, build))} → ${describeWord(effectiveWord(offer.wordId, next))} (덱의 같은 카드 전부)`
-    }
-    case 'structure':
-      return STRUCTURE_NAMES[offer.id]
-    case 'relic':
-      return RELICS[offer.id].text
-  }
-}
 
 function statusText(entity: Entity): string {
   const parts = (Object.keys(STATUS_NAMES) as StatusKind[])
@@ -307,7 +264,7 @@ function deckSummary(deck: readonly WordId[], build: BuildState): string {
 }
 
 function buildSummary(build: BuildState): string {
-  const upgrades = Object.entries(build.upgrades).map(([id, level]) => `${getWord(id).text} ${level}단계`)
+  const upgrades = upgradeSummary(build)
   const relics = build.relics.length > 0 ? build.relics.map((id) => `${RELICS[id].name}(${RELICS[id].text})`).join(', ') : '없음'
   return [
     `수식어 칸: 주어 ${build.slots.subject} · 목적어 ${build.slots.object} · 동사 ${build.slots.verb} · 손패 상한 ${build.handMax} · 턴당 버리기 ${build.discardsPerTurn}`,
@@ -365,7 +322,7 @@ function renderCombat(state: RunState, combat: RallyState): string {
   out.push(`  그다음 적 차례: ${enemyLines.length > 0 ? enemyLines.map((l) => l.text).join(' / ') : '(없음)'}`)
 
   out.push('', `손패 (${combat.deck.hand.length}/${combat.build.handMax})`)
-  combat.deck.hand.forEach((card, i) => out.push(`  ${i + 1}. (${card.instanceId}) ${cardLine(card.wordId, combat.build)}`))
+  combat.deck.hand.forEach((card, i) => out.push(`  ${i + 1}. (${card.instanceId}) ${cardText(card.wordId, combat.build)}`))
   out.push('', buildSummary(state.build), deckSummary(state.deck, state.build))
   return out.join('\n')
 }
