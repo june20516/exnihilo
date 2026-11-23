@@ -198,24 +198,34 @@ exnihilo 연구소는 여러 웹 파일럿을 만들어 비교한 뒤 게임 하
 
 ### 4.1 구조
 
+코드는 **`kit/`(장르와 무관한 범용 부품)**과 **`game/`(문장 던전 고유)**으로 나눈다. `kit`은 `game`을 import할 수 없다(ESLint `no-restricted-imports`로 강제). `kit`은 파일럿 2를 시작할 때 실제로 재사용되는 부분만 공용 패키지로 추출할 후보다(9장 참조). 파일럿 1에서는 추출하지 않는다.
+
 ```
 pilot-sentence/
 ├─ src/
-│  ├─ engine/           # 순수 TS, React 의존 없음
-│  │  ├─ grammar/       # 문형 정의 해석, 조사 처리, 문장 → 표시 텍스트
-│  │  ├─ sentence/      # 보드 상태, 배치/덮어쓰기, 봉인, 잉크 건조, 원문 복귀
-│  │  ├─ resolve/       # resolveSentence: 보드 + 개체 → Effect[]
-│  │  ├─ combat/        # 턴 진행, 개입 루프, 상태, 승패
-│  │  ├─ run/           # 지도 생성, 보상, 상점, 휴식, 이벤트, 상속, 유물 훅
-│  │  └─ rng.ts         # 시드 RNG
-│  ├─ content/          # 데이터: words, frames, enemies, relics, events, balance
-│  ├─ store/            # useReducer 기반의 얇은 store
-│  └─ ui/               # Title, Map, Combat, Reward, Shop, Rest, Event, RunEnd, DevPanel
-│     └─ fx/            # EffectPlayer, 이벤트별 연출 함수, 파티클 canvas (6장)
-├─ public/assets/       # Stitch 일러스트
-├─ stitch/              # Stitch 시안 원본(참고용)
-└─ tests/e2e/           # Playwright 스모크 테스트
+│  ├─ kit/                  # 범용. game을 import하지 않음
+│  │  ├─ core/              # rng(시드), reduce → events 패턴 타입, 개체 HP·보호·상태 기본기
+│  │  ├─ deck/              # 덱 기계: 드로우·버림·섞기·제거·오염 카드 삽입
+│  │  ├─ run/               # 지도 생성, 노드 진행, 보상·상점·휴식·이벤트 틀, 유물 훅 시스템
+│  │  ├─ fx/                # EffectPlayer, 기본 연출(흔들림, 숫자 팝업, 파티클 canvas, 화면 전환)
+│  │  ├─ dev/               # 개발 패널 틀(수치 덮어쓰기, 시드, 치트 버튼 등록 API)
+│  │  └─ telemetry/         # 공통 플레이 기록 스키마, 저장·내보내기, 런 종료 설문
+│  ├─ game/                 # 문장 던전 고유
+│  │  ├─ grammar/           # 문형 정의 해석, 조사 처리, 문장 → 표시 텍스트
+│  │  ├─ sentence/          # 보드 상태, 배치/덮어쓰기, 봉인, 잉크 건조, 원문 복귀
+│  │  ├─ resolve/           # resolveSentence: 보드 + 개체 → Effect[]
+│  │  ├─ combat/            # 턴 진행, 개입 루프, 승패
+│  │  ├─ run/               # 상속, 문장 길이 보상, kit/run에 꽂는 노드 구현
+│  │  ├─ content/           # 데이터: words, frames, enemies, relics, events, balance
+│  │  ├─ fx/                # 잉크 연출(번짐, 펜 획, 건조, 봉인 등)
+│  │  └─ ui/                # Title, Map, Combat, Reward, Shop, Rest, Event, RunEnd
+│  └─ app/                  # 진입점, store(useReducer), 화면 라우팅
+├─ public/assets/           # Stitch 일러스트
+├─ stitch/                  # Stitch 시안 원본(참고용)
+└─ tests/e2e/               # Playwright 스모크 테스트
 ```
+
+경계 판단 기준: "다른 장르의 덱빌딩 파일럿(예: idea2의 건축 하중 시스템)에서도 수정 없이 쓸 수 있는가?" 애매하면 `game/`에 둔다.
 
 ### 4.2 데이터 흐름
 
@@ -260,7 +270,7 @@ pilot-sentence/
 
 ### 6.1 구조
 
-- 엔진이 돌려주는 `GameEvent` 목록을 `EffectPlayer`가 순서대로 재생한다. 이벤트 종류별 연출 함수는 `ui/fx/`에 모으고, 각 함수는 Promise를 돌려준다. 재생 중에는 입력을 막는다.
+- 엔진이 돌려주는 `GameEvent` 목록을 `EffectPlayer`가 순서대로 재생한다. `EffectPlayer`와 범용 연출(흔들림, 숫자 팝업, 파티클, 전환)은 `kit/fx/`에, 잉크 모티프 연출은 `game/fx/`에 둔다. 연출 함수는 이벤트 종류에 등록하고, 각 함수는 Promise를 돌려준다. 재생 중에는 입력을 막는다.
 - 라이브러리: `motion`(React 애니메이션, 레이아웃 전환), `@dnd-kit/core`(드래그 앤 드롭). 파티클(잉크 방울, 독, 불씨)은 전체 화면 canvas 레이어 하나에서 직접 그린다.
 - 연출 속도 배율(×0.5~×3)과 "연출 건너뛰기"는 개발 패널에서 바꾼다. `prefers-reduced-motion`이면 흔들림과 파티클을 끄고 페이드만 쓴다.
 
@@ -307,7 +317,7 @@ pilot-sentence/
 - 시드 표시와 고정, 문형 결정 모드(`path` / `random`) 전환
 - `balance.ts` 주요 수치를 실시간으로 덮어쓰기(행동력, 드로우, 잉크 기본값, 적 HP 배율), 연출 속도와 건너뛰기
 - 노드 이동, 단어·유물·골드 지급, 즉시 승리/패배
-- 런이 끝나면 요약을 `localStorage`에 저장한다(시드, 모드, 도달 계층, 사망 원인, 턴 수, 단어별 사용 횟수, 획득·제거 기록). 패널에서 JSON으로 내보낸다.
+- 런이 끝나면 9.2의 공통 스키마로 기록을 `localStorage`에 저장한다. 파일럿 고유 항목(단어별 사용 횟수, 획득·제거 기록, 문형별 승률)은 `extra`에 넣는다. 패널에서 JSON으로 내보낸다.
 
 ---
 
@@ -321,3 +331,63 @@ pilot-sentence/
 - `npm run dev` 하나로 실행된다.
 
 **범위 밖**: 사운드, 모바일 대응, 세이브/이어하기, 메타 진행(해금), 배포.
+
+---
+
+## 9. 연구소 효율화 스터디
+
+이 파일럿은 게임이면서, exnihilo에서 앞으로 만들 여러 파일럿의 **제작 방법을 다듬는 첫 표본**이다.
+
+### 9.1 작업 로그와 회고
+
+- `docs/lab/worklog/pilot-sentence.md`: 구현 계획의 작업 단위마다 한 줄씩 남긴다(시작·종료 시각, 단계 분류, 막힌 점, 재작업 여부와 원인).
+  - 단계 분류: 기획 / 애셋 / kit / game 엔진 / UI / 연출 / 밸런싱 / 디버깅
+- `docs/lab/retro/pilot-sentence.md`: 파일럿이 끝나면 작성한다. 다음 내용을 담는다.
+  1. 단계별 소요 비중
+  2. 가장 비쌌던 재작업 3가지와 원인
+  3. 파일럿 2에서 줄일 수 있는 것(재사용할 `kit` 모듈, 바꿀 절차, Stitch 프롬프트 요령)
+  4. `kit` 추출 후보 목록과, 각 모듈이 실제로 장르 중립이었는지에 대한 판정
+
+### 9.2 공통 평가 기준
+
+`docs/lab/evaluation.md`에 모든 파일럿이 따를 평가 기준을 정의한다. 이 파일럿이 첫 적용 사례다.
+
+**공통 플레이 기록 스키마** (`kit/telemetry`)
+```
+RunRecord {
+  pilotId, buildVersion, seed, mode,
+  startedAt, durationSec,
+  outcome: 'win' | 'loss' | 'abandon',
+  progress: number,          // 0~1, 런 진행도
+  encounters: number,        // 전투 수
+  turns: number,
+  avgTurnThinkSec: number,   // 턴 시작부터 턴 종료까지 평균 시간
+  deathCause?: string,
+  survey?: Survey,
+  extra: Record<string, unknown>   // 파일럿 고유 항목
+}
+```
+
+**런 종료 설문** (선택 응답, 30초 이내, 1~5점)
+1. 이해: 규칙이 금방 이해되었다.
+2. 선택의 무게: 턴마다 고민할 만한 선택이 있었다.
+3. 발견: 예상하지 못한 조합이나 해법을 발견했다.
+4. 변주: 이번 런이 이전 런과 다르게 느껴졌다.
+5. 재도전: 한 판 더 하고 싶다.
+6. 자유 메모 (한 줄)
+
+설문 결과는 `RunRecord.survey`에 저장한다. 파일럿끼리는 설문 평균, 재도전 의향, `avgTurnThinkSec`, 이탈 지점(`progress`)으로 비교한다.
+
+### 9.3 이번 범위에서 하지 않는 것
+
+- `kit`을 공용 패키지로 추출하는 작업(파일럿 2에서 한다)
+- 절차를 Claude Code skill로 만드는 작업(9.4의 후속 계획으로 넘긴다)
+
+### 9.4 후속 계획: 프로젝트 skill화
+
+회고(9.1)가 끝난 뒤 효과가 확인된 절차만 **프로젝트 skill**로 만든다. 위치는 `exnihilo/.claude/skills/<이름>/SKILL.md`다. 이 저장소에서 연 Claude Code 세션에서만 불러오며, git으로 함께 관리한다.
+
+후보 (회고 결과로 확정한다):
+- `stitch-assets`: Stitch로 시안과 일러스트를 생성하고, 원본(`=s0`)을 받아 `CREDITS.md`에 기록하는 절차. timeout 처리와 "no text" 프롬프트 요령을 포함한다.
+- `new-pilot`: 새 파일럿 폴더 스캐폴딩, spec 템플릿, `kit` 연결, 작업 로그·평가 기준 연결.
+- `pilot-retro`: 작업 로그와 플레이 기록을 읽어 회고 초안을 만드는 절차.
