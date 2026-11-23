@@ -1,0 +1,22 @@
+import type { SlotAddress } from '@/game/content/encounters'
+import { getWord, type WordId } from '@/game/content/words'
+import { MODIFIER_TARGET_ROLES } from '@/game/grammar/frames'
+import { type Board, placeWord } from '@/game/sentence/board'
+
+export function isModifierWord(wordId: WordId): boolean {
+  const kind = getWord(wordId).kind
+  return kind === 'adjective' || kind === 'adverb'
+}
+
+/** 선택한 단어를 이 슬롯의 head에 놓을 수 있는가. */
+export function canPlaceHead(board: Board, at: SlotAddress, wordId: WordId): boolean {
+  if (isModifierWord(wordId) || getWord(wordId).cost === null) return false
+  return placeWord(board, at, { wordId, owner: 'player', inkLeft: 1, instanceId: null, targetEntityId: null }).ok
+}
+
+/** 선택한 단어를 이 슬롯의 수식어 칸에 놓을 수 있는가. */
+export function canPlaceModifier(at: SlotAddress, wordId: WordId): boolean {
+  const kind = getWord(wordId).kind
+  if (kind !== 'adjective' && kind !== 'adverb') return false
+  return MODIFIER_TARGET_ROLES[kind].includes(at.role)
+}
