@@ -13,7 +13,8 @@
     "e2e": "playwright test",
     "sim": "tsx --tsconfig tsconfig.app.json scripts/sim.ts",
     "sim:run": "tsx --tsconfig tsconfig.app.json scripts/run-sim.ts",
-    "gate": "tsx --tsconfig tsconfig.app.json scripts/run-sim.ts --gate"
+    "gate": "tsx --tsconfig tsconfig.app.json scripts/run-sim.ts --gate",
+    "ceiling": "tsx --tsconfig tsconfig.app.json scripts/ceiling.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -150,6 +150,17 @@ test('기록: 낭독 수, 방어 낭독 수, 최대 한 방, 동사 없는 턴',
   expect(noVerbs.log.deadTurns).toBe(1)
 })
 
+test('최대 한 방은 적의 남은 HP에 잘리지 않은 문장의 위력이다', () => {
+  const weak = (s: RallyState): RallyState => ({ ...s, entities: s.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 3 } : e)) })
+  const killed = castVerb(weak(start()), 'bite').state
+  expect(killed.phase).toBe('won')
+  expect(killed.log.bestBurst).toBe(6)
+
+  const echoBuild: BuildState = { ...EMPTY_BUILD, relics: ['echo'] }
+  const echoed = castVerb(weak(startRally('test-dummy', DECK, 123, BALANCE, { build: echoBuild }).state), 'bite').state
+  expect(echoed.log.bestBurst).toBe(12)
+})
+
 test('카드 보존: 무작위 행동 200회 동안 내 카드 instanceId 집합이 변하지 않는다', () => {
   const ids = (s: RallyState) =>
     [...s.deck.hand, ...s.deck.drawPile, ...s.deck.discardPile].map((c) => c.instanceId)

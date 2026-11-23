@@ -22,7 +22,7 @@ export interface RallyLog {
   readonly defensiveCasts: number
   /** 턴 시작 손패에 동사가 하나도 없던 턴 수. */
   readonly deadTurns: number
-  /** 한 번의 내 낭독에서 적이 받은 피해 합의 최댓값. */
+  /** 한 번의 내 낭독의 위력(적 HP에 잘리지 않은 피해 합, sentencePower)의 최댓값. */
   readonly bestBurst: number
 }
 
@@ -195,6 +195,15 @@ export function runSentence(state: RallyState): { state: RallyState; events: Com
     burst += previousBurst
   })
   return { state: current, events, burst, clauses }
+}
+
+/**
+ * 문장의 위력: 적의 남은 HP에 잘리지 않은 즉시 피해. 적이 쓰러져도 남은 반복과 절을 끝까지 친다고 보고 잰다.
+ * 최대 한 방 기록용이며 실제 상태에는 반영하지 않는다.
+ */
+export function sentencePower(state: RallyState): number {
+  const unbounded = state.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: Number.MAX_SAFE_INTEGER, maxHp: Number.MAX_SAFE_INTEGER } : e))
+  return runSentence({ ...state, entities: unbounded }).burst
 }
 
 function cardsFrom(words: readonly PlacedWord[]): CardInst[] {
@@ -473,7 +482,7 @@ function cast(state: RallyState): Result {
   const verbId = getSlot(state.board, { clause: 0, role: 'verb' }).head.wordId
   const executed = runSentence(state)
   events.push(...executed.events)
-  const burst = executed.burst
+  const power = sentencePower(state)
   const cleared = clearSentence(executed.state)
   // 울림: 첫 절의 동사 카드는 버림 더미 대신 손패로 돌아온다.
   const verbCard = has(state, 'resonance') ? getSlot(state.board, { clause: 0, role: 'verb' }).head.instanceId : null
@@ -490,7 +499,7 @@ function cast(state: RallyState): Result {
       ...executed.state.log,
       casts: executed.state.log.casts + 1,
       defensiveCasts: executed.state.log.defensiveCasts + (isDefensiveVerb(verbId) ? 1 : 0),
-      bestBurst: Math.max(executed.state.log.bestBurst, burst),
+      bestBurst: Math.max(executed.state.log.bestBurst, power),
     },
   }
   const outcome = outcomeOf(current.entities)

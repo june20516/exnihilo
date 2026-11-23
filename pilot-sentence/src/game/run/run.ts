@@ -16,7 +16,7 @@ export interface FloorRecord {
 }
 
 export interface RunLog {
-  /** 런 전체에서 한 번의 낭독으로 적에게 준 피해의 최댓값. */
+  /** 런 전체에서 한 번의 낭독의 위력(적 HP에 잘리지 않은 피해)의 최댓값. */
   readonly bestBurst: number
   readonly purchases: readonly Offer[]
   readonly floorTurns: readonly FloorRecord[]
