@@ -80,5 +80,7 @@ export function describeIntent(step: InterventionStep, roleName: (role: SlotRole
       return `🔒 ${attachParticle(roleName(step.at.role), 'object')} 봉인`
     case 'pollute':
       return `☠ 덱에 [${getWord(step.word).text}] ${step.count}장`
+    case 'enrage':
+      return '🔥 격앙: 이후 매 턴 두 번 개입'
   }
 }

@@ -4,7 +4,7 @@ import { useCombatStore } from '@/app/useCombatStore'
 import { BALANCE } from '@/game/content/balance'
 import { ENCOUNTERS, type SlotAddress } from '@/game/content/encounters'
 import { getWord } from '@/game/content/words'
-import { currentIntent } from '@/game/combat/combat'
+import { upcomingIntents } from '@/game/combat/combat'
 import type { RejectReason } from '@/game/combat/events'
 import type { PlacedWord } from '@/game/sentence/board'
 import { ApMeter } from './ApMeter'
@@ -73,7 +73,7 @@ export function CombatScreen({ encounterId, seed: initialSeed }: CombatScreenPro
         <Battlefield
           entities={state.entities}
           portraits={portraits}
-          intent={state.phase === 'player' ? currentIntent(state) : null}
+          intents={state.phase === 'player' ? upcomingIntents(state) : []}
         />
         <SentenceBoard
           board={state.board}
@@ -102,7 +102,7 @@ export function CombatScreen({ encounterId, seed: initialSeed }: CombatScreenPro
           </div>
           <Hand
             hand={state.deck.hand}
-          board={state.board}
+            board={state.board}
             selectedId={selectedId}
             disabled={!canAct}
             onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}

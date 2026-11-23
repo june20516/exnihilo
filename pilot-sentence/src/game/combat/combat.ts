@@ -2,14 +2,29 @@ import { createEntity, type Entity, isAlive, tickEndOfTurn } from '@/kit/core/en
 import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState } from '@/kit/core/rng'
 import {
-  addToDiscard, type CardInstance, createDeck, type DeckState, discardHand, draw, takeFromHand,
+  addToDiscard,
+  type CardInstance,
+  createDeck,
+  type DeckState,
+  discardHand,
+  draw,
+  takeFromHand,
 } from '@/kit/deck/deck'
 import type { Balance } from '@/game/content/balance'
 import { ENCOUNTERS, type EncounterDef, type InterventionStep, type SlotAddress } from '@/game/content/encounters'
 import { getWord, type WordId } from '@/game/content/words'
 import { resolveClause } from '@/game/resolve/resolve'
 import {
-  type Board, buildBoard, dryInk, enemyAttach, enemyReplace, getSlot, placeWord, type PlacedWord, revertSlot, sealSlot,
+  type Board,
+  buildBoard,
+  dryInk,
+  enemyAttach,
+  enemyReplace,
+  getSlot,
+  placeWord,
+  type PlacedWord,
+  revertSlot,
+  sealSlot,
 } from '@/game/sentence/board'
 import type { CombatEvent, RejectReason } from './events'
 
@@ -26,6 +41,8 @@ export interface CombatState {
   readonly deck: DeckState<CardInst>
   readonly ap: number
   readonly loopIndex: number
+  /** 격앙 상태면 턴마다 개입 단계를 2개씩 실행한다. */
+  readonly enraged: boolean
   readonly rng: RngState
   readonly nextId: number
 }
@@ -48,9 +65,17 @@ function getEncounter(id: string): EncounterDef {
   return encounter
 }
 
-export function currentIntent(state: CombatState): InterventionStep {
+const ENRAGED_STEPS_PER_TURN = 2
+
+/** 다음 턴 종료 때 실행될 개입 단계들(평소 1개, 격앙 시 2개). */
+export function upcomingIntents(state: CombatState): InterventionStep[] {
   const loop = getEncounter(state.encounterId).interventionLoop
-  return loop[state.loopIndex % loop.length]
+  const count = state.enraged ? ENRAGED_STEPS_PER_TURN : 1
+  return Array.from({ length: count }, (_, i) => loop[(state.loopIndex + i) % loop.length])
+}
+
+export function currentIntent(state: CombatState): InterventionStep {
+  return upcomingIntents(state)[0]
 }
 
 function toCard(word: PlacedWord): CardInst | null {
@@ -95,13 +120,17 @@ export function startCombat(
     deck,
     ap: balance.apPerTurn,
     loopIndex: 0,
+    enraged: false,
     rng,
     nextId: cards.length,
   }
   const drawn = drawTurn(initial, balance)
   return {
     state: drawn.state,
-    events: [...drawn.events, { type: 'intentRevealed', step: currentIntent(drawn.state) }],
+    events: [
+      ...drawn.events,
+      ...upcomingIntents(drawn.state).map((step) => ({ type: 'intentRevealed' as const, step })),
+    ],
   }
 }
 
@@ -136,7 +165,11 @@ function place(
   }
 
   const placed: PlacedWord = {
-    wordId: card.wordId, owner: 'player', inkLeft: def.ink, instanceId: card.instanceId, targetEntityId,
+    wordId: card.wordId,
+    owner: 'player',
+    inkLeft: def.ink,
+    instanceId: card.instanceId,
+    targetEntityId,
   }
   const result = placeWord(state.board, at, placed, action.modifierIndex)
   if (!result.ok) return reject(state, result.reason, at)
@@ -177,6 +210,8 @@ function applyIntervention(state: CombatState, step: InterventionStep): CombatSt
     }
     case 'seal':
       return { ...state, board: sealSlot(state.board, step.at) }
+    case 'enrage':
+      return { ...state, enraged: true }
     case 'pollute': {
       const junk = Array.from({ length: step.count }, (_, i) => ({
         instanceId: `c${state.nextId + i}`,
@@ -199,10 +234,12 @@ function endTurn(state: CombatState, balance: Balance): Reduced<CombatState, Com
   let current: CombatState = { ...state, deck: discardHand(state.deck) }
 
   // 적 개입 (실행 직전)
-  const step = currentIntent(current)
-  events.push({ type: 'intervention', step })
-  current = applyIntervention(current, step)
-  if (step.kind === 'pollute') events.push({ type: 'polluted', wordId: step.word, count: step.count })
+  const steps = upcomingIntents(current)
+  for (const step of steps) {
+    events.push({ type: 'intervention', step })
+    current = applyIntervention(current, step)
+    if (step.kind === 'pollute') events.push({ type: 'polluted', wordId: step.word, count: step.count })
+  }
 
   // 문장 실행
   let nextId = current.nextId
@@ -246,8 +283,8 @@ function endTurn(state: CombatState, balance: Balance): Reduced<CombatState, Com
   }
 
   // 다음 예고와 다음 턴
-  current = { ...current, loopIndex: current.loopIndex + 1, turn: current.turn + 1 }
-  events.push({ type: 'intentRevealed', step: currentIntent(current) })
+  current = { ...current, loopIndex: current.loopIndex + steps.length, turn: current.turn + 1 }
+  for (const step of upcomingIntents(current)) events.push({ type: 'intentRevealed', step })
   const drawn = drawTurn(current, balance)
   return { state: drawn.state, events: [...events, ...drawn.events] }
 }

@@ -6,10 +6,10 @@ import { IntentBadge } from './IntentBadge'
 interface BattlefieldProps {
   entities: readonly Entity[]
   portraits: Readonly<Record<string, string>>
-  intent: InterventionStep | null
+  intents: readonly InterventionStep[]
 }
 
-export function Battlefield({ entities, portraits, intent }: BattlefieldProps) {
+export function Battlefield({ entities, portraits, intents }: BattlefieldProps) {
   const allies = entities.filter((e) => e.side === 'ally')
   const enemies = entities.filter((e) => e.side === 'enemy')
   return (
@@ -19,7 +19,7 @@ export function Battlefield({ entities, portraits, intent }: BattlefieldProps) {
         style={{ backgroundImage: 'url(/assets/bg-cavern.jpg)' }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-surface-container-lowest/50 to-transparent" />
-      <div className="relative z-10 flex justify-end">{intent && <IntentBadge step={intent} />}</div>
+      <div className="relative z-10 flex justify-end">{intents.length > 0 && <IntentBadge steps={intents} />}</div>
       <div className="relative z-10 flex items-end justify-between">
         <div className="flex items-end gap-4">
           {allies.map((e) => (

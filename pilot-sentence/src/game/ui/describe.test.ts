@@ -23,6 +23,7 @@ test('describeIntent', () => {
   expect(describeIntent({ kind: 'attach', at: { clause: 0, role: 'verb' }, word: 'fiercely' }, roleName))
     .toBe('＋ 동사에 [격렬하게]를 붙임')
   expect(describeIntent({ kind: 'pollute', word: 'web', count: 1 }, roleName)).toBe('☠ 덱에 [거미줄] 1장')
+  expect(describeIntent({ kind: 'enrage' }, roleName)).toBe('🔥 격앙: 이후 매 턴 두 번 개입')
   expect(describeIntent({ kind: 'seal', at: { clause: 0, role: 'object' } }, roleName)).toBe('🔒 목적어를 봉인')
   expect(describeIntent({ kind: 'replace', at: { clause: 0, role: 'object' }, word: 'spider' }, roleName))
     .toBe('✎ 목적어를 [거미]로 교체')

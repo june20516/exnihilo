@@ -13,6 +13,7 @@ export type InterventionStep =
   | { readonly kind: 'replace'; readonly at: SlotAddress; readonly word: WordId }
   | { readonly kind: 'seal'; readonly at: SlotAddress }
   | { readonly kind: 'pollute'; readonly word: WordId; readonly count: number }
+  | { readonly kind: 'enrage' }
 
 export interface ClauseSpec {
   readonly frameId: FrameId
@@ -50,8 +51,10 @@ export const ENCOUNTERS: Record<string, EncounterDef> = {
     ],
     interventionLoop: [
       { kind: 'revert', at: { clause: 0, role: 'subject' } },
+      { kind: 'revert', at: { clause: 0, role: 'object' } },
       { kind: 'attach', at: { clause: 0, role: 'verb' }, word: 'fiercely' },
       { kind: 'pollute', word: 'web', count: 1 },
+      { kind: 'enrage' },
     ],
   },
 }

@@ -50,7 +50,9 @@ export function WordTile({ def, instanceId, selected, disabled, playable, onSele
       <p className="rounded bg-surface-container-lowest/60 p-1.5 text-xs leading-tight text-on-surface-variant">
         {describeWord(def)}
         {!playable && def.cost !== null && (
-          <span className="mt-1 block text-error" data-testid="unplayable-note">이 문장에서는 쓸 수 없다</span>
+          <span className="mt-1 block text-error" data-testid="unplayable-note">
+            이 문장에서는 쓸 수 없다
+          </span>
         )}
       </p>
     </button>
