@@ -203,3 +203,66 @@ test('형용사 상태 이전에 저장한 파일(lingering 없음)도 보정해
   expect(() => run(migrated, { type: 'show' })).not.toThrow()
   expect(migrateRunState({ hello: 1 })).toBeNull()
 })
+
+describe('v3: 기본 동사, 새로고침, 보호 덩어리, 저장 호환', () => {
+  test('0으로 기본 동사를 동사 칸에 놓는다', () => {
+    expect(parseCommand(['place', '0', '1', '동사'])).toEqual({ type: 'place', hand: 0, clause: 1, role: 'verb', modifier: null })
+    const s = run(withHand(fresh(), ['fiercely']), { type: 'place', hand: 0, clause: 1, role: 'verb', modifier: null }).state
+    expect(s?.combat && getSlot(s.combat.board, { clause: 0, role: 'verb' }).head.wordId).toBe('strike')
+  })
+
+  test('기본 동사는 버릴 수 없다', () => {
+    expect(run(fresh(), { type: 'discard', hands: [0] }).output).toContain('기본 동사는 버릴 수 없습니다')
+  })
+
+  test('reroll 명령은 상점을 새로 뽑는다', () => {
+    expect(parseCommand(['reroll'])).toEqual({ type: 'reroll' })
+    const shop = { ...clearFloor(fresh()), gold: 10 }
+    const r = run(shop, { type: 'reroll' })
+    expect(r.output).toContain('상점을 새로고침했습니다(3).')
+    expect(r.state?.gold).toBe(7)
+    expect(renderRun(shop)).toContain('reroll로 새로고침(3 화폐)')
+  })
+
+  test('renderRun은 기본 동사와 보호 덩어리, 서고·망각을 보인다', () => {
+    const s = fresh()
+    if (!s.combat) throw new Error('전투 중이 아닙니다')
+    const guarded: RunState = {
+      ...s,
+      combat: {
+        ...s.combat,
+        entities: s.combat.entities.map((e) =>
+          e.id === PLAYER_ID ? { ...e, statuses: { ...e.statuses, block: 10 }, blockChunks: [{ amount: 6, turnsLeft: 0 }, { amount: 4, turnsLeft: 2 }] } : e,
+        ),
+      },
+    }
+    const text = renderRun(guarded)
+    expect(text).toContain('0. 때린다 (기본 동사)')
+    expect(text).toContain('보호 10 (4는 2턴 유지)')
+    expect(text).toMatch(/서고 \d+ · 망각 \d+/)
+  })
+
+  test('구버전 저장(freshBlock, rerolls·characterId·basicVerb 없음)을 migrateRunState가 옮긴다', () => {
+    const s = clearFloor(fresh())
+    const legacyShop: unknown = JSON.parse(JSON.stringify(s, (key, value: unknown) => (['rerolls', 'characterId', 'basicVerb'].includes(key) ? undefined : value)))
+    const shop = migrateRunState(legacyShop)
+    expect(shop).toMatchObject({ characterId: 'explorer', shop: { rerolls: 0 }, build: { basicVerb: 'strike' } })
+
+    const c = fresh()
+    if (!c.combat) throw new Error('전투 중이 아닙니다')
+    const legacyCombat: unknown = JSON.parse(JSON.stringify({
+      ...c,
+      combat: {
+        ...c.combat,
+        log: { casts: 1, defensiveCasts: 0, deadTurns: 2, bestBurst: 6 },
+        entities: c.combat.entities.map(({ blockChunks: _chunks, ...e }) => ({ ...e, freshBlock: 0, statuses: { ...e.statuses, block: e.id === PLAYER_ID ? 7 : 0 } })),
+      },
+    }))
+    const migrated = migrateRunState(legacyCombat)
+    const player = migrated?.combat?.entities.find((e) => e.id === PLAYER_ID)
+    expect(player?.blockChunks).toEqual([{ amount: 7, turnsLeft: 0 }])
+    expect(player && 'freshBlock' in player).toBe(false)
+    expect(migrated?.combat?.log).toMatchObject({ basicVerbCasts: 0, emptyDrawHpLost: 0, recalledCards: 0 })
+    expect(() => run(migrated, { type: 'show' })).not.toThrow()
+  })
+})

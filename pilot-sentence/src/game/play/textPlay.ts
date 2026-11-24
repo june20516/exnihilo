@@ -9,8 +9,8 @@ import { type EncounterTier, RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
-import { type RallyAction, type RallyState } from '@/game/rally/combat'
-import { PLAYER_ID } from '@/game/content/characters'
+import { BASIC_VERB_INSTANCE, basicVerbAvailable, type RallyAction, type RallyState } from '@/game/rally/combat'
+import { CHARACTERS, DEFAULT_CHARACTER, PLAYER_ID } from '@/game/content/characters'
 import { sentenceFormula } from '@/game/rally/formulaText'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
@@ -18,13 +18,18 @@ import { intentTexts, lingeringTexts, REJECT_MESSAGES, sentenceText, wordNamer }
 import { FLOORS } from '@/game/run/floors'
 import { isCombatEvent, type RunAction, type RunEvent, type RunState, reduceRun, startRun } from '@/game/run/run'
 import { cardText, offerDetail, offerName, upgradeSummary } from '@/game/run/labels'
+import { rerollPrice } from '@/game/run/shop'
 import { describeWord, ROLE_NAMES } from '@/game/ui/describe'
 
 // ───────────────────────── 명령 ─────────────────────────
 
 export type PlaceRole = SlotRole | 'connective'
 /** 손패 번호(1부터) 또는 카드 id(예: c3). id는 다른 카드를 놓아도 바뀌지 않는다. */
+/** 손패 번호(1부터, 0은 기본 동사) 또는 카드 id. */
 export type CardRef = number | string
+/** 기본 동사를 가리키는 손패 번호. */
+const BASIC_REF = 0
+const BASIC_REF_TEXT = '0'
 
 export type PlayCommand =
   | { readonly type: 'new'; readonly seed: number }
@@ -37,12 +42,13 @@ export type PlayCommand =
   | { readonly type: 'end' }
   | { readonly type: 'buy'; readonly item: number }
   | { readonly type: 'leave' }
+  | { readonly type: 'reroll' }
 
 export const USAGE = [
   '명령 (번호는 모두 1부터):',
   '  new [시드]                              새 런',
   '  show                                    지금 화면',
-  '  place <손패#|카드id> <절#> <주어|목적어|동사|연결어> [칸#]',
+  '  place <손패#|카드id> <절#> <주어|목적어|동사|연결어> [칸#]   (손패# 0은 기본 동사)',
   '                                          카드를 놓는다. 형용사는 주어·목적어, 부사는 동사에. 칸#로 수식어 자리를 고른다',
   '  target <적#>                            빈 목적어가 가리킬 적',
   '  discard <손패#|카드id...>               버리고 그만큼 다시 뽑는다(턴당 횟수 제한)',
@@ -51,6 +57,7 @@ export const USAGE = [
   '  cast                                    낭독(그다음 적 차례)',
   '  end                                     낭독하지 않고 턴 종료',
   '  buy <보상#>                             상점에서 산다',
+  '  reroll                                  상점 새로고침(값이 점점 오른다)',
   '  leave                                   상점을 떠나 다음 층으로',
 ].join('\n')
 
@@ -65,8 +72,9 @@ function positive(text: string | undefined): number | null {
   return n >= 1 ? n : null
 }
 
-/** 손패 번호 또는 카드 id. 아니면 null. */
+/** 손패 번호(0은 기본 동사) 또는 카드 id. 아니면 null. */
 function cardRef(text: string | undefined): CardRef | null {
+  if (text === BASIC_REF_TEXT) return BASIC_REF
   if (text !== undefined && /^[a-z]\w*$/.test(text)) return text
   return positive(text)
 }
@@ -85,6 +93,7 @@ export function parseCommand(args: readonly string[]): ParseResult {
     case 'cast':
     case 'end':
     case 'leave':
+    case 'reroll':
       return { type: name }
     case 'place': {
       const hand = cardRef(rest[0])
@@ -124,7 +133,8 @@ export interface PlayResult {
 function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new' | 'show' }>): RunAction | string {
   const combat = (action: RallyAction): RunAction => ({ type: 'combat', action })
   const hand = state.combat?.deck.hand ?? []
-  const cardAt = (ref: CardRef) => (typeof ref === 'number' ? hand[ref - 1] : hand.find((c) => c.instanceId === ref))?.instanceId
+  const cardAt = (ref: CardRef) =>
+    ref === BASIC_REF ? BASIC_VERB_INSTANCE : (typeof ref === 'number' ? hand[ref - 1] : hand.find((c) => c.instanceId === ref))?.instanceId
   const missingCard = (ref: CardRef) => (typeof ref === 'number' ? `손패에 ${ref}번 카드가 없습니다.` : `손패에 ${ref} 카드가 없습니다.`)
   switch (command.type) {
     case 'place': {
@@ -144,6 +154,7 @@ function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new
       return enemy ? combat({ type: 'target', entityId: enemy.id }) : `${command.enemy}번 적이 없습니다.`
     }
     case 'discard': {
+      if (command.hands.includes(BASIC_REF)) return '기본 동사는 버릴 수 없습니다.'
       const ids = command.hands.map(cardAt)
       const missing = command.hands.find((_, i) => !ids[i])
       if (missing !== undefined) return missingCard(missing)
@@ -159,6 +170,8 @@ function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new
       return { type: 'buy', index: command.item - 1 }
     case 'leave':
       return { type: 'leave' }
+    case 'reroll':
+      return { type: 'reroll' }
   }
 }
 
@@ -246,10 +259,16 @@ function markerLine(event: CombatEvent): string | null {
 const TIER_NAMES: Record<EncounterTier, string> = { normal: '일반', elite: '정예', boss: '보스' }
 const STATUS_NAMES: Record<StatusKind, string> = { block: '보호', poison: '독', freeze: '빙결', strength: '힘', weak: '약화', vulnerable: '취약' }
 
+/** 이월하는 보호 덩어리를 밝힌다(예: "(4는 2턴 유지)"). 다음 차례에 사라질 몫은 따로 적지 않는다. */
+function blockDetail(entity: Entity): string {
+  const holding = entity.blockChunks.filter((c) => c.turnsLeft > 0).map((c) => `${c.amount}는 ${c.turnsLeft}턴 유지`)
+  return holding.length > 0 ? ` (${holding.join(', ')})` : ''
+}
+
 function statusText(entity: Entity): string {
   const parts = (Object.keys(STATUS_NAMES) as StatusKind[])
     .filter((k) => entity.statuses[k] > 0)
-    .map((k) => `${STATUS_NAMES[k]} ${entity.statuses[k]}`)
+    .map((k) => `${STATUS_NAMES[k]} ${entity.statuses[k]}${k === 'block' ? blockDetail(entity) : ''}`)
   return parts.length > 0 ? ` · ${parts.join(' · ')}` : ''
 }
 
@@ -290,7 +309,7 @@ function renderCombat(state: RunState, combat: RallyState): string {
   out.push(`━━ ${state.floor}/${FLOORS.length}층 · ${TIER_NAMES[encounter?.tier ?? 'normal']} · ${encounter?.name ?? combat.encounterId} ━━`)
   out.push(
     `HP ${player?.hp ?? 0}/${player?.maxHp ?? state.maxHp}${player ? statusText(player) : ''}${(states[PLAYER_ID] ?? []).map((t) => ` · ${t}`).join('')} · 화폐 ${state.gold} · 턴 ${combat.turn}` +
-      ` · 남은 버리기 ${combat.discardsLeft} · 뽑을 더미 ${combat.deck.drawPile.length} · 버림 더미 ${combat.deck.discardPile.length}`,
+      ` · 남은 버리기 ${combat.discardsLeft} · 서고 ${combat.deck.drawPile.length} · 망각 ${combat.deck.discardPile.length}`,
   )
   out.push('', '적')
   enemies.forEach((e, i) => {
@@ -323,6 +342,8 @@ function renderCombat(state: RunState, combat: RallyState): string {
   out.push(`  그다음 적 차례: ${enemyLines.length > 0 ? enemyLines.map((l) => l.text).join(' / ') : '(없음)'}`)
 
   out.push('', `손패 (${combat.deck.hand.length}/${combat.build.handMax})`)
+  const basic = basicVerbAvailable(combat) ? cardText(combat.build.basicVerb, combat.build) : '(문장에 놓음)'
+  out.push(`  0. ${getWord(combat.build.basicVerb).text} (기본 동사) — ${basic}`)
   combat.deck.hand.forEach((card, i) => out.push(`  ${i + 1}. (${card.instanceId}) ${cardText(card.wordId, combat.build)}`))
   out.push('', buildSummary(state.build), deckSummary(state.deck, state.build))
   return out.join('\n')
@@ -335,6 +356,7 @@ function renderShop(state: RunState): string {
     const detail = item.sold ? '' : ` — ${offerDetail(item.offer, state.build)}`
     out.push(`  ${i + 1}. ${offerName(item.offer, state.build, !item.sold)}${detail} · ${price}`)
   })
+  if (state.shop) out.push('', `reroll로 새로고침(${rerollPrice(state.shop)} 화폐): 팔리지 않은 보상을 새로 뽑습니다.`)
   out.push('', `buy <번호>로 사고, leave로 다음 층(${state.floor + 1}/${FLOORS.length})으로 갑니다. 하나를 사면 남은 보상의 값이 ×1.5 오릅니다. 남은 화폐는 이월됩니다.`)
   out.push('', buildSummary(state.build), deckSummary(state.deck, state.build))
   return out.join('\n')
@@ -369,13 +391,51 @@ function isRunState(value: unknown): value is RunState {
   return typeof value === 'object' && value !== null && 'phase' in value && 'floor' in value && 'deck' in value && 'build' in value
 }
 
+/** 구버전 개체: freshBlock만 있고 blockChunks가 없으면 보호 합을 덩어리 하나(다음 차례에 사라짐)로 옮긴다. */
+function migrateEntity(entity: Entity): Entity {
+  if (Object.hasOwn(entity, 'blockChunks')) return entity
+  const { freshBlock: _legacy, ...rest } = entity as Entity & { freshBlock?: number }
+  const block = entity.statuses.block
+  return { ...rest, blockChunks: block > 0 ? [{ amount: block, turnsLeft: 0 }] : [] }
+}
+
+/** 구버전 빌드: 기본 동사가 없으면 기본 캐릭터의 것으로 채운다. */
+function migrateBuild(build: BuildState): BuildState {
+  return Object.hasOwn(build, 'basicVerb') ? build : { ...build, basicVerb: CHARACTERS[DEFAULT_CHARACTER].basicVerb }
+}
+
+/** 구버전 전투 기록: 새 집계 필드를 0으로 채우고 쓰지 않는 deadTurns는 버린다. */
+function migrateLog(log: RallyState['log']): RallyState['log'] {
+  const { deadTurns: _legacy, ...known } = log as Partial<RallyState['log']> & { deadTurns?: number }
+  return {
+    casts: known.casts ?? 0,
+    defensiveCasts: known.defensiveCasts ?? 0,
+    basicVerbCasts: known.basicVerbCasts ?? 0,
+    emptyDrawHpLost: known.emptyDrawHpLost ?? 0,
+    recalledCards: known.recalledCards ?? 0,
+    bestBurst: known.bestBurst ?? 0,
+  }
+}
+
 /**
  * 저장 파일을 지금 런 상태로 읽는다. 런 상태 모양이 아니면 null.
- * 이전 버전에서 저장한 파일에 없는 필드를 기본값으로 채운다(형용사 상태 lingering).
+ * 이전 버전에서 저장한 파일에 없는 필드를 기본값으로 채운다
+ * (형용사 상태 lingering, v3: 보호 덩어리·기본 동사·새로고침 횟수·캐릭터·전투 기록).
  */
 export function migrateRunState(value: unknown): RunState | null {
   if (!isRunState(value)) return null
   const combat = value.combat
-  if (!combat || Object.hasOwn(combat, 'lingering')) return value
-  return { ...value, combat: { ...combat, lingering: {} } }
+  return {
+    ...value,
+    characterId: Object.hasOwn(value, 'characterId') ? value.characterId : DEFAULT_CHARACTER,
+    build: migrateBuild(value.build),
+    shop: value.shop && !Object.hasOwn(value.shop, 'rerolls') ? { ...value.shop, rerolls: 0 } : value.shop,
+    combat: combat && {
+      ...combat,
+      lingering: Object.hasOwn(combat, 'lingering') ? combat.lingering : {},
+      build: migrateBuild(combat.build),
+      log: migrateLog(combat.log),
+      entities: combat.entities.map(migrateEntity),
+    },
+  }
 }
