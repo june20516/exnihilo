@@ -284,10 +284,12 @@ function engineBurst(s: Sentence, build: BuildState): number {
   const ids = [...usage(s.clauses, s.mode === 'single' ? null : CONNECTIVE_OF[s.mode])].flatMap(([id, n]) =>
     Array.from({ length: n }, () => id),
   )
-  const started = startRally('spider', ids, 1, { build: { ...build, handMax: 99 } }).state
+  // 손패를 최대치까지 채우는 규칙(v3)에서 서고가 바닥나지 않도록, 시작 손패 최대치를 덱 장수와 같게 둔다.
+  const started = startRally('spider', ids, 1, { build: { ...build, handMax: ids.length } }).state
   const cards = ids.map((wordId, i) => ({ instanceId: `x${i}`, wordId }))
   let state: RallyState = {
     ...started,
+    build: { ...started.build, handMax: 99 },
     deck: { drawPile: [], hand: cards, discardPile: [] },
     entities: started.entities.map((e) => (e.id === PLAYER_ID ? e : { ...e, hp: ENGINE_ENEMY_HP, maxHp: ENGINE_ENEMY_HP })),
   }

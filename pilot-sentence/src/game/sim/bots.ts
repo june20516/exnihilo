@@ -1,6 +1,7 @@
 import { nextInt } from '@/kit/core/rng'
 import type { Policy, SimGame } from '@/kit/sim/simulate'
-import { type RallyState } from '@/game/rally/combat'
+import { BASIC_VERB_INSTANCE, type RallyAction, type RallyState } from '@/game/rally/combat'
+import { getWord, type WordId } from '@/game/content/words'
 import { PLAYER_ID } from '@/game/content/characters'
 import { isFinisher, type SimCombatAction } from './combatGame'
 
@@ -63,4 +64,28 @@ export const greedyBot: CombatPolicy = (game, state, rng) => {
   const [baseline, ...candidates] = scoreCandidates(game, state)
   const best = candidates.reduce((top, c) => (c.score > top.score ? c : top), baseline)
   return [best.action, rng]
+}
+
+/** 때리기만 하는 봇이 고를 수 있는 동사인가: 피해 동작(damage, mutualDamage)만 가진 동사. */
+function isDamageOnlyVerb(wordId: WordId): boolean {
+  const effect = getWord(wordId).effect
+  if (effect.type !== 'verb') return true
+  return effect.actions.length > 0 && effect.actions.every((a) => a.kind === 'damage' || a.kind === 'mutualDamage')
+}
+
+/**
+ * "때리기만 하는 봇"(v3 판정 지표)이 둘 수 있는 행동인가. 단어 id가 아니라 정의의 동작 종류로 판정한다.
+ * 동사 배치는 피해 동작만 가진 동사(기본 동사 포함)일 때만 허용한다. 보호·상태·떠올리기·되받아친다는 쓰지 않는다.
+ * 동사가 아닌 단어(대상·형용사·부사·연결어)와 대상 지정·낭독·턴 종료 등은 허용한다.
+ */
+export function isAttackOnlyAction(state: RallyState, action: RallyAction): boolean {
+  if (action.type !== 'place') return true
+  const wordId =
+    action.instanceId === BASIC_VERB_INSTANCE ? state.build.basicVerb : state.deck.hand.find((c) => c.instanceId === action.instanceId)?.wordId
+  return wordId === undefined || isDamageOnlyVerb(wordId)
+}
+
+/** 합법 행동을 때리기만 하는 행동으로 거른 게임(전투 게이트용). */
+export function attackOnlyGame(game: CombatSim): CombatSim {
+  return { ...game, legalActions: (state) => game.legalActions(state).filter((a) => isAttackOnlyAction(state, a.action)) }
 }

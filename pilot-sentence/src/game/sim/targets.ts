@@ -7,4 +7,6 @@ export const BALANCE_TARGETS = {
   defendRate: [0.2, 0.6],
   /** 무작위 봇 승률은 탐욕 봇보다 이만큼 이상 낮아야 한다. */
   minGreedyEdge: 0.2,
+  /** 때리기만 하는 봇이 이겼을 때 잃은 HP는 탐욕 봇보다 이만큼 이상 많아야 한다(v3 결정 구조 판정). */
+  minAttackOnlyHpGap: 8,
 } as const

@@ -103,6 +103,17 @@ for (const [name, policy] of policies) {
   )
 }
 
+const attackOnlyRuns = evalSeeds.map((seed) => simulateRun(seed, weightedShopBot(learned), undefined, 'attackOnly'))
+const attackOnly = summarize('때리기만(학습 구매)', attackOnlyRuns)
+console.log(`${attackOnly.name.padEnd(13)} ${pct(attackOnly.winRate)} ${num(attackOnly.avgFloor)} ${num(attackOnly.burstMean, 9)} ${num(attackOnly.burstTop, 10)} ${num(attackOnly.eliteTurns, 10)}`)
+
+const learnedRuns = summaries[0].results
+const perRun = (pick: (r: RunResult) => number) => num(mean(learnedRuns.map(pick)))
+const learnedCasts = learnedRuns.reduce((sum, r) => sum + r.casts, 0)
+console.log('\n보고 지표(학습 봇, 런당 평균)')
+console.log(`  서고 바닥으로 잃은 HP ${perRun((r) => r.emptyDrawHpLost)} · 떠올린 카드 ${perRun((r) => r.recalledCards)} · 새로고침 ${perRun((r) => r.rerolls)}`)
+console.log(`  낭독 중 기본 동사 ${pct(learnedCasts === 0 ? 0 : learnedRuns.reduce((s, r) => s + r.basicVerbCasts, 0) / learnedCasts)} · 되받아친다 ${pct(learnedCasts === 0 ? 0 : learnedRuns.reduce((s, r) => s + r.counterCasts, 0) / learnedCasts)} · 지원 동사 ${pct(learnedCasts === 0 ? 0 : learnedRuns.reduce((s, r) => s + r.supportCasts, 0) / learnedCasts)}`)
+
 console.log(`시간 초과(교착) 런: ${summaries.map((s) => `${s.name} ${s.results.filter((r) => r.timedOut).length}`).join(' · ')}`)
 
 const learnedSummary = summaries[0]
@@ -127,6 +138,7 @@ if (gate) {
     ['학습 봇 근처 유형 수', archetypesNear >= T.minArchetypes, `${archetypesNear}`],
     ['상위 25% 최대 한 방', learnedSummary.burstTop >= T.topQuartileBurst, num(learnedSummary.burstTop)],
     ['정예·보스 평균 턴', learnedSummary.eliteTurns <= T.eliteMaxTurns, num(learnedSummary.eliteTurns)],
+    ['때리기만 봇 격차', learnedSummary.winRate - attackOnly.winRate >= T.attackOnlyGap, pct(learnedSummary.winRate - attackOnly.winRate)],
   ]
   console.log('\n게이트')
   for (const [label, ok, value] of checks) console.log(`  ${ok ? '통과' : '실패'}  ${label}: ${value}`)

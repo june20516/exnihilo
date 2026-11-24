@@ -105,3 +105,11 @@ test('학습 봇 런의 새로고침 횟수는 상점 수 × 2를 넘지 않는�
     expect(r.rerolls).toBeLessThanOrEqual(2 * Math.max(0, r.floorReached - 1))
   }
 })
+
+test('simulateRun attackOnly는 지원 동사를 한 번도 낭독하지 않는다(시드 2개)', () => {
+  for (const seed of [21, 22]) {
+    const r = simulateRun(seed, noShopBot, undefined, 'attackOnly')
+    expect(r.supportCasts).toBe(0)
+  }
+  expect(simulateRun(21, noShopBot).supportCasts).toBeGreaterThan(0)
+})

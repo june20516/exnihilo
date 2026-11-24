@@ -11,4 +11,6 @@ export const RUN_TARGETS = {
   topQuartileBurst: 180,
   /** 정예·보스 전투의 평균 턴 상한. */
   eliteMaxTurns: 8,
+  /** 학습 봇 완주율 − 때리기만 하는 봇 완주율의 하한(v3 결정 구조 판정). */
+  attackOnlyGap: 0.2,
 } as const
