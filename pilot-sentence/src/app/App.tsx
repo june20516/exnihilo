@@ -1,5 +1,6 @@
 import { RallySandbox } from './RallySandbox'
 import { RunScreen } from './RunScreen'
+import { Stage } from './Stage'
 
 const params = new URLSearchParams(window.location.search)
 
@@ -18,6 +19,9 @@ function readDebugEnemyHp(): number | null {
 
 export default function App() {
   const seed = readInitialSeed()
-  if (params.get('mode') === 'rally') return <RallySandbox initialSeed={seed} />
-  return <RunScreen seed={seed} debugEnemyHp={readDebugEnemyHp()} />
+  return (
+    <Stage>
+      {params.get('mode') === 'rally' ? <RallySandbox initialSeed={seed} /> : <RunScreen seed={seed} debugEnemyHp={readDebugEnemyHp()} />}
+    </Stage>
+  )
 }

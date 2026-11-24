@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* 높이가 낮은 화면(모바일 가로 등): 초상화·카드·여백만 줄인다. 터치 대상(칸·버튼)의 크기는 줄이지 않는다. */
+@custom-variant short (@media (max-height: 640px));
+
 /* Stitch battle-v1 시안의 디자인 토큰 */
 @theme {
   --color-background: #101319;
@@ -42,6 +45,15 @@
   --radius-xl: 0.5rem;
 }
 
-html, body { margin: 0; background: var(--color-surface-container-lowest); }
+html, body { margin: 0; background: var(--color-surface-container-lowest); height: 100dvh; overflow: hidden; }
+/* 모바일 브라우저의 글자 자동 확대를 끈다: 배치는 Stage가 비율로 줄이므로, 글자만 커지면 영역이 눌린다. */
+html { text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+
+/* 모바일은 가로만 지원한다(표시 spec §3.8). 세로로 든 터치 기기에서는 안내만 보인다. */
+.rotate-notice { display: none; }
+@media (orientation: portrait) and (hover: none) {
+  .rotate-notice { display: flex; }
+  .stage { display: none; }
+}
 body { font-family: var(--font-ui); color: var(--color-on-surface); user-select: none; }
 .material-symbols-outlined { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; line-height: 1; display: inline-block; }

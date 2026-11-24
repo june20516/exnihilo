@@ -18,22 +18,22 @@ function chipText(chip: ChangeChip): string {
 /** 미리보기 한 구간: 개체마다 한 줄(HP 전→후와 막대, 변화 칩). */
 export function PreviewList({ testId, title, changes, empty }: { testId: string; title: string; changes: readonly EntityChange[]; empty: string }) {
   return (
-    <div data-testid={testId} className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface-container p-3 shadow-inner">
-      <div className="mb-1 font-ui text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">{title}</div>
-      <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
+    <div data-testid={testId} className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface-container p-3 shadow-inner short:p-1.5">
+      <div className="mb-1 font-ui text-[11px] short:mb-0 font-bold uppercase tracking-widest text-on-surface-variant">{title}</div>
+      <ul data-testid={`${testId}-list`} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto short:space-y-0.5">
         {changes.length === 0 && <li className="font-ui text-sm text-outline">{empty}</li>}
         {changes.map((c) => {
           const ratio = c.maxHp > 0 ? Math.max(0, c.hpAfter) / c.maxHp : 0
           return (
-            <li key={c.id} className="flex flex-col gap-0.5">
-              <div className="flex items-center justify-between gap-2">
+            <li key={c.id} className="flex flex-col gap-0.5 short:flex-row short:flex-wrap short:items-center short:gap-x-2">
+              <div className="flex items-center justify-between gap-2 short:justify-start">
                 <span className="font-prose text-sm font-bold">{c.name}</span>
                 <span className="font-number text-sm">
                   {c.hpBefore} → {c.hpAfter}
                   {c.died && <span className="ml-1 rounded bg-error-container px-1 font-ui text-[10px] text-on-error-container">처치</span>}
                 </span>
               </div>
-              <div className="h-1 overflow-hidden rounded-full bg-surface-container-high">
+              <div className="h-1 overflow-hidden rounded-full bg-surface-container-high short:hidden">
                 <div className={`h-full ${c.side === 'enemy' ? 'bg-error' : 'bg-primary'}`} style={{ width: `${ratio * 100}%` }} />
               </div>
               <div className="flex flex-wrap gap-1 font-ui text-[11px]">

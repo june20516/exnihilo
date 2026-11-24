@@ -53,12 +53,13 @@ export function ControlPanel(props: ControlPanelProps) {
         </Tooltip>
         <span data-testid="turn">턴 {turn}</span>
       </div>
+      <div className="flex gap-2">
       <button
         type="button"
         data-testid="discard"
         disabled={disabled || discardsLeft <= 0}
         onClick={onToggleDiscard}
-        className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40 ${
+        className={`flex min-h-[60px] flex-1 items-center justify-between rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40 ${
           discarding ? 'bg-error-container text-on-error-container' : 'bg-surface-container-high'
         }`}
       >
@@ -66,7 +67,7 @@ export function ControlPanel(props: ControlPanelProps) {
           <Icon name="delete_sweep" className="text-[18px]" />
           {discarding ? '버리기 취소' : '버리고 새로 뽑기'}
         </span>
-        <span className="font-ui text-xs text-secondary">턴당 {discardsLeft}회</span>
+        {!discarding && <span className="font-ui text-xs text-secondary">턴당 {discardsLeft}회</span>}
       </button>
       {discarding && (
         <button
@@ -74,11 +75,12 @@ export function ControlPanel(props: ControlPanelProps) {
           data-testid="discard-confirm"
           disabled={disabled || markedCount === 0}
           onClick={onConfirmDiscard}
-          className="rounded-lg bg-error px-3 py-2 text-sm font-bold text-on-error disabled:opacity-40"
+          className="min-h-[60px] w-20 rounded-lg bg-error px-2 py-2 text-sm font-bold text-on-error disabled:opacity-40"
         >
           {markedCount}장 버리기
         </button>
       )}
+      </div>
     </div>
   )
 }

@@ -62,7 +62,7 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
       )}
       <div
         data-portrait={entity.id}
-        className="relative h-28 w-full overflow-hidden rounded-lg bg-surface-container shadow-xl"
+        className="relative h-28 w-full overflow-hidden rounded-lg bg-surface-container shadow-xl short:h-12"
       >
         {portrait ? (
           <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${portrait})` }} />

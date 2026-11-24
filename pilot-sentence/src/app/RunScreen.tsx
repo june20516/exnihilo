@@ -17,7 +17,7 @@ export function RunScreen({ seed, debugEnemyHp }: { seed: number; debugEnemyHp: 
   const newRun = () => restart(shown.seed + 1)
 
   return (
-    <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-container-lowest" data-testid="run-screen">
+    <div className="grid h-full grid-rows-[auto_1fr] overflow-hidden bg-surface-container-lowest" data-testid="run-screen">
       <RunTopBar state={shown} busy={busy} onNewRun={newRun} />
       {showCombat && shown.combat ? (
         <CombatScreen

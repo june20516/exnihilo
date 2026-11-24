@@ -1,5 +1,5 @@
 import { expect, type Locator, test } from '@playwright/test'
-import { expectInViewport } from './viewport.js'
+import { expectContentFits, expectInViewport, expectStacked } from './viewport.js'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -151,4 +151,8 @@ test('적 초상화는 글자가 박힌 아래 띠를 잘라 낸 이미지를 �
 test('1280×720에서도 핵심 요소가 화면 안에 있다', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
   await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'amplifiers', 'pile-draw', 'preview-mine', 'preview-enemy', 'intent-e0'])
+  await expectStacked(page, 'battlefield', 'sentence')
+  await expectStacked(page, 'formula', 'hand')
+  await expectContentFits(page, 'preview-mine-list')
+  await expectContentFits(page, 'sentence')
 })

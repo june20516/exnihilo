@@ -19,7 +19,7 @@ export function Battlefield({ entities, portraits, targetId, intents, states, on
   const allies = entities.filter((e) => e.side === 'ally')
   const enemies = entities.filter((e) => e.side === 'enemy')
   return (
-    <section className="relative flex items-end justify-between overflow-hidden rounded-xl px-6 pb-2 pt-3 shadow-2xl">
+    <section data-testid="battlefield" className="relative flex items-end justify-between overflow-hidden rounded-xl px-6 pb-2 pt-3 shadow-2xl short:pb-1 short:pt-1">
       <div
         className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-luminosity"
         style={{ backgroundImage: 'url(/assets/bg-cavern.jpg)' }}

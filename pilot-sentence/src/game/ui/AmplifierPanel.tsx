@@ -6,7 +6,7 @@ import { Tooltip } from './Tooltip'
 /** 적용 중인 증폭 요소(유물·늘어난 구조·강화·내 상태). 늘 보이는 작은 패널이고, 자세한 효과는 툴팁으로. */
 export function AmplifierPanel({ items }: { items: readonly Amplifier[] }) {
   return (
-    <div data-testid="amplifiers" className="flex flex-col gap-1 rounded-xl bg-surface-container px-3 py-2 font-ui text-xs shadow-lg">
+    <div data-testid="amplifiers" className="flex flex-col gap-1 rounded-xl bg-surface-container px-3 py-2 font-ui text-xs shadow-lg short:flex-row short:items-center short:gap-2 short:py-1">
       <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">적용 중</span>
       {items.length === 0 ? (
         <span className="text-outline">없음</span>

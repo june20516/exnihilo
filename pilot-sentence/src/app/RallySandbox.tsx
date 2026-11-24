@@ -35,7 +35,7 @@ export function RallySandbox({ initialSeed }: { initialSeed: number }) {
   }
 
   return (
-    <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-container-lowest">
+    <div className="grid h-full grid-rows-[auto_1fr] overflow-hidden bg-surface-container-lowest">
       <TopBar
         encounterId={encounterId}
         seed={seed}

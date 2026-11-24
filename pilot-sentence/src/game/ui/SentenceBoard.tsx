@@ -25,11 +25,11 @@ export function SentenceBoard(props: SentenceBoardProps) {
   const { board, nameOf, selectedWordId, onHeadClick, onModifierClick, connective, connectivePlaceable, onConnectiveClick, omitsObject } = props
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col justify-center gap-3 rounded-xl bg-surface-container-low p-4 shadow-xl"
+      className="flex min-h-0 flex-1 flex-col justify-center gap-3 rounded-xl bg-surface-container-low p-4 shadow-xl short:gap-1 short:p-1.5"
       data-testid="sentence"
     >
       {board.clauses.map((clause, clauseIndex) => (
-        <div key={clauseIndex} className="flex flex-wrap items-end justify-center gap-4" data-clause={clauseIndex}>
+        <div key={clauseIndex} className="flex flex-wrap items-end justify-center gap-2" data-clause={clauseIndex}>
           {FRAMES[clause.frameId].slots.map((slotDef) => {
             const slot = clause.slots.find((s) => s.role === slotDef.role)
             if (!slot) return null
@@ -75,7 +75,7 @@ function ConnectiveSlot({ connective, placeable, onClick }: { connective: Placed
             data-testid="connective-slot"
             onClick={onClick}
             title={connective ? '누르면 손패로 돌아옵니다' : '연결어를 놓으면 둘째 절이 열립니다'}
-            className={`flex h-16 min-w-20 items-center justify-center rounded-lg px-3 transition-all ${
+            className={`flex h-16 min-w-16 items-center justify-center rounded-lg px-2 transition-all ${
               connective ? 'bg-primary/20 shadow-md' : 'border border-dashed border-outline-variant/60'
             } ${placeable ? HIGHLIGHT : ''} ${isOver && placeable ? 'scale-105' : ''}`}
           >

@@ -51,7 +51,7 @@ export function WordTile({ def, facts, instanceId, selected, marked, disabled, d
       {...listeners}
       // 드래그를 꺼도(버리기 모드) 클릭은 받는다: dnd-kit의 aria-disabled를 실제 비활성 여부로 덮어쓴다.
       aria-disabled={disabled}
-      className={`flex h-40 w-32 flex-col justify-between rounded-xl bg-surface-container p-2 text-left shadow-lg
+      className={`flex h-40 w-32 short:h-28 flex-col justify-between rounded-xl bg-surface-container p-2 text-left shadow-lg
         ${isDragging ? 'shadow-2xl ring-2 ring-secondary' : 'transition-all duration-200'}
         ${selected && !isDragging ? '-translate-y-2 ring-2 ring-secondary shadow-2xl' : 'hover:-translate-y-1'}
         ${marked ? '-translate-y-2 ring-2 ring-error' : ''}

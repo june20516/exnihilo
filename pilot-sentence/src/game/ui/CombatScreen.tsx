@@ -149,7 +149,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
       onDragEnd={handleDragEnd}
       onDragCancel={() => setSelectedId(null)}
     >
-      <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-2">
+      <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-2 short:gap-1 short:p-1">
         <Battlefield
           entities={state.entities}
           portraits={portraits}
@@ -158,7 +158,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
           states={states}
           onPickEnemy={canAct ? (entityId) => run({ type: 'target', entityId }) : null}
         />
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_320px] gap-2">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_320px] short:grid-cols-[minmax(0,1fr)_250px] gap-2">
           <div className="flex min-h-0 flex-col gap-1">
             <SentenceBoard
               board={state.board}
@@ -213,7 +213,8 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             onSelect={onSelectCard}
             basic={{ wordId: state.build.basicVerb, available: basicVerbAvailable(state) }}
           />
-          <div className="flex w-44 shrink-0 flex-col gap-2">
+          {/* 버튼은 기준 크기에서 60px 이상: 가장 작은 화면(비율 약 0.67)에서도 터치 대상 40px. */}
+          <div className="flex w-52 shrink-0 flex-col gap-2">
             <button
               type="button"
               data-testid="cast"
@@ -223,12 +224,13 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             >
               낭독
             </button>
+            <div className="flex gap-2">
             <button
               type="button"
               data-testid="end-turn"
               disabled={!canAct}
               onClick={() => run({ type: 'endTurn' })}
-              className="flex h-12 flex-col items-start justify-center rounded-xl bg-primary-container px-4 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
+              className="flex min-h-[60px] flex-1 flex-col items-start justify-center rounded-xl bg-primary-container px-3 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
             >
               <span className="font-ui text-lg font-black">턴 종료</span>
               <span className="text-[10px] opacity-80">낭독 없이 넘긴다</span>
@@ -238,10 +240,11 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
               data-testid="clear"
               disabled={!canAct || sentenceEmpty}
               onClick={() => run({ type: 'clear' })}
-              className="rounded-lg bg-surface-container-high px-3 py-1 text-xs font-bold disabled:opacity-40"
+              className="min-h-[60px] w-[60px] rounded-xl bg-surface-container-high px-1 text-xs font-bold disabled:opacity-40"
             >
               문장 비우기
             </button>
+            </div>
           </div>
         </section>
       </main>
