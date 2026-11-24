@@ -34,12 +34,12 @@ export function runClause(
   clause: number,
   hooks: ClauseHooks,
   side: 'player' | 'enemy',
-): { state: RallyState; events: CombatEvent[]; targets: ResolvedClause['targets'] } {
+): { state: RallyState; events: CombatEvent[]; targets: ResolvedClause['targets']; recalls: number } {
   let nextId = state.nextId
   const lookup = side === 'player' ? wordLookup(state.build) : undefined
   // 적 절에는 개체에 남은 형용사 상태를 넘긴다. 남은 형용사는 내 카드라 내 빌드(강화)로 읽는다.
   const playerLookup = wordLookup(state.build)
   const lingering = side === 'enemy' ? (id: string) => lingeringMods(state.lingering[id] ?? [], playerLookup) : undefined
   const r = resolveClause(board, clause, state.entities, () => `t${nextId++}`, { executions: state.executions, lookup, hooks, lingering })
-  return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events, targets: r.targets }
+  return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events, targets: r.targets, recalls: r.recalls }
 }

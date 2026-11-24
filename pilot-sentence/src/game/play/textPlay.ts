@@ -227,9 +227,13 @@ function markerLine(event: CombatEvent): string | null {
     case 'sealed':
       return `  봉인: 당신의 ${ROLE_NAMES[event.role]} 칸 (다음 적 차례 시작에 풀림)`
     case 'drawn':
-      return `— 내 차례: ${event.count}장 뽑음${event.reshuffled ? ' (버림 더미를 섞음)' : ''} —`
+      return `— 내 차례: ${event.count}장 뽑음 —`
+    case 'emptyDraw':
+      return `  서고가 비어 HP ${event.hpLost} 잃음 (${event.missing}장 못 뽑음)`
+    case 'recalled':
+      return `  망각에서 ${event.count}장을 떠올림`
     case 'burned':
-      return `  손패가 가득 차 ${getWord(event.wordId).text}은(는) 버림 더미로`
+      return `  손패가 가득 차 ${getWord(event.wordId).text}은(는) 망각으로`
     case 'discarded':
       return `${event.count}장 버림`
     case 'connected':

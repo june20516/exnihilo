@@ -1,3 +1,4 @@
+import { PLAYER_ID } from '@/game/content/characters'
 import type { EffectHandlers } from '@/kit/fx/effectPlayer'
 import { flash, popNumber, shake, wait } from '@/kit/fx/primitives'
 import type { SlotAddress } from '@/game/content/enemies'
@@ -65,6 +66,10 @@ export const fxRegistry: EffectHandlers<CombatEvent> = {
   async hpLost(event, speed) {
     const el = portrait(event.entityId)
     if (el) await Promise.all([shake(el, 4, speed), popNumber(el, `HP −${event.amount}`, 'damage', speed)])
+  },
+  async emptyDraw(event, speed) {
+    const el = portrait(PLAYER_ID)
+    if (el) await Promise.all([shake(el, 4, speed), popNumber(el, `서고 바닥 HP −${event.hpLost}`, 'damage', speed)])
   },
   async grew(event, speed) {
     const el = portrait(event.entityId)

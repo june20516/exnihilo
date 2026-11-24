@@ -1,3 +1,4 @@
+import { addBlock } from '@/kit/core/entity'
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import type { WordId } from '@/game/content/words'
 import { getSlot, playerWordsOnBoard } from '@/game/sentence/board'
@@ -17,7 +18,9 @@ const withHand = (s: RallyState, words: WordId[], drawPile: CardInst[] = []): Ra
   ...s,
   deck: { drawPile, discardPile: [], hand: cards(words) },
 })
-const castVerb = (s: RallyState, verb: WordId) => act(act(withHand(s, [verb]), { type: 'place', instanceId: 'h0', at: V }).state, { type: 'cast' })
+/** 서고를 넉넉히 두어 서고 바닥 대가(v3)가 끼어들지 않게 한다. */
+const FILLER: CardInst[] = cards(Array.from({ length: 12 }, () => 'bite' as WordId), 'f')
+const castVerb = (s: RallyState, verb: WordId) => act(act(withHand(s, [verb], FILLER), { type: 'place', instanceId: 'h0', at: V }).state, { type: 'cast' })
 
 test('시작: 손패 6, 1턴, 버리기 1, 대상은 첫 적, 동사 없음', () => {
   const s = start()
@@ -34,7 +37,7 @@ test('동사 없이 낭독하면 거부되고 상태는 그대로', () => {
 })
 
 test('동사 한 장 낭독 → 적 피해 6, 적 반격 7, 2턴, 카드는 버림 더미, 문장은 빈칸', () => {
-  const s = withHand(start(), ['bite'], cards(['guard', 'guard', 'hide', 'rage', 'scare'], 'd'))
+  const s = withHand(start(), ['bite'], cards(['guard', 'guard', 'hide', 'rage', 'scare', 'mend'], 'd'))
   const r = act(act(s, { type: 'place', instanceId: 'h0', at: V }).state, { type: 'cast' })
   expect(hp(r.state, 'e0')).toBe(24)
   expect(hp(r.state, 'p')).toBe(53)
@@ -44,7 +47,7 @@ test('동사 한 장 낭독 → 적 피해 6, 적 반격 7, 2턴, 카드는 버�
   expect(r.events).toContainEqual({ type: 'enemyTurn' })
 })
 
-test('막는다 낭독 → 반격 7 중 6을 막고, 다음 내 턴 시작에 보호 0', () => {
+test('막는다 낭독 → 반격 7 중 6을 막고, 다 쓴 보호는 남지 않는다', () => {
   const r = castVerb(start(), 'guard')
   expect(hp(r.state, 'p')).toBe(59)
   expect(block(r.state, 'p')).toBe(0)
@@ -57,11 +60,12 @@ test('낭독 없이 턴 종료 → 놓았던 카드는 손패로 돌아온다', 
   expect(hp(r.state, 'e0')).toBe(30)
 })
 
-test('손패는 이월되고 5장을 뽑되 8장을 넘으면 소각', () => {
-  const s = withHand(start(), ['bite', 'bite', 'bite', 'guard', 'guard', 'hide', 'rage'], cards(['scare', 'mend', 'slash', 'hungry', 'cracked'], 'd'))
+test('손패는 이월되고 최대치(6)까지만 채워, 넘쳐서 버려지는 카드가 없다', () => {
+  const s = withHand(start(), ['bite', 'bite', 'bite', 'guard'], cards(['scare', 'mend', 'slash', 'hungry', 'cracked'], 'd'))
   const r = act(s, { type: 'endTurn' })
-  expect(r.state.deck.hand).toHaveLength(8)
-  expect(r.events.filter((e) => e.type === 'burned')).toHaveLength(4)
+  expect(r.state.deck.hand).toHaveLength(6)
+  expect(r.state.deck.drawPile).toHaveLength(3)
+  expect(r.events.filter((e) => e.type === 'burned')).toHaveLength(0)
 })
 
 test('버리기: 같은 장수를 뽑고, 두 번째는 noDiscardLeft', () => {
@@ -74,17 +78,13 @@ test('버리기: 같은 장수를 뽑고, 두 번째는 noDiscardLeft', () => {
   expect(act(r.state, { type: 'discard', instanceIds: ['h2'] }).events[0]).toMatchObject({ reason: 'noDiscardLeft' })
 })
 
-test('버리기: 덱이 비어 있으면 버림 더미를 섞어 뽑고, 그래도 없으면 덜 뽑는다', () => {
+test('버리기: 서고가 비어 있으면 망각을 섞지 않고 덜 뽑으며, 못 뽑은 장수만큼 대가를 치른다', () => {
   const base = withHand(start(), ['bite', 'guard'])
   const earlier = { ...base, deck: { ...base.deck, discardPile: cards(['hide', 'rage'], 'd') } }
   const r = act(earlier, { type: 'discard', instanceIds: ['h0', 'h1'] })
-  expect(r.state.deck.hand.map((c) => c.wordId).sort()).toEqual(['hide', 'rage'])
-  expect(r.state.deck.discardPile.map((c) => c.wordId)).toEqual(['bite', 'guard'])
-  // 버린 카드는 다시 뽑지 않는다: 덱 전체가 손패에 있던 카드 한 장뿐이면 손패는 빈다.
-  const alone = withHand(start(), ['bite'])
-  const lonely = act({ ...alone, deck: { ...alone.deck, drawPile: [], discardPile: [] } }, { type: 'discard', instanceIds: ['h0'] })
-  expect(lonely.state.deck.hand).toEqual([])
-  expect(lonely.state.deck.discardPile.map((c) => c.instanceId)).toEqual(['h0'])
+  expect(r.state.deck.hand).toEqual([])
+  expect(r.state.deck.discardPile.map((c) => c.wordId)).toEqual(['hide', 'rage', 'bite', 'guard'])
+  expect(r.events).toContainEqual({ type: 'emptyDraw', missing: 2, hpLost: 4 })
 })
 
 test('버리기: 손패에 없는 카드나 빈 목록은 거부', () => {
@@ -219,11 +219,11 @@ describe('빌드와 전투 옵션', () => {
     expect(getSlot(s.board, V).modifiers).toHaveLength(3)
   })
 
-  test('손패 상한 9, 버리기 2회', () => {
+  test('손패 상한 7, 버리기 2회', () => {
     const s = withBuild(applyStructure(applyStructure(EMPTY_BUILD, 'handSize'), 'discard')).state
     expect(s.discardsLeft).toBe(2)
-    const full = withHand(s, ['bite', 'bite', 'bite', 'guard', 'guard', 'hide', 'rage', 'scare'], cards(['mend', 'slash', 'hungry', 'cracked', 'venomous'], 'd'))
-    expect(act(full, { type: 'endTurn' }).state.deck.hand).toHaveLength(9)
+    const partial = withHand(s, ['bite', 'bite', 'bite', 'guard'], cards(['mend', 'slash', 'hungry', 'cracked', 'venomous'], 'd'))
+    expect(act(partial, { type: 'endTurn' }).state.deck.hand).toHaveLength(7)
   })
 
   test('강화한 물어뜯는다로 낭독하면 피해 9', () => {
@@ -249,4 +249,71 @@ test('버리기: 뽑을 더미가 비어도 방금 버린 카드를 다시 뽑�
   const r = act(empty, { type: 'discard', instanceIds: ['h0'] }).state
   expect(r.deck.hand.map((c) => c.wordId)).toEqual(['guard'])
   expect(r.deck.discardPile.map((c) => c.wordId)).toEqual(['bite'])
+})
+
+describe('v3 전투 흐름: 손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기', () => {
+  const filler = (n: number, prefix = 'd') => cards(Array.from({ length: n }, () => 'bite' as WordId), prefix)
+  const withPiles = (s: RallyState, hand: WordId[], drawPile: CardInst[], discardPile: CardInst[] = []): RallyState => ({
+    ...s,
+    deck: { drawPile, discardPile, hand: cards(hand) },
+  })
+  const placeAndCast = (s: RallyState) => act(act(s, { type: 'place', instanceId: 'h0', at: V }).state, { type: 'cast' })
+  const total = (s: RallyState) => s.deck.hand.length + s.deck.drawPile.length + s.deck.discardPile.length
+
+  test('턴 시작에 손패를 손패 최대치(6)까지 채운다', () => {
+    const r = placeAndCast(withPiles(start(), ['bite', 'guard', 'hide'], filler(10)))
+    expect(r.state.deck.hand).toHaveLength(6)
+    expect(r.events).toContainEqual({ type: 'drawn', count: 4 })
+    expect(r.events.some((e) => e.type === 'burned')).toBe(false)
+  })
+
+  test('서고가 비어도 망각은 자동으로 서고로 돌아오지 않는다', () => {
+    const r = placeAndCast(withPiles(start(), ['bite'], [], filler(5, 'x')))
+    expect(r.state.deck.drawPile).toHaveLength(0)
+    expect(r.state.deck.discardPile).toHaveLength(6)
+  })
+
+  test('서고가 비면 모자란 장수 × 2만큼 HP를 잃고, 보호가 있어도 줄어든다', () => {
+    const base = withPiles(start(), ['bite'], [])
+    const guarded = { ...base, entities: base.entities.map((e) => (e.id === 'p' ? addBlock(e, 10, 3) : e)) }
+    const r = placeAndCast(guarded)
+    expect(r.events).toContainEqual({ type: 'emptyDraw', missing: 6, hpLost: 12 })
+    expect(hp(r.state, 'p')).toBe(60 - 12)
+    expect(block(r.state, 'p')).toBe(3)
+  })
+
+  test('서고 바닥으로 HP가 0이 되면 전투에서 진다', () => {
+    const base = withPiles(start(), ['bite'], [])
+    const weak = { ...base, entities: base.entities.map((e) => (e.id === 'p' ? { ...e, hp: 10 } : e)) }
+    const r = placeAndCast(weak)
+    expect(r.state.phase).toBe('lost')
+    expect(r.events).toContainEqual({ type: 'combatEnded', outcome: 'lost' })
+  })
+
+  test('서고가 빈 상태에서 버리면 버린 장수만큼 대가를 치르고, 버린 카드는 망각으로 간다', () => {
+    const r = act(withPiles(start(), ['bite', 'guard'], []), { type: 'discard', instanceIds: ['h1'] })
+    expect(r.events).toContainEqual({ type: 'emptyDraw', missing: 1, hpLost: 2 })
+    expect(r.state.deck.discardPile.map((c) => c.instanceId)).toEqual(['h1'])
+    expect(r.state.deck.hand.map((c) => c.instanceId)).toEqual(['h0'])
+  })
+
+  test('떠올린다는 망각에서 4장을 서고로 옮긴다(망각이 2장이면 2장)', () => {
+    const s = withPiles(start(), ['recall'], filler(10), filler(2, 'x'))
+    const r = placeAndCast(s)
+    expect(r.events).toContainEqual({ type: 'recalled', count: 2 })
+    expect(total(r.state)).toBe(total(s))
+    expect(r.state.deck.discardPile.map((c) => c.instanceId)).toEqual(['h0'])
+    const big = placeAndCast(withPiles(start(), ['recall'], filler(10), filler(6, 'x')))
+    expect(big.events).toContainEqual({ type: 'recalled', count: 4 })
+    expect(big.state.deck.discardPile).toHaveLength(3)
+  })
+
+  test('적의 holds 1 보호는 적 차례 시작을 한 번 넘긴다', () => {
+    const base = withPiles(start(), [], filler(20))
+    const s = { ...base, entities: base.entities.map((e) => (e.id === 'e0' ? addBlock(e, 8, 1) : e)) }
+    const once = act(s, { type: 'endTurn' }).state
+    expect(block(once, 'e0')).toBe(8)
+    const twice = act(once, { type: 'endTurn' }).state
+    expect(block(twice, 'e0')).toBe(0)
+  })
 })

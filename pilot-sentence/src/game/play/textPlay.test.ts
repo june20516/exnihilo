@@ -83,10 +83,12 @@ test('cast: 낭독 결과와 적 차례가 출력에 나온다', () => {
   expect(r.output).toContain('적 차례')
 })
 
-test('손패가 가득 차 넘친 카드는 버림 더미로 갔다고 알려 준다', () => {
-  let s = withHand(fresh(), ['bite', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend', 'fiercely'])
+test('서고가 비어 못 뽑으면 잃은 HP를 알려 준다', () => {
+  let s = withHand(fresh(), ['bite'])
+  if (!s.combat) throw new Error('전투 중이 아닙니다')
+  s = { ...s, combat: { ...s.combat, deck: { ...s.combat.deck, drawPile: [] } } }
   s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
-  expect(run(s, { type: 'cast' }).output).toMatch(/손패가 가득 차 .+ 버림 더미로/)
+  expect(run(s, { type: 'cast' }).output).toMatch(/서고가 비어 HP 12 잃음 \(6장 못 뽑음\)/)
 })
 
 test('상점: 1층을 이기면 보상·값·화폐가 보이고, 사면 화폐가 줄고 남은 값이 오른다', () => {

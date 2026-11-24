@@ -1,3 +1,4 @@
+import { PLAYER_DEF_ID } from '@/game/content/characters'
 import type { Entity, StatusKind } from '@/kit/core/entity'
 import type { CombatEvent, FizzleReason } from '@/game/combat/events'
 
@@ -50,6 +51,10 @@ function describeEvent(event: CombatEvent, entities: readonly Entity[]): Preview
       return { text: `${name(event.entityId)} 등장`, tone: 'help' }
     case 'died':
       return { text: `${name(event.entityId)} 쓰러짐`, tone: toneFor(find(event.entityId), true) }
+    case 'emptyDraw': {
+      const player = entities.find((e) => e.side === 'ally' && e.defId === PLAYER_DEF_ID)
+      return { text: `${player?.name ?? '당신'}: 서고가 비어 HP ${event.hpLost} 잃음`, tone: 'harm' }
+    }
     case 'fizzled':
       return { text: `불발: ${FIZZLE_LABELS[event.reason]}`, tone: 'neutral' }
     default:

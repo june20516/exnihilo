@@ -13,9 +13,11 @@ const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const V = { clause: 0, role: 'verb' } as const
 const act = (s: RallyState, a: RallyAction) => reduceRally(s, a).state
+const FILLER: CardInst[] = Array.from({ length: 12 }, (_, i) => ({ instanceId: `f${i}`, wordId: 'bite' }))
 const withHand = (words: WordId[]): RallyState => ({
   ...startRally('test-dummy', RALLY_STARTER_DECK, 1).state,
-  deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
+  // 서고를 넉넉히 두어 서고 바닥 대가(v3)가 미리보기에 끼어들지 않게 한다.
+  deck: { drawPile: FILLER, discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
 })
 const texts = (lines: readonly { text: string }[]) => lines.map((l) => l.text)
 
@@ -241,4 +243,12 @@ test('미리보기의 적 차례 피해에 남은 상태(눈먼)가 반영된다
   let s = act(base, { type: 'place', instanceId: 'h0', at: V })
   s = act(s, { type: 'place', instanceId: 'h1', at: O })
   expect(texts(previewRound(s).enemy)).toEqual(['거미 → 탐험가: 피해 3'])
+})
+
+test('미리보기: 서고 바닥 HP 손실이 이어서 적의 차례에 실제와 같은 수치로 보인다', () => {
+  const s = act({ ...withHand(['bite']), deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'bite' }] } }, { type: 'place', instanceId: 'h0', at: V })
+  const p = previewRound(s)
+  expect(texts(p.enemy)).toContain('탐험가: 서고가 비어 HP 12 잃음')
+  const real = reduceRally(s, { type: 'cast' }).events
+  expect(real).toContainEqual({ type: 'emptyDraw', missing: 6, hpLost: 12 })
 })

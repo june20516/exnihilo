@@ -1,5 +1,5 @@
-import { addStatus, expireBlock, isAlive, tickEndOfTurn } from '@/kit/core/entity'
 import { RALLY_RULES } from '@/game/content/balance'
+import { addStatus, expireBlock, isAlive, tickEndOfTurn } from '@/kit/core/entity'
 import { PLAYER_ID } from '@/game/content/characters'
 import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent } from '@/game/content/enemies'
 import type { CombatEvent } from '@/game/combat/events'
@@ -45,11 +45,14 @@ export function enemyIntent(state: RallyState, enemyIndex: number): RallyIntent 
   return spec.intents[(state.turn - 1) % spec.intents.length]
 }
 
-/** 내 턴 시작: 보호 소멸, 버리기 회복, 드로우, 대상 보정. */
-export function startPlayerTurn(state: RallyState, drawCount: number): Result {
+/** 내 턴 시작: 보호 만료, 버리기 회복, 손패 최대치까지 채우기, 대상 보정. 서고 바닥 대가로 쓰러지면 진다. */
+export function startPlayerTurn(state: RallyState): Result {
   const entities = state.entities.map((e) => (e.id === PLAYER_ID ? expireBlock(e) : e))
   const refreshed: RallyState = { ...state, entities, discardsLeft: state.build.discardsPerTurn }
-  const drawn = drawCards(refreshed, drawCount)
+  const drawn = drawCards(refreshed, Math.max(0, state.build.handMax - state.deck.hand.length))
+  if (outcomeOf(drawn.state.entities) === 'lost') {
+    return { state: { ...drawn.state, phase: 'lost' }, events: [...drawn.events, { type: 'combatEnded', outcome: 'lost' }] }
+  }
   const target = drawn.state.entities.find((e) => e.id === drawn.state.targetId)
   const targetId = target && isAlive(target) ? drawn.state.targetId : firstAliveEnemy(drawn.state.entities)
   const dead = handHasVerb(drawn.state.deck.hand) ? 0 : 1
@@ -113,6 +116,6 @@ export function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
   const outcome = outcomeOf(current.entities)
   if (outcome) return ended(outcome)
 
-  const started = startPlayerTurn({ ...current, turn: current.turn + 1 }, RALLY_RULES.drawPerTurn)
+  const started = startPlayerTurn({ ...current, turn: current.turn + 1 })
   return { state: started.state, events: [...events, ...started.events] }
 }

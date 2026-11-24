@@ -24,10 +24,8 @@ export const UPGRADE_RULES = {
 export const RALLY_RULES = {
   /** 플레이어 최대 HP(임시: 캐릭터 정의로 옮긴다, Plan 7 Task 5). */
   playerMaxHp: 60,
-  /** 첫 턴 드로우 수. */
-  startHand: 6,
-  /** 이후 턴마다 드로우 수. */
-  drawPerTurn: 5,
+  /** 서고가 바닥났을 때 뽑지 못한 카드 한 장마다 잃는 HP(보호·피해 감소 무시). */
+  emptyDrawHpLoss: 2,
   /** 그래서: 앞 절에서 적이 받은 피해 중 다음 절 기본값에 더하는 비율. */
   soRatio: 0.5,
   /** 적 예고 문장의 수식어 칸 수(내 빌드와 무관). */

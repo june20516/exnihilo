@@ -62,7 +62,7 @@ test('탐욕 봇은 첫 턴에 아무것도 안 할 때보다 낫다(시드 합�
 test('combatMetrics: 비율과 0으로 나누기', () => {
   const s = game.start(1)
   expect(combatMetrics(s)).toMatchObject({ hpLost: 0, turns: 1, defendRate: 0, bestBurst: 0 })
-  const m = combatMetrics({ ...s, turn: 4, log: { casts: 4, defensiveCasts: 1, deadTurns: 1, bestBurst: 12 } })
+  const m = combatMetrics({ ...s, turn: 4, log: { ...s.log, casts: 4, defensiveCasts: 1, deadTurns: 1, bestBurst: 12 } })
   expect(m).toMatchObject({ deadTurnRate: 0.25, defendRate: 0.25, bestBurst: 12 })
 })
 

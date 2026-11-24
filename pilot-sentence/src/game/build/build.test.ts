@@ -7,14 +7,14 @@ const damageOf = (def: WordDef) => (def.effect.type === 'verb' ? def.effect.acti
 const modsOf = (def: WordDef) => (def.effect.type === 'adjective' || def.effect.type === 'adverb' ? def.effect.mods : [])
 
 test('EMPTY_BUILD는 기본 랠리 값', () => {
-  expect(EMPTY_BUILD).toEqual({ slots: { subject: 2, object: 2, verb: 2 }, handMax: 8, discardsPerTurn: 1, upgrades: {}, relics: [] })
+  expect(EMPTY_BUILD).toEqual({ slots: { subject: 2, object: 2, verb: 2 }, handMax: 6, discardsPerTurn: 1, upgrades: {}, relics: [] })
 })
 
 test('칸은 4에서 멈추고, 손패·버리기는 1씩 오른다', () => {
   let b = EMPTY_BUILD
   for (let i = 0; i < 5; i++) b = applyStructure(b, 'verbSlot')
   expect(b.slots.verb).toBe(4)
-  expect(applyStructure(EMPTY_BUILD, 'handSize').handMax).toBe(9)
+  expect(applyStructure(EMPTY_BUILD, 'handSize').handMax).toBe(7)
   expect(applyStructure(EMPTY_BUILD, 'discard').discardsPerTurn).toBe(2)
 })
 

@@ -21,7 +21,7 @@ export interface BuildState {
 /** 빈 빌드: 기본 랠리와 같은 값. */
 export const EMPTY_BUILD: BuildState = {
   slots: { subject: 2, object: 2, verb: 2 },
-  handMax: 8,
+  handMax: 6,
   discardsPerTurn: 1,
   upgrades: {},
   relics: [],

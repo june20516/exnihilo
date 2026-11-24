@@ -11,7 +11,7 @@ import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { ClauseHooks, ResolvedClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
 import { enemyDamageTaken, isAliveEnemy, outcomeOf, runClause } from './clauseRun'
-import { cardsFrom, drawCards } from './deckFlow'
+import { cardsFrom, drawCards, recallCards } from './deckFlow'
 import { enemyPhase, getEncounter, startPlayerTurn } from './enemyTurn'
 import { clauseHooks, connectiveMode, materializeFor, returnsFirstVerb, soBonusFrom } from './hooks'
 import { blankClause, blankSentence, firstAliveEnemy, hasVerb, isDefensiveVerb } from './sentence'
@@ -26,6 +26,10 @@ export interface RallyLog {
   readonly defensiveCasts: number
   /** 턴 시작 손패에 동사가 하나도 없던 턴 수. */
   readonly deadTurns: number
+  /** 서고가 바닥나 잃은 HP의 합. */
+  readonly emptyDrawHpLost: number
+  /** 떠올리기로 망각에서 서고로 옮긴 카드 수의 합. */
+  readonly recalledCards: number
   /** 한 번의 내 낭독의 위력(적 HP에 잘리지 않은 피해 합, sentencePower)의 최댓값. */
   readonly bestBurst: number
 }
@@ -153,12 +157,15 @@ export function runSentence(state: RallyState): {
   clauses: ClauseRun[]
   /** 이 낭독으로 개체에 남을 형용사 상태(실행된 절만). */
   lingering: Record<string, WordId[]>
+  /** 떠올리기 장수의 합(모든 절). */
+  recalls: number
 } {
   const board = materializeFor(state)
   const mode = connectiveMode(state)
   let current = state
   let burst = 0
   let previousBurst = 0
+  let recalls = 0
   const events: CombatEvent[] = []
   const clauses: ClauseRun[] = []
   const lingering: Record<string, WordId[]> = {}
@@ -169,6 +176,7 @@ export function runSentence(state: RallyState): {
     const hooks = soBonus > 0 ? { ...base, damageBonus: (base.damageBonus ?? 0) + soBonus } : base
     clauses.push({ hooks, entitiesBefore: current.entities, executionsBefore: current.executions, soBonus })
     const executed = runClause(current, board, clause, hooks, 'player')
+    recalls += executed.recalls
     const fizzled = executed.events.some((e) => e.type === 'fizzled' && e.clause === clause)
     if (!fizzled) collectLingering(state, board, clause, executed.targets, lingering, seen)
     current = executed.state
@@ -176,7 +184,7 @@ export function runSentence(state: RallyState): {
     previousBurst = enemyDamageTaken(executed.events, current.entities)
     burst += previousBurst
   })
-  return { state: current, events, burst, clauses, lingering }
+  return { state: current, events, burst, clauses, lingering, recalls }
 }
 
 /**
@@ -218,14 +226,14 @@ export function startRally(
     executions: 0,
     rng,
     nextId: cards.length,
-    log: { casts: 0, defensiveCasts: 0, deadTurns: 0, bestBurst: 0 },
+    log: { casts: 0, defensiveCasts: 0, deadTurns: 0, emptyDrawHpLost: 0, recalledCards: 0, bestBurst: 0 },
     build,
     enemyScale,
     connective: null,
     sealCount: 0,
     lingering: {},
   }
-  return startPlayerTurn(initial, RALLY_RULES.startHand)
+  return startPlayerTurn(initial)
 }
 
 function reject(state: RallyState, reason: RejectReason, at: SlotAddress | null = null): Result {
@@ -333,9 +341,13 @@ function cast(state: RallyState): Result {
   const used = cleared.cards
   const returned = used.filter((c) => c.instanceId === verbCard)
   const spent = used.filter((c) => c.instanceId !== verbCard)
-  const afterCast = addToDiscard(executed.state.deck, spent)
+  // 떠올리기는 이 낭독에 쓴 카드가 망각에 들어가기 전에 한다(방금 쓴 카드는 떠올리지 않는다).
+  const recalled = executed.recalls > 0 ? recallCards(executed.state, executed.recalls) : { state: executed.state, events: [] }
+  events.push(...recalled.events)
+  const recalledCount = recalled.events.reduce((sum, e) => (e.type === 'recalled' ? sum + e.count : sum), 0)
+  const afterCast = addToDiscard(recalled.state.deck, spent)
   let current: RallyState = {
-    ...executed.state,
+    ...recalled.state,
     lingering: mergeLingering(state.lingering, executed.lingering),
     board: cleared.board,
     connective: null,
@@ -344,6 +356,7 @@ function cast(state: RallyState): Result {
       ...executed.state.log,
       casts: executed.state.log.casts + 1,
       defensiveCasts: executed.state.log.defensiveCasts + (isDefensiveVerb(verbId) ? 1 : 0),
+      recalledCards: executed.state.log.recalledCards + recalledCount,
       bestBurst: Math.max(executed.state.log.bestBurst, power),
     },
   }

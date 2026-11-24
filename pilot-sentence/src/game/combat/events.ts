@@ -33,7 +33,11 @@ export type CombatEvent =
   | { readonly type: 'cast'; readonly by: 'player' | 'enemy' }
   | { readonly type: 'summoned'; readonly entityId: string; readonly tokenId: TokenId }
   | { readonly type: 'died'; readonly entityId: string }
-  | { readonly type: 'drawn'; readonly count: number; readonly reshuffled: boolean }
+  | { readonly type: 'drawn'; readonly count: number }
+  /** 서고가 바닥나 뽑지 못한 장수와 그 대가로 잃은 HP(보호·감소 무시). */
+  | { readonly type: 'emptyDraw'; readonly missing: number; readonly hpLost: number }
+  /** 떠올리기로 망각에서 서고로 옮긴 장수. */
+  | { readonly type: 'recalled'; readonly count: number }
   | { readonly type: 'combatEnded'; readonly outcome: 'won' | 'lost' }
   | { readonly type: 'enemyTurn' }
   | { readonly type: 'discarded'; readonly count: number }

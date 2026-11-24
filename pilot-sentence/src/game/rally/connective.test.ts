@@ -13,7 +13,7 @@ const hp = (s: RallyState, id: string) => s.entities.find((e) => e.id === id)?.h
 const withHand = (words: WordId[]): RallyState => ({
   ...startRally('test-dummy', DECK, 1).state,
   deck: {
-    drawPile: (['guard', 'hide', 'rage', 'scare', 'mend'] as const).map((wordId, i): CardInst => ({ instanceId: `d${i}`, wordId })),
+    drawPile: (['guard', 'hide', 'rage', 'scare', 'mend', 'bite', 'bite', 'bite'] as const).map((wordId, i): CardInst => ({ instanceId: `d${i}`, wordId })),
     discardPile: [],
     hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })),
   },
