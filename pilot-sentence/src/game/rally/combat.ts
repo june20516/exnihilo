@@ -15,6 +15,9 @@ import { enemyPhase, getEncounter, startPlayerTurn } from './enemyTurn'
 import { clauseHooks, connectiveMode, materializeFor, returnsFirstVerb, soBonusFrom } from './hooks'
 import { blankClause, blankSentence, firstAliveEnemy, hasVerb, isDefensiveVerb } from './sentence'
 
+/** 기본 동사 타일의 instanceId(정의는 deckFlow.ts, 순환 import를 피하려고). */
+export { BASIC_VERB_INSTANCE }
+
 export interface CardInst extends CardInstance {
   readonly wordId: WordId
 }
@@ -242,8 +245,6 @@ function reject(state: RallyState, reason: RejectReason, at: SlotAddress | null 
   return { state, events: [{ type: 'rejected', reason, at }] }
 }
 
-export { BASIC_VERB_INSTANCE }
-
 /** 기본 동사를 지금 놓을 수 있는가: 판(모든 절)에 아직 없을 때. */
 export function basicVerbAvailable(state: RallyState): boolean {
   return !playerWordsOnBoard(state.board).some((w) => w.instanceId === BASIC_VERB_INSTANCE)
@@ -300,7 +301,12 @@ function discard(state: RallyState, instanceIds: readonly string[]): Result {
   const withoutThrown: RallyState = { ...state, deck: { ...state.deck, hand: kept }, discardsLeft: state.discardsLeft - 1 }
   const drawn = drawCards(withoutThrown, thrown.length)
   const deck = { ...drawn.state.deck, discardPile: [...drawn.state.deck.discardPile, ...thrown] }
-  return { state: { ...drawn.state, deck }, events: [{ type: 'discarded', count: thrown.length }, ...drawn.events] }
+  const events: CombatEvent[] = [{ type: 'discarded', count: thrown.length }, ...drawn.events]
+  // 서고가 비어 버리기 대가로 쓰러지면 그 자리에서 진다(턴 시작 드로우와 같은 규칙).
+  if (outcomeOf(drawn.state.entities) === 'lost') {
+    return { state: { ...drawn.state, deck, phase: 'lost' }, events: [...events, { type: 'combatEnded', outcome: 'lost' }] }
+  }
+  return { state: { ...drawn.state, deck }, events }
 }
 
 /** 문장을 한 절의 빈칸으로 되돌리고, 놓았던 내 카드(연결어 포함)를 돌려준다. */

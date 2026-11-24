@@ -37,7 +37,8 @@ function expression(calc: ClauseCalc): string {
 
 export function formulaText(calc: ClauseCalc): string {
   if (calc.fizzle) return FIZZLE_TEXT[calc.fizzle]
-  const repeat = calc.repeat > 1 ? ` (×${calc.repeat}회)` : ''
+  const repeat =
+    calc.repeat <= 1 ? '' : calc.laterValue !== null ? ` (이후 ${calc.repeat - 1}회는 ${calc.laterValue})` : ` (×${calc.repeat}회)`
   const lethal = calc.lethalHp !== null ? ` → 처치(남은 HP ${calc.lethalHp})` : ''
   return `${expression(calc)} = ${calc.value}${repeat}${lethal}`
 }

@@ -32,6 +32,8 @@ export interface ClauseCalc {
   readonly terms: readonly FormulaTerm[]
   /** 1회분 값. 무효면 0. */
   readonly value: number
+  /** 둘째 반복부터의 1회분 값이 첫 값과 다르면 그 값(되받아친다: 보호를 다 쓴 뒤라 보호 0). 같으면 null. */
+  readonly laterValue: number | null
   readonly repeat: number
   /** 값(반복 포함)이 대상 적의 남은 HP 이상이면 그 남은 HP. */
   readonly lethalHp: number | null
@@ -72,7 +74,7 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   // 되받아친다의 위력은 카드 수치가 아니라 주어의 보호 합이다(해석기와 같은 시점의 값).
   const baseLabel = action.kind === 'counter' ? 'block' : null
   const baseAmount = action.kind === 'counter' ? (source?.statuses.block ?? 0) : action.amount
-  const fizzled = (fizzle: FizzleCause): ClauseCalc => ({ clause, base: baseAmount, baseLabel, terms: [], value: 0, repeat: adverbs.repeat, lethalHp: null, fizzle })
+  const fizzled = (fizzle: FizzleCause): ClauseCalc => ({ clause, base: baseAmount, baseLabel, terms: [], value: 0, laterValue: null, repeat: adverbs.repeat, lethalHp: null, fizzle })
   if (source && source.statuses.freeze > 0 && !adverbs.ignoreFreeze) return fizzled('frozen')
 
   if (action.kind !== 'damage' && action.kind !== 'mutualDamage' && action.kind !== 'counter') {
@@ -82,7 +84,7 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
       { kind: 'plus', amount: bonus, label: 'relic' },
       { kind: 'times', factor: adverbs.power, label: null },
     ]
-    return { clause, base: action.amount, baseLabel, terms, value, repeat: adverbs.repeat, lethalHp: null, fizzle: null }
+    return { clause, base: action.amount, baseLabel, terms, value, laterValue: null, repeat: adverbs.repeat, lethalHp: null, fizzle: null }
   }
 
   if (!target || target.hp <= 0) return fizzled('noObject')
@@ -92,16 +94,22 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   const chainOf = (slot: typeof subjectSlot) => chainFactorOf(slot, lookup, hooks.chainBoost)
   const sourceChain = chainOf(subjectSlot)
   const targetChain = chainOf(objectSlot)
-  const base = baseAmount + (hooks.damageBonus ?? 0)
   const executionBonus = adverbs.executionBonus ? run.executionsBefore : 0
   const strength = source?.statuses.strength ?? 0
   const weak = (source?.statuses.weak ?? 0) > 0 ? WEAK_MULTIPLIER : 1
   const vulnerable = target.statuses.vulnerable > 0 ? VULNERABLE_MULTIPLIER : 1
 
-  const powered = base * adverbs.power + executionBonus
-  const outgoing = ((source ? scaleOutgoing(powered, source) : powered) + sourceMods.outgoingFlat) * sourceMods.outgoingMul * sourceChain
-  const incoming = scaleIncoming(outgoing, target) * targetMods.incomingMul * targetChain
-  const value = Math.max(0, Math.floor(incoming) - targetMods.incomingFlat)
+  /** 기본 수치 하나에 대한 1회분 값(해석기와 같은 순서·같은 반올림 위치). */
+  const valueFor = (amount: number): number => {
+    const powered = (amount + (hooks.damageBonus ?? 0)) * adverbs.power + executionBonus
+    const outgoing = ((source ? scaleOutgoing(powered, source) : powered) + sourceMods.outgoingFlat) * sourceMods.outgoingMul * sourceChain
+    const incoming = scaleIncoming(outgoing, target) * targetMods.incomingMul * targetChain
+    return Math.max(0, Math.floor(incoming) - targetMods.incomingFlat)
+  }
+  const value = valueFor(baseAmount)
+  // 되받아친다는 첫 반복이 보호를 모두 쓰므로, 이후 반복의 위력은 보호 0이다.
+  const laterValue = action.kind === 'counter' ? valueFor(0) : null
+  const total = value + (laterValue ?? value) * (adverbs.repeat - 1)
 
   const terms: FormulaTerm[] = [
     { kind: 'plus', amount: (hooks.damageBonus ?? 0) - soBonus, label: 'relic' },
@@ -119,8 +127,8 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
     { kind: 'minus', amount: targetMods.incomingFlat },
   ]
   // 미리보기의 피해는 적의 남은 HP에서 잘린다. 값이 그 이상이면 처치임을 밝혀 두 숫자가 왜 다른지 보인다.
-  const lethalHp = target.side === 'enemy' && value * adverbs.repeat >= target.hp + target.statuses.block ? target.hp : null
-  return { clause, base: baseAmount, baseLabel, terms, value, repeat: adverbs.repeat, lethalHp, fizzle: null }
+  const lethalHp = target.side === 'enemy' && total >= target.hp + target.statuses.block ? target.hp : null
+  return { clause, base: baseAmount, baseLabel, terms, value, laterValue, repeat: adverbs.repeat, lethalHp, fizzle: null }
 }
 
 /** 내 문장의 계산: 동사가 놓인 절마다 하나(spec §2.3, 런 spec §4.1). */

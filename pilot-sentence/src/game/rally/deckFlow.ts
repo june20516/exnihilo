@@ -44,8 +44,8 @@ export function drawCards(state: RallyState, count: number): Result {
   }
   const events: CombatEvent[] = []
   let entities = state.entities
+  let hpLost = 0
   if (missing > 0) {
-    let hpLost = 0
     entities = entities.map((e) => {
       if (e.id !== PLAYER_ID) return e
       const r = loseHp(e, missing * RALLY_RULES.emptyDrawHpLoss)
@@ -57,7 +57,6 @@ export function drawCards(state: RallyState, count: number): Result {
     if (player && !isAlive(player)) events.push({ type: 'died', entityId: PLAYER_ID })
   }
   events.push({ type: 'drawn', count: drawn }, ...burned)
-  const hpLost = events.reduce((sum, e) => (e.type === 'emptyDraw' ? sum + e.hpLost : sum), 0)
   const log = hpLost > 0 ? { ...state.log, emptyDrawHpLost: state.log.emptyDrawHpLost + hpLost } : state.log
   return { state: { ...state, entities, log, deck: { drawPile, hand, discardPile } }, events }
 }

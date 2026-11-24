@@ -5,7 +5,9 @@ import { type CardInst, type RallyAction, type RallyState, reduceRally, runSente
 import { PLAYER_ID } from '@/game/content/characters'
 import { type BuildState, EMPTY_BUILD, type RelicId } from '@/game/build/build'
 import type { CombatEvent } from '@/game/combat/events'
+import { sentenceCalc } from './formula'
 import { sentenceFormula } from './formulaText'
+import { addBlock } from '@/kit/core/entity'
 import { previewEvents, previewRound } from './preview'
 import './testFixtures'
 
@@ -63,7 +65,7 @@ describe('계산식', () => {
 })
 
 const RELIC_IDS: RelicId[] = ['longSentence', 'adjectiveChain', 'stress', 'ellipsis', 'scarecrowSpeaker', 'poisonGrammar', 'resonance', 'echo']
-const PROPERTY_DECK: WordId[] = [...CHARACTERS[DEFAULT_CHARACTER].starterDeck, 'and', 'so', 'while', 'giant', 'twice', 'curse']
+const PROPERTY_DECK: WordId[] = [...CHARACTERS[DEFAULT_CHARACTER].starterDeck, 'and', 'so', 'while', 'giant', 'twice', 'curse', 'counter', 'endure']
 
 /** 시드로 정한 무작위 빌드: 유물 0~3개, 강화 0~2개. */
 function randomBuild(seed: number): BuildState {
@@ -155,14 +157,17 @@ function twoClauseState(encounterId: string, seed: number): RallyState {
     rng = next
     return items[i]
   }
-  const verbs: WordId[] = ['bite', 'slash', 'bite', 'scare', 'curse', 'rage', 'guard']
+  const verbs: WordId[] = ['bite', 'slash', 'bite', 'scare', 'curse', 'rage', 'guard', 'counter']
   const modifiers: WordId[] = ['fiercely', 'hungry', 'cracked', 'venomous', 'giant', 'twice', 'blind']
   const words: WordId[] = [pick(verbs), pick(['and', 'so', 'while'] as const), pick(verbs)]
   const [modifierCount, next] = nextInt(rng, 0, 3)
   rng = next
   for (let i = 0; i < modifierCount; i++) words.push(pick(modifiers))
   const base = startRally(encounterId, PROPERTY_DECK, seed, { build: randomBuild(seed) }).state
-  let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) } }
+  // 되받아친다가 위력을 갖도록 플레이어에게 보호를 준다(시드마다 0~12).
+  const block = (seed * 7) % 13
+  const entities = base.entities.map((e) => (e.id === PLAYER_ID && block > 0 ? addBlock(e, block, 1) : e))
+  let s: RallyState = { ...base, entities, deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) } }
   s = act(s, { type: 'place', instanceId: 'h0', at: { clause: 0, role: 'verb' } })
   s = act(s, { type: 'connect', instanceId: 'h1' })
   s = act(s, { type: 'place', instanceId: 'h2', at: { clause: 1, role: 'verb' } })
@@ -251,4 +256,48 @@ test('미리보기: 서고 바닥 HP 손실이 이어서 적의 차례에 실제
   expect(texts(p.enemy)).toContain('탐험가: 서고가 비어 HP 12 잃음')
   const real = reduceRally(s, { type: 'cast' }).events
   expect(real).toContainEqual({ type: 'emptyDraw', missing: 6, hpLost: 12 })
+})
+
+/**
+ * 반복 전체: 절마다 첫 대상이 받은 피해(막힌 양 포함)의 합이 계산식의 반복 합과 같다.
+ * 반복 합 = 첫 값 + 이후 값 × (반복 − 1). 대상이 쓰러졌으면(과잉 피해가 잘림) 계산식이 그 이상이어야 한다.
+ */
+function expectRepeatTotals(state: RallyState, label: string): number {
+  let checked = 0
+  const groups = eventsByClause(previewEvents(state).mine)
+  const runs = runSentence(state).clauses
+  const calcs = sentenceCalc(state)
+  for (const calc of calcs) {
+    if (calc.fizzle) continue
+    const hits = (groups[calc.clause] ?? []).filter((e): e is Extract<CombatEvent, { type: 'damaged' }> => e.type === 'damaged')
+    const first = hits[0]
+    if (!first) continue
+    const onTarget = hits.filter((h) => h.entityId === first.entityId && h.sourceId === first.sourceId)
+    const dealt = onTarget.reduce((sum, h) => sum + h.amount + h.blocked, 0)
+    const total = calc.value + (calc.laterValue ?? calc.value) * (calc.repeat - 1)
+    const targetHp = runs[calc.clause]?.entitiesBefore.find((e) => e.id === first.entityId)
+    const died = targetHp !== undefined && onTarget.reduce((sum, h) => sum + h.amount, 0) >= targetHp.hp
+    if (died) expect(total, label).toBeGreaterThanOrEqual(dealt)
+    else expect(total, `${label} clause ${calc.clause}`).toBe(dealt)
+    checked++
+  }
+  return checked
+}
+
+test.each(['spider', 'swarm', 'slime'])('반복 전체: 계산식의 반복 합이 실제 피해 합과 같다(되받아친다 포함): %s', (encounterId) => {
+  let checked = 0
+  for (let seed = 1; seed <= 80; seed++) checked += expectRepeatTotals(twoClauseState(encounterId, seed), `seed ${seed}`)
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) for (const state of randomStates(encounterId, seed)) checked += expectRepeatTotals(state, `random ${seed}`)
+  expect(checked).toBeGreaterThan(30)
+})
+
+test('되받아친다 + 두 번: 첫 반복이 보호를 다 쓰므로 둘째 반복은 0이고, 계산식도 그렇게 보인다', () => {
+  const base = withHand(['counter', 'twice'])
+  const guarded = { ...base, entities: base.entities.map((e) => (e.id === PLAYER_ID ? addBlock(e, 8, 1) : e)) }
+  const s = act(act(guarded, { type: 'place', instanceId: 'h0', at: V }), { type: 'place', instanceId: 'h1', at: V, modifierIndex: 0 })
+  const [calc] = sentenceCalc(s)
+  expect(calc).toMatchObject({ value: 8, laterValue: 0, repeat: 2, lethalHp: null })
+  expect(sentenceFormula(s)[0]?.text).toBe('보호 8 = 8 (이후 1회는 0)')
+  const hits = reduceRally(s, { type: 'cast' }).events.filter((e) => e.type === 'damaged' && e.entityId === 'e0')
+  expect(hits.map((h) => (h.type === 'damaged' ? h.amount + h.blocked : -1))).toEqual([8, 0])
 })

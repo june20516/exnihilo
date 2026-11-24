@@ -300,6 +300,15 @@ describe('v3 전투 흐름: 손패 채우기, 망각 비순환, 서고 바닥 �
     expect(r.state.deck.hand.map((c) => c.instanceId)).toEqual(['h0'])
   })
 
+  test('서고가 빈 상태의 버리기로 쓰러지면 즉시 진다', () => {
+    const base = withPiles(start(), ['bite', 'guard'], [])
+    const weak = { ...base, entities: base.entities.map((e) => (e.id === 'p' ? { ...e, hp: 3 } : e)) }
+    const r = act(weak, { type: 'discard', instanceIds: ['h0', 'h1'] })
+    expect(r.state.phase).toBe('lost')
+    expect(r.events).toContainEqual({ type: 'combatEnded', outcome: 'lost' })
+    expect(act(r.state, { type: 'place', instanceId: BASIC_VERB_INSTANCE, at: V }).events[0]).toMatchObject({ type: 'rejected', reason: 'notPlayerTurn' })
+  })
+
   test('떠올린다는 망각에서 4장을 서고로 옮긴다(망각이 2장이면 2장)', () => {
     const s = withPiles(start(), ['recall'], filler(10), filler(2, 'x'))
     const r = placeAndCast(s)
