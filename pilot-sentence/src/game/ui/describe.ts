@@ -1,3 +1,4 @@
+import type { BlockChunk } from '@/kit/core/entity'
 import { TOKENS } from '@/game/content/tokens'
 import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type ConnectiveMode, LASTS_TEXT, type VerbAction, type WordDef } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
@@ -114,4 +115,12 @@ export function describeWord(def: WordDef): string {
       return effect.mods.map(describeAdverb).join(', ')
   }
   return ''
+}
+
+/** 보호 덩어리를 한 줄로: 합과, 이월하는 몫의 남은 턴(예: "보호 10 · 4는 2턴 유지"). 보호가 없으면 빈 문자열. */
+export function blockText(chunks: readonly BlockChunk[]): string {
+  const total = chunks.reduce((sum, c) => sum + c.amount, 0)
+  if (total === 0) return ''
+  const holding = chunks.filter((c) => c.turnsLeft > 0).map((c) => `${c.amount}는 ${c.turnsLeft}턴 유지`)
+  return [`보호 ${total}`, ...holding].join(' · ')
 }

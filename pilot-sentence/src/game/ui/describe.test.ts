@@ -1,6 +1,6 @@
 import { PLAYER_POOL } from '@/game/content/words'
 import { getWord } from '@/game/content/words'
-import { describeWord } from './describe'
+import { blockText, describeWord } from './describe'
 
 test.each([
   ['bite', '피해 6'],
@@ -40,4 +40,10 @@ test('v2에는 잉크·비용이 없다: 어떤 카드 설명에도 잉크가 �
 
 test('근접·원거리 표기는 어떤 카드 설명에도 없다', () => {
   for (const word of PLAYER_POOL) expect(describeWord(word), word.id).not.toMatch(/근접|원거리/)
+})
+
+test('blockText: 보호 합과 이월 몫(남은 턴)을 보인다', () => {
+  expect(blockText([{ amount: 6, turnsLeft: 0 }, { amount: 4, turnsLeft: 2 }])).toBe('보호 10 · 4는 2턴 유지')
+  expect(blockText([{ amount: 9, turnsLeft: 0 }])).toBe('보호 9')
+  expect(blockText([])).toBe('')
 })

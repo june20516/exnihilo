@@ -1,3 +1,4 @@
+import { blockText } from './describe'
 import type { Entity, StatusKind } from '@/kit/core/entity'
 import { Icon } from './Icon'
 
@@ -68,9 +69,14 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
       </span>
       <div className="flex min-h-4 flex-wrap gap-x-2 font-label text-[11px]">
         {STATUS_BADGES.filter((b) => entity.statuses[b.kind] > 0).map((b) => (
-          <span key={b.kind} className={`flex items-center gap-0.5 ${b.tone}`} title={b.label}>
+          <span
+            key={b.kind}
+            data-testid={b.kind === 'block' ? `block-${entity.id}` : undefined}
+            className={`flex items-center gap-0.5 ${b.tone}`}
+            title={b.label}
+          >
             <Icon name={b.icon} className="text-[12px]" />
-            {b.label} {entity.statuses[b.kind]}
+            {b.kind === 'block' ? blockText(entity.blockChunks) : `${b.label} ${entity.statuses[b.kind]}`}
           </span>
         ))}
       </div>

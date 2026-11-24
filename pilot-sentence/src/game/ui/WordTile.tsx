@@ -15,9 +15,11 @@ interface WordTileProps {
   /** 현재 문장 어디에도 놓을 수 없으면 false (문형 불일치 등). */
   playable: boolean
   onSelect: () => void
+  /** 기본값은 tile-{단어 id}. 기본 동사 타일처럼 따로 찾아야 하면 지정한다. */
+  testId?: string
 }
 
-export function WordTile({ def, instanceId, selected, marked, disabled, draggable, playable, onSelect }: WordTileProps) {
+export function WordTile({ def, instanceId, selected, marked, disabled, draggable, playable, onSelect, testId }: WordTileProps) {
   const style = KIND_STYLES[def.kind]
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: instanceId,
@@ -30,7 +32,7 @@ export function WordTile({ def, instanceId, selected, marked, disabled, draggabl
     <button
       ref={setNodeRef}
       type="button"
-      data-testid={`tile-${def.id}`}
+      data-testid={testId ?? `tile-${def.id}`}
       data-instance-id={instanceId}
       data-selected={selected}
       onClick={onSelect}

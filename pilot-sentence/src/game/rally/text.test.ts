@@ -2,7 +2,7 @@ import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
 import { previewEvents } from './preview'
-import { intentTexts, lingeringTexts, REJECT_MESSAGES, sentenceText, wordNamer } from './text'
+import { eventNotice, intentTexts, lingeringTexts, REJECT_MESSAGES, sentenceText, wordNamer } from './text'
 import { intentClause } from './testFixtures'
 
 RALLY_ENCOUNTERS['test-text-seal'] = {
@@ -75,4 +75,11 @@ test('남을 상태: 지금 문장대로 낭독하면 남을 형용사 상태를
   expect(lingeringTexts(two)).toEqual({ e0: ['눈멂 ×2 · 적 차례까지'] })
   const noVerb = act(base, { type: 'place', instanceId: 'h1', at: { clause: 0, role: 'object' } })
   expect(lingeringTexts(noVerb)).toEqual({})
+})
+
+test('eventNotice: 거절 사유가 먼저이고, 없으면 서고 바닥·손패 넘침·떠올리기를 잇는다', () => {
+  expect(eventNotice([{ type: 'rejected', reason: 'noVerb', at: null }, { type: 'emptyDraw', missing: 1, hpLost: 2 }])).toBe(REJECT_MESSAGES.noVerb)
+  expect(eventNotice([{ type: 'emptyDraw', missing: 2, hpLost: 4 }, { type: 'recalled', count: 3 }])).toBe('서고가 비어 HP 4 잃음 · 망각에서 3장을 떠올림')
+  expect(eventNotice([{ type: 'burned', wordId: 'bite' }])).toBe('손패가 가득 차 물어뜯는다은(는) 망각으로')
+  expect(eventNotice([{ type: 'cast', by: 'player' }])).toBe('')
 })

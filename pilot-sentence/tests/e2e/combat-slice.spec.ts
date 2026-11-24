@@ -58,7 +58,8 @@ test('동사가 없으면 낭독할 수 없다', async ({ page }) => {
 })
 
 test('버리기: 카드 두 장을 표시하고 확정하면 손패 수는 같고 버리기는 비활성', async ({ page }) => {
-  const tiles = page.getByTestId('hand').locator('[data-instance-id]')
+  // 손패 카드만 센다(기본 동사 타일은 손패가 아니다).
+  const tiles = page.getByTestId('hand').locator('[data-instance-id]:not([data-instance-id="basic"])')
   await expect(tiles).toHaveCount(6)
   await page.getByTestId('discard').click()
   await tiles.nth(0).click()
@@ -112,4 +113,16 @@ test('형용사 상태: 금이 간을 목적어에 놓으면 적 카드에 남�
   await expect(page.getByTestId('states-e0')).toContainText('금이 감')
   await expect(page.getByTestId('end-turn')).toBeEnabled({ timeout: 10_000 })
   await expect(page.getByTestId('states-e0')).toHaveCount(0)
+})
+
+test('기본 동사 타일을 동사 칸에 놓고 낭독하면 다음 턴에 다시 쓸 수 있다', async ({ page }) => {
+  const basic = page.getByTestId('tile-basic')
+  await expect(basic).toBeVisible()
+  await basic.click()
+  await page.getByTestId('slot-0-verb').click()
+  await expect(page.getByTestId('slot-0-verb')).toContainText('때린다')
+  await expect(basic).toBeDisabled()
+  await page.getByTestId('cast').click()
+  await expect(page.getByTestId('turn')).toContainText('2', { timeout: 10_000 })
+  await expect(basic).toBeEnabled()
 })

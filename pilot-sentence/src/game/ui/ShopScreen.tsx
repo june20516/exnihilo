@@ -1,6 +1,7 @@
 import { FLOORS } from '@/game/run/floors'
 import { offerDetail, offerTitle } from '@/game/run/labels'
 import type { RunState } from '@/game/run/run'
+import { rerollPrice } from '@/game/run/shop'
 import { BuildSummary } from './BuildSummary'
 
 const KIND_LABELS = { word: '단어', upgrade: '강화', structure: '구조', relic: '유물' } as const
@@ -10,11 +11,13 @@ interface ShopScreenProps {
   disabled: boolean
   onBuy: (index: number) => void
   onLeave: () => void
+  onReroll: () => void
 }
 
 /** 층 사이 상점: 보상 3개. 하나를 사면 남은 보상의 값이 ×1.5 오른다. */
-export function ShopScreen({ state, disabled, onBuy, onLeave }: ShopScreenProps) {
+export function ShopScreen({ state, disabled, onBuy, onLeave, onReroll }: ShopScreenProps) {
   const items = state.shop?.items ?? []
+  const reroll = state.shop ? rerollPrice(state.shop) : null
   return (
     <main className="flex min-h-0 flex-col gap-4 overflow-hidden p-6" data-testid="shop">
       <div className="flex items-end justify-between">
@@ -24,6 +27,19 @@ export function ShopScreen({ state, disabled, onBuy, onLeave }: ShopScreenProps)
             {state.floor}층을 통과했습니다. 하나를 사면 남은 보상의 값이 ×1.5 오릅니다. 남은 화폐는 다음 상점으로 이월됩니다.
           </p>
         </div>
+        <div className="flex gap-2">
+        {reroll !== null && (
+          <button
+            type="button"
+            data-testid="shop-reroll"
+            disabled={disabled || reroll > state.gold}
+            onClick={onReroll}
+            title="팔리지 않은 보상을 새로 뽑습니다. 쓸 때마다 값이 오릅니다."
+            className="rounded-xl bg-surface-container-high px-4 py-3 font-headline text-lg font-bold disabled:opacity-50"
+          >
+            새로고침 ({reroll})
+          </button>
+        )}
         <button
           type="button"
           data-testid="leave-shop"
@@ -33,6 +49,7 @@ export function ShopScreen({ state, disabled, onBuy, onLeave }: ShopScreenProps)
         >
           다음 층으로 ({state.floor + 1}/{FLOORS.length})
         </button>
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-4">
         {items.map((item, index) => {

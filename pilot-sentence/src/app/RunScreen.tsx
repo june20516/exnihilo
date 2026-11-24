@@ -33,6 +33,7 @@ export function RunScreen({ seed, debugEnemyHp }: { seed: number; debugEnemyHp: 
           disabled={busy}
           onBuy={(index) => dispatch({ type: 'buy', index })}
           onLeave={() => dispatch({ type: 'leave' })}
+          onReroll={() => dispatch({ type: 'reroll' })}
         />
       ) : (
         <RunResult state={shown} onNewRun={newRun} />

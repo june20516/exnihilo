@@ -130,3 +130,13 @@ test('낭독으로 이기면 미리보기의 적 칸은 적의 차례가 없다�
   await page.getByTestId('slot-0-verb').click()
   await expect(page.getByTestId('preview-enemy')).toContainText('적이 모두 쓰러져 적의 차례가 없다')
 })
+
+test('상점에서 새로고침을 누르면 화폐가 3 줄고 버튼 값이 4가 된다', async ({ page }) => {
+  await winFloorOne(page)
+  await expect(page.getByTestId('shop-reroll')).toBeVisible({ timeout: 10_000 })
+  const before = await gold(page)
+  await expect(page.getByTestId('shop-reroll')).toContainText('3')
+  await page.getByTestId('shop-reroll').click()
+  await expect(page.getByTestId('run-gold')).toContainText(String(before - 3))
+  await expect(page.getByTestId('shop-reroll')).toContainText('4')
+})

@@ -127,3 +127,22 @@ export function lingeringTexts(state: RallyState): Record<string, string[]> {
   }
   return texts
 }
+
+const NOTICE_TYPES: ReadonlySet<string> = new Set(['rejected', 'emptyDraw', 'burned', 'recalled'])
+
+/**
+ * 방금 일어난 일 중 플레이어에게 알릴 것 한 줄: 거절 사유가 먼저이고,
+ * 없으면 서고 바닥 대가, 손패 넘침, 떠올리기를 잇는다. 없으면 빈 문자열.
+ */
+export function eventNotice(events: readonly CombatEvent[]): string {
+  const combat = events.filter((e) => NOTICE_TYPES.has(e.type))
+  const rejected = combat.find((e) => e.type === 'rejected')
+  if (rejected?.type === 'rejected') return REJECT_MESSAGES[rejected.reason]
+  const notes: string[] = []
+  for (const e of combat) {
+    if (e.type === 'emptyDraw') notes.push(`서고가 비어 HP ${e.hpLost} 잃음`)
+    if (e.type === 'burned') notes.push(`손패가 가득 차 ${getWord(e.wordId).text}은(는) 망각으로`)
+    if (e.type === 'recalled') notes.push(`망각에서 ${e.count}장을 떠올림`)
+  }
+  return notes.join(' · ')
+}

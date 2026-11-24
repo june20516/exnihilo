@@ -2,12 +2,12 @@ import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } f
 import { useMemo, useState } from 'react'
 import { RALLY_ENCOUNTERS, type SlotAddress } from '@/game/content/enemies'
 import type { CombatEvent } from '@/game/combat/events'
-import type { RallyAction, RallyState } from '@/game/rally/combat'
+import { BASIC_VERB_INSTANCE, basicVerbAvailable, type RallyAction, type RallyState } from '@/game/rally/combat'
 import { sentenceFormula } from '@/game/rally/formulaText'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
 import { hasVerb, isBlank } from '@/game/rally/sentence'
-import { intentTexts, lingeringTexts, REJECT_MESSAGES, wordNamer } from '@/game/rally/text'
+import { eventNotice, intentTexts, lingeringTexts, wordNamer } from '@/game/rally/text'
 import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
 import { ControlPanel } from './ControlPanel'
@@ -41,8 +41,11 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   const canAct = state.phase === 'player' && !busy
   const nameOf = useMemo(() => wordNamer(state), [state])
 
-  const selectedCard = state.deck.hand.find((c) => c.instanceId === selectedId) ?? null
-  const rejected = lastEvents.find((e) => e.type === 'rejected')
+  const selectedCard =
+    selectedId === BASIC_VERB_INSTANCE
+      ? { instanceId: BASIC_VERB_INSTANCE, wordId: state.build.basicVerb }
+      : (state.deck.hand.find((c) => c.instanceId === selectedId) ?? null)
+  const notice = eventNotice(lastEvents)
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
   const formulas = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : []), [state])
   const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
@@ -65,6 +68,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
 
   const onSelectCard = (id: string) => {
     if (marked) {
+      if (id === BASIC_VERB_INSTANCE) return
       const next = new Set(marked)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -143,7 +147,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
                   : '동사를 놓으면 계산식이 보입니다'}
             </p>
             <p className="h-5 text-center text-sm text-error" data-testid="message">
-              {rejected && rejected.type === 'rejected' ? REJECT_MESSAGES[rejected.reason] : ''}
+              {notice}
             </p>
           </div>
           <SidePanel
@@ -174,6 +178,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             marked={marked}
             disabled={!canAct}
             onSelect={onSelectCard}
+            basic={{ wordId: state.build.basicVerb, available: basicVerbAvailable(state) }}
           />
           <div className="flex w-44 shrink-0 flex-col gap-2">
             <button
