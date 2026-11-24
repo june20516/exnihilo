@@ -272,3 +272,73 @@
 - 떠올린다는 시작 덱에 없고 학습 봇이 사지 않는다(0). 서고 바닥 대가가 작아(런당 1.9) 살 이유가 약하다. 관찰 항목이다.
 - 새로고침을 봇이 상점마다 2번 가까이 쓴다. 봇 정책(살 것 없으면 새로고침)의 결과이고, 사람의 사용 빈도는 따로 본다.
 - 한 방 상위 25%가 80→60으로 내려갔다. 손패가 6장이라 한 번에 쥐는 재료가 줄었다. 180 목표는 v2부터 봇 측정 한계로 분류한 항목이고, 천장 분석에서 천장 180 이상인 런은 87%다.
+
+## Plan 7·8 구현 중 내린 결정 (2026-11-24)
+
+ledger의 Ruling 전체. 형식: 결정 — 이유 — 틀렸을 때 비용.
+
+### Plan 7 (규칙 v3)
+- Task 1: Ruling: scripts/가 어떤 tsc 설정에도 없어 리팩터링으로 깨져도 모름 — tsconfig.scripts.json(node 타입)을 만들어 tsc -b에 연결 — 비용: 설정 파일 하나
+- Task 1: Ruling: impliedSubject 효과는 토큰이 아니라 단어 id(word)를 갖는다 — materialize가 단어 id를 받음 — 비용: 없음
+- Task 1: Ruling: UPGRADE_RULES는 build.ts가 아니라 content/balance.ts에 둠 — 규칙 손잡이는 한 집(Global Constraints) — 비용: import 경로
+- Task 1: Ruling: 층 배율(BASE/HARD)은 RUN_RULES가 아니라 콘텐츠 표 run/floors.ts에 남김 — 층 구성과 같이 바뀌는 콘텐츠 값 — 비용: 없음
+- Task 1: Ruling: PLAYER_DEF_ID는 content/characters.ts에 둠(Task 5가 확장) — resolve가 combat을 import하면 순환 — 비용: 없음
+- Task 1: Ruling: combat 나누기 경계를 plan(hooks/deckFlow/enemyTurn)에 clauseRun.ts를 더해 넷으로 — runClause·outcomeOf를 enemyTurn과 combat이 함께 써서 런타임 순환을 피하려면 별도 모듈 필요 — 비용: 파일 하나
+- Task 1: Ruling: PLAYER_ID도 content/characters.ts로 옮김 — 새 모듈이 combat을 값으로 import하면 순환 — 비용: import 경로
+- Task 4: Ruling: 옛 규칙(5장 뽑기·망각 섞기·손패 8)을 고정하던 테스트 8개를 새 규칙 기준으로 고침(의도 유지, 서고 비운 도우미엔 서고 채움) — spec §3.1·3.2 — 비용: 없음
+- Task 4: Ruling: emptyDraw 이벤트를 drawn보다 먼저 내 미리보기 적 차례 구간(drawn에서 끊김)에 들어가게 함 — spec 미리보기 요구 — 비용: 없음
+- Task 5: Ruling: BASIC_VERB_INSTANCE는 deckFlow.ts에 정의하고 combat.ts가 re-export — deckFlow가 combat을 값으로 import하면 순환, 공개 API는 combat — 비용: 없음
+- Task 5: Ruling: CharacterDef에 slots도 둠(plan 목록 밖) — 캐릭터별로 달라질 수 있는 값은 캐릭터 정의에(확장 원칙) — 비용: 필드 하나
+- Task 5: Ruling: RallyOptions.character 추가(이름·최대 HP·기본 빌드) — 런이 캐릭터를 넘겨야 전투의 플레이어 이름·HP가 캐릭터를 따름 — 비용: 없음
+- Task 5: Ruling: 긴 문장 유물은 기본 동사도 판의 내 단어로 셈(plan대로) — 비용: 긴 문장 가치 소폭 상승
+- Task 6: Ruling: 새로고침 값은 SHOP_RULES.reroll(balance.ts)에 둠(plan Task 1 수정대로) — 비용: 없음
+- Task 6: Ruling: textPlay의 런 전용 이벤트 목록(RUN_ONLY)을 지우고 run.ts isCombatEvent 하나만 씀 — 새 런 이벤트마다 두 곳을 고치던 중복 — 비용: 없음
+- Task 6: Ruling: 봇 새로고침 조건은 gold ≥ 새로고침 값 + 단어 기본값, 상점당 MAX_BOT_REROLLS=2 — plan의 조건을 손잡이로 — 비용: sim 구매 패턴 변화
+- Task 7: Ruling: 보호 덩어리 표기는 '보호 10 (4는 2턴 유지)'(이월 몫만 밝힘) — plan 예시 '(6, 4·2턴)'보다 읽기 쉬움 — 비용: 문구
+- Task 7: Ruling: 텍스트 플레이의 '뽑을 더미/버림 더미'를 화면 이름 '서고/망각'으로 맞춤 — 이름 통일 — 비용: 없음
+- Task 7: Ruling: 기본 동사는 discard에서 '기본 동사는 버릴 수 없습니다.'로 막음 — 엔진은 손패에 없는 id라 거절하지만 문구가 불친절 — 비용: 없음
+- Task 8: Ruling: 보호 이월 표시는 e2e 대신 순수 함수 blockText 단위 테스트로 고정 — 시드 5의 적 공격이 이월분을 다 소모해 e2e로 장면을 만들 수 없음 — 비용: 화면 연결은 testid로만 확인
+- Task 8: Ruling: 알림 줄을 eventNotice(rally/text.ts)로 일반화(거절 → 서고 바닥·손패 넘침·떠올리기) — 화면과 테스트가 같은 문구 — 비용: 없음
+- Task 8: Ruling: 기존 버리기 e2e는 손패 타일만 세도록 기본 동사 타일을 제외 — 기본 동사는 손패가 아님 — 비용: 없음
+- Task 9: Ruling: 튜닝 1차 — 모든 적 HP ×0.75 — 서고 시계 때문에 전투가 길어져(거미 8.4턴) 탐욕 봇 37%; 손패 6·대가 2(사용자 값)는 유지 — 비용: 적이 약해 보일 수 있음
+- Task 9: Ruling: 튜닝 2차 — 거미·새끼 거미 뺀 적 HP ×0.75(슬라임 20, 여왕 31, 문지기 45, 필경사 68) — 런 학습 봇 37%→55%, 거미 게이트 유지 — 비용: 정예·보스 압박 감소
+- Task 9: Ruling: 런 게이트 '상위 25% 최대 한 방 180'은 60으로 실패 — v2부터 봇 측정 한계로 분류한 항목, 천장 180 이상 런 87% — 비용: 한 방 체감은 사람 테스트로만 확인
+- Task 9: Ruling: ceiling.ts 엔진 대조의 시작 손패 최대치를 덱 장수로(손패 채우기 규칙에서 서고 바닥 패배 방지) — 비용: 없음
+- Task 9: Ruling: e2e의 거미 HP 45를 34로 갱신 — 튜닝 반영 — 비용: 없음
+- Final: Ruling: 되받아친다 반복 규칙은 문자 그대로(첫 반복이 보호를 다 씀, 이후 0) 유지하고 계산식만 맞춤 — spec '주어의 보호를 모두 없앤다' — 비용: 사용자가 반복마다 같은 위력을 원하면 해석기 한 줄 변경
+- Final: Ruling: MAX_BOT_REROLLS는 sim/shopBots.ts에 둠 — 게임 규칙이 아니라 봇 정책 값 — 비용: 없음
+- Final: Ruling: 적 HP 튜닝은 plan Task 9는 허용, spec §5 손잡이 목록에는 없음 — 사용자 확인 필요로 최종 보고에 올림 — 비용: 사용자가 거부하면 다른 손잡이로 재튜닝
+- Final: Ruling(declined): sim/봇·shop·스크립트·화면 코드는 리뷰어가 읽지 못함 — 테스트(단위 374, e2e 27)와 게이트 실행으로 대신 확인 — 비용: 미발견 결함 가능
+
+### Plan 8 (표시·조작)
+- Task 1: Ruling: 목적어 생략 판단 omitsObject(text.ts)를 공개해 화면 문장판(Task 5)도 같은 판단을 쓰게 함; 빈 동사(blankVerb, 지원 분류)에는 생략하지 않음 — 비용: 없음
+- Task 1: Ruling: 문장판 슬롯의 '생략' 표시는 Task 5에서 — 문장판 조작을 그 task가 소유 — 비용: 없음
+- Task 2: Ruling: 강화 수치는 설명 함수에 숫자 포맷(NumText)을 넘겨 '기본→지금'으로 씀(문자열 치환 안 함) — 비용: 없음
+- Task 2: Ruling: 상점 강화 상품은 기존 '지금 설명 → 다음 설명'을 유지 — 사는 순간의 변화가 더 유용 — 비용: 카드 위 표기(원래→지금)와 형식이 다름
+- Task 2: Ruling: cardText(텍스트 플레이·상점 단어)는 cardSummary로 — 자동사 표기가 '(자동사)'에서 '· 자동사'로 바뀜 — 비용: 없음
+- Task 3: Ruling: 보호 칩의 이월 턴을 위해 statusApplied 이벤트에 선택 필드 holds 추가 — 이벤트만으로 구조값을 만들기 위함 — 비용: 없음
+- Task 3: Ruling: 증폭 요소의 '늘어난 구조'는 기본 캐릭터 시작 빌드와 비교 — RallyState에 캐릭터 id가 없음 — 비용: 캐릭터가 늘면 기준 캐릭터를 상태에 실어야 함
+- Task 3: Ruling: 독 틱(poisonTick)은 미리보기 칩 'poison'으로 묶음 — 같은 아이콘 — 비용: 독 걸기와 독 피해가 같은 칩 종류
+- Task 4: Ruling: 폰트 클래스는 줄마다 쓰임으로 매핑(카드 단어·조사·상품 이름=card, 제목·결과·개체 이름=prose, 계산식·가격·HP=number, 버튼·라벨=ui) — 비용: 없음
+- Task 4: Ruling: ICONS에 TONES(칩 색) 표를 함께 둠 — 종류별 색도 한 곳에서 — 비용: 없음
+- Task 4: Ruling: 계산식 줄 전체를 임시로 font-number로, 칩 시각화는 Task 6 — 비용: 안내 문구도 숫자 폰트(일시)
+- Task 5: Ruling: '손패 9장 1280×720' e2e는 샌드박스에서 빌드를 바꿀 수 없어 이 task에서 빼고 Task 7 viewport 검사에서 손패 겹침 계산(overlapFor 최대 84px)으로 커버 — 비용: 9장 화면은 수동 확인 필요
+- Task 5: Ruling: 형용사 상태 툴팁 내용을 위해 lingeringStates(text·wordId) 추가, lingeringTexts는 그 래퍼 — 비용: 없음
+- Task 5: Ruling: 놓은 단어 클릭 빼기·끌어 빼기는 연출 중(busy) 무시(기존 입력 잠금과 같음); e2e는 연출 종료를 기다림 — 비용: 연출 중 클릭이 먹지 않음
+- Task 5: Ruling: 겹침 수치는 Hand.tsx OVERLAP 상수(화면 표현 값이라 balance.ts가 아님) — 비용: 없음
+- Task 6: Ruling: 계산식 칩은 항을 계산 순서대로 나열(괄호 대신 순차 적용) — 칩 하나하나가 실제 적용 순서라 읽는 순서 = 계산 순서 — 비용: 괄호식에 익숙한 사람에겐 낯섦
+- Task 6: Ruling: 계산식 칩에 laterValue(되받아친다 반복)를 '(이후 n회는 x)'로 보임 — Plan 7 수정 반영 — 비용: 없음
+- Task 6: Ruling: intentTexts에 withNumbers 옵션 — 화면은 문장만, 수치는 intentActions 칩; 텍스트 플레이는 기존대로 — 비용: 없음
+- Task 6: Ruling: 초상화는 CSS가 아니라 이미지 자체를 잘라 냄(sips, 원본은 public/assets/originals/) — 검증은 e2e에서 이미지 크기 1260×540 — 비용: 다른 비율 카드에서 구도 차이
+- Task 6: Ruling: 상점 강화 상품 설명은 Task 2 결정대로 '지금 → 다음' 유지 — 비용: 없음
+- Task 6: Ruling: 1280 폭에서 연결어 칸이 둘째 줄로 내려감 — 정보 손실 없음, 한 화면 유지 — 비용: 배치 미관
+- Task 7: Ruling: 한 배치를 기준 크기 1180×580에서 맞추고 그보다 작은 화면은 루트를 CSS zoom으로 줄임(Stage.tsx) — 844×390에서 비율 0.672, 60px 버튼이 40px — 비용: 드래그 중 카드가 손가락보다 덜 움직여 보일 수 있음(탭 배치는 영향 없음)
+- Task 7: Ruling: dnd-kit TouchSensor를 따로 두지 않고 PointerSensor(터치 포인터 포함)를 씀 — 두 센서가 같은 터치에 함께 반응하는 것을 피함, 길게 누르기는 6px 이상 움직이면 취소 — 비용: 기기별 드래그 감도 차이
+- Task 7: Ruling: 높이 640px 이하용 short 변형(초상화·카드·여백·증폭 패널·미리보기 줄만 줄임), 터치 대상(칸·버튼)은 줄이지 않음 — 비용: 낮은 화면에서 초상화가 작음
+- Task 7: Ruling: 세로 안내는 (orientation: portrait) and (hover: none)에서만 — 데스크탑 좁은 창은 안내 대신 줄인 배치 — 비용: 세로 태블릿+마우스 조합은 안내 없음
+- Task 7: Ruling: 턴 종료·문장 비우기를 가로로 나란히, 버리기·확정도 나란히(모두 60px) — 높이를 늘리지 않고 터치 40px — 비용: 버튼 문구가 좁음
+- Task 7: Ruling: 겹침 검사(expectStacked)와 내용 넘침 검사(expectContentFits)를 e2e 도구에 추가 — 요소가 화면 안에 있어도 눌려 겹치는 배치를 잡기 위해; 1280 폭 연결어 줄바꿈 넘침(Task 6에서 놓침)도 이걸로 발견해 고침 — 비용: 없음
+- Task 7: Ruling: 미리보기 기준을 '최소 50px'에서 '목록 내용이 넘치지 않음'으로 — 임의 수치보다 의도에 맞음 — 비용: 없음
+- Final: Ruling: iOS Safari에서 CSS zoom 아래 좌표(툴팁·드롭 판정)가 맞는지는 실기기 확인 필요 — 자동 테스트는 Chromium뿐 — 비용: 틀리면 툴팁 위치·드롭 판정이 어긋남, Stage를 transform 방식으로 바꿔야 함
+- Final: Ruling: 레이어 제안(px 산술과 컴포넌트 분리)은 손패만 handLayout.ts로 분리, 툴팁·Stage는 그대로 — 공개 props가 시맨틱이라 위험 낮음 — 비용: 없음
+- Final: Ruling(declined): 앞 적이 플레이어를 쓰러뜨리면 뒤 적 예고가 비어 보임 — 전투가 끝나는 상황이라 사소함 — 비용: 없음
