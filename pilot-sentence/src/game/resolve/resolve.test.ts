@@ -1,4 +1,4 @@
-import { addStatus, createEntity, type Entity } from '@/kit/core/entity'
+import { addBlock, addStatus, createEntity, type Entity } from '@/kit/core/entity'
 import type { SlotAddress } from '@/game/content/enemies'
 import { SPIDER_SENTENCE } from '@/game/sentence/testSentence'
 import type { WordId } from '@/game/content/words'
@@ -69,7 +69,7 @@ describe('기본 실행', () => {
   })
 
   test('보호에 다 막히면 독이 걸리지 않는다', () => {
-    const r = run(board0(), [addStatus(player(), 'block', 10), spider()])
+    const r = run(board0(), [addBlock(player(), 10, 0), spider()])
     expect(find(r.entities, 'p').statuses.poison).toBe(0)
   })
 

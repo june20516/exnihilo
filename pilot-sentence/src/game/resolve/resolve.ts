@@ -1,6 +1,6 @@
 import { PLAYER_DEF_ID } from '@/game/content/characters'
 import {
-  addStatus, applyDamage, createEntity, type Entity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing,
+  addBlock, addStatus, applyDamage, createEntity, type Entity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing,
 } from '@/kit/core/entity'
 import { TOKENS } from '@/game/content/tokens'
 import { type ActionTarget, type AdjectiveMod, getWord, type TokenId, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
@@ -317,7 +317,7 @@ export function resolveClause(
       case 'block':
         for (const id of targetsOf(action.to)) {
           const amount = scaled(action.amount + supportBonus)
-          table.update(id, (e) => addStatus(e, 'block', amount))
+          table.update(id, (e) => addBlock(e, amount, 0))
           events.push({ type: 'statusApplied', entityId: id, status: 'block', amount })
         }
         return

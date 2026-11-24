@@ -1,4 +1,4 @@
-import { addStatus, clearBlock, isAlive, tickEndOfTurn } from '@/kit/core/entity'
+import { addStatus, expireBlock, isAlive, tickEndOfTurn } from '@/kit/core/entity'
 import { RALLY_RULES } from '@/game/content/balance'
 import { PLAYER_ID } from '@/game/content/characters'
 import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent } from '@/game/content/enemies'
@@ -47,7 +47,7 @@ export function enemyIntent(state: RallyState, enemyIndex: number): RallyIntent 
 
 /** 내 턴 시작: 보호 소멸, 버리기 회복, 드로우, 대상 보정. */
 export function startPlayerTurn(state: RallyState, drawCount: number): Result {
-  const entities = state.entities.map((e) => (e.id === PLAYER_ID ? clearBlock(e) : e))
+  const entities = state.entities.map((e) => (e.id === PLAYER_ID ? expireBlock(e) : e))
   const refreshed: RallyState = { ...state, entities, discardsLeft: state.build.discardsPerTurn }
   const drawn = drawCards(refreshed, drawCount)
   const target = drawn.state.entities.find((e) => e.id === drawn.state.targetId)
@@ -66,7 +66,7 @@ export function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
   let current: RallyState = {
     ...state,
     board: clearSeals(state.board),
-    entities: state.entities.map((e) => (e.side === 'enemy' && isAlive(e) ? clearBlock(e) : e)),
+    entities: state.entities.map((e) => (e.side === 'enemy' && isAlive(e) ? expireBlock(e) : e)),
   }
   const ended = (outcome: 'won' | 'lost'): Result => {
     events.push({ type: 'combatEnded', outcome })

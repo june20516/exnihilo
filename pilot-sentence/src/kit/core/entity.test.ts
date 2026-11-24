@@ -1,4 +1,4 @@
-import { addStatus, applyDamage, clearBlock, createEntity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing, tickEndOfTurn } from './entity'
+import { addBlock, addStatus, applyDamage, createEntity, expireBlock, growMaxHp, heal, isAlive, loseHp, removeAllBlock, scaleIncoming, scaleOutgoing, tickEndOfTurn } from './entity'
 
 const spider = () => createEntity({ id: 'e1', defId: 'spider', name: '거미', side: 'enemy', hp: 30 })
 
@@ -10,7 +10,7 @@ test('기본값: 전열, 상태 모두 0, 살아 있음', () => {
 })
 
 test('보호가 피해를 먼저 흡수', () => {
-  const r = applyDamage(addStatus(spider(), 'block', 4), 6)
+  const r = applyDamage(addBlock(spider(), 4, 0), 6)
   expect(r).toMatchObject({ dealt: 2, blocked: 4 })
   expect(r.entity.hp).toBe(28)
   expect(r.entity.statuses.block).toBe(0)
@@ -28,25 +28,47 @@ test('회복은 최대 HP를 넘지 않는다', () => {
 })
 
 test('턴 종료: 독 피해는 보호를 무시하고 1 감소', () => {
-  const e = addStatus(addStatus(spider(), 'poison', 3), 'block', 5)
+  const e = addBlock(addStatus(spider(), 'poison', 3), 5, 0)
   const r = tickEndOfTurn(e)
   expect(r.poisonDamage).toBe(3)
   expect(r.entity.hp).toBe(27)
   expect(r.entity.statuses.poison).toBe(2)
 })
 
-test('이번 턴에 얻은 보호는 첫 턴 종료 뒤에도 남고, 두 번째 턴 종료에 사라진다', () => {
-  const t1 = tickEndOfTurn(addStatus(spider(), 'block', 5)).entity
-  expect(t1.statuses.block).toBe(5)
-  expect(tickEndOfTurn(t1).entity.statuses.block).toBe(0)
+test('보호 덩어리: holds 0은 다음 자기 차례 시작에 사라지고 holds 1은 한 번 더 남는다', () => {
+  let e = addBlock(addBlock(spider(), 6, 0), 4, 1)
+  expect(e.statuses.block).toBe(10)
+  e = expireBlock(e)
+  expect(e.statuses.block).toBe(4)
+  expect(e.blockChunks).toEqual([{ amount: 4, turnsLeft: 0 }])
+  expect(expireBlock(e).statuses.block).toBe(0)
 })
 
-test('피해는 묵은 보호부터 소모한다', () => {
-  const old = tickEndOfTurn(addStatus(spider(), 'block', 3)).entity
-  const both = addStatus(old, 'block', 4)
-  const hit = applyDamage(both, 5).entity
-  expect(hit.statuses.block).toBe(2)
-  expect(tickEndOfTurn(hit).entity.statuses.block).toBe(2)
+test('피해는 곧 사라질 덩어리부터 깎는다', () => {
+  const e = addBlock(addBlock(spider(), 4, 2), 6, 0)
+  const r = applyDamage(e, 7)
+  expect(r.blocked).toBe(7)
+  expect(r.entity.blockChunks).toEqual([{ amount: 3, turnsLeft: 2 }])
+})
+
+test('같은 남은 턴이면 먼저 생긴 덩어리부터 깎는다', () => {
+  const e = addBlock(addBlock(spider(), 3, 1), 5, 1)
+  expect(applyDamage(e, 4).entity.blockChunks).toEqual([{ amount: 4, turnsLeft: 1 }])
+})
+
+test('removeAllBlock은 보호를 모두 없애고 없앤 양을 돌려준다', () => {
+  const r = removeAllBlock(addBlock(addBlock(spider(), 3, 0), 5, 2))
+  expect(r.removed).toBe(8)
+  expect(r.entity.statuses.block).toBe(0)
+  expect(r.entity.blockChunks).toEqual([])
+})
+
+test('턴 종료 처리는 보호를 건드리지 않는다', () => {
+  expect(tickEndOfTurn(addBlock(spider(), 5, 0)).entity.statuses.block).toBe(5)
+})
+
+test('보호 0은 덩어리를 남기지 않는다', () => {
+  expect(addBlock(spider(), 0, 2).blockChunks).toEqual([])
 })
 
 test('연산은 원본 개체를 바꾸지 않는다', () => {
@@ -76,7 +98,7 @@ test('scaleIncoming: 취약이면 1.5배', () => {
 })
 
 test('loseHp는 보호를 무시하고 HP를 깎는다', () => {
-  const r = loseHp(addStatus(spider(), 'block', 10), 4)
+  const r = loseHp(addBlock(spider(), 10, 0), 4)
   expect(r).toMatchObject({ lost: 4 })
   expect(r.entity.hp).toBe(26)
   expect(r.entity.statuses.block).toBe(10)
@@ -84,9 +106,4 @@ test('loseHp는 보호를 무시하고 HP를 깎는다', () => {
 
 test('growMaxHp는 최대 HP와 HP를 함께 올린다', () => {
   expect(growMaxHp(spider(), 6)).toMatchObject({ hp: 36, maxHp: 36 })
-})
-
-test('clearBlock은 보호와 이번 턴 보호를 0으로', () => {
-  const e = addStatus(createEntity({ id: 'a', defId: 'a', name: 'a', side: 'ally', hp: 10 }), 'block', 5)
-  expect(clearBlock(e)).toMatchObject({ statuses: { block: 0 }, freshBlock: 0 })
 })
