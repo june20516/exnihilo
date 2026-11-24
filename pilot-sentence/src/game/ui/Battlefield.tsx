@@ -1,3 +1,4 @@
+import type { IntentAction } from '@/game/rally/summary'
 import type { Entity } from '@/kit/core/entity'
 import { EntityCard } from './EntityCard'
 
@@ -6,8 +7,8 @@ interface BattlefieldProps {
   portraits: Readonly<Record<string, string>>
   /** 내 문장의 빈 목적어가 가리키는 적. */
   targetId: string | null
-  /** 적 id → 이번 턴 예고 문장. */
-  intents: Readonly<Record<string, string>>
+  /** 적 id → 이번 턴 예고(문장과 행동). */
+  intents: Readonly<Record<string, { readonly text: string; readonly actions: readonly IntentAction[] }>>
   /** 개체별 형용사 상태 표시(문구와 효과). */
   states: Readonly<Record<string, readonly { readonly text: string; readonly detail: string }[]>>
   /** 적을 눌러 대상을 바꾼다. 행동할 수 없을 때는 null. */

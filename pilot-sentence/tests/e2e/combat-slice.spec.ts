@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('1440×900에서 스크롤 없이 한 화면, 예고·미리보기가 보인다', async ({ page }) => {
-  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula'])
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'amplifiers', 'pile-draw'])
   await expect(page.getByTestId('intent-e0')).toBeInViewport()
   await expect(page.getByTestId('intent-e0')).toContainText('물어뜯는다')
   await expect(page.getByTestId('preview-enemy')).toBeInViewport()
@@ -38,10 +38,12 @@ test('빈 주어는 당신으로 보이고, 동사를 놓으면 계산식이 나
   await expect(page.getByTestId('formula')).toContainText('동사를 놓으면')
   await page.getByTestId('tile-bite').click()
   await page.getByTestId('slot-0-verb').click()
-  await expect(page.getByTestId('formula')).toContainText('6 = 6')
+  await expect(page.getByTestId('formula')).toContainText('물어뜯는다 6')
+  await expect(page.getByTestId('formula-result')).toHaveText('= 6')
   await page.getByTestId('tile-fiercely').click()
   await page.getByTestId('mod-0-verb-0').click()
-  await expect(page.getByTestId('formula')).toContainText('6 × 1.5 = 9')
+  await expect(page.getByTestId('formula-term')).toContainText('격렬하게 ×1.5')
+  await expect(page.getByTestId('formula-result')).toHaveText('= 9')
 })
 
 test('동사 한 장을 끌어다 놓고 낭독하면 적 HP가 줄고 2턴이 된다', async ({ page }) => {

@@ -1,4 +1,5 @@
 import { expect, type Locator, test } from '@playwright/test'
+import { expectInViewport } from './viewport.js'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -106,4 +107,48 @@ test('막는다를 놓으면 목적어 칸은 주어와 같아 생략으로 보�
   await page.getByTestId('slot-0-verb').click()
   await expect(page.getByTestId('slot-0-object')).toContainText('주어와 같아 생략')
   await expect(page.getByTestId('particle-0-object')).toHaveCount(0)
+})
+
+test('미리보기는 개체별 HP "34 → 28"과 피해 칩을 보인다', async ({ page }) => {
+  await page.getByTestId('tile-bite').first().click()
+  await page.getByTestId('slot-0-verb').click()
+  await expect(page.getByTestId('preview-mine')).toContainText('34 → 28')
+  await expect(page.getByTestId('preview-mine')).toContainText('피해 6')
+})
+
+test('계산식은 항마다 출처 칩을 보인다: 물어뜯는다 6 · 격렬하게 ×1.5 → = 9', async ({ page }) => {
+  await page.getByTestId('tile-bite').first().click()
+  await page.getByTestId('slot-0-verb').click()
+  await page.getByTestId('tile-fiercely').first().click()
+  await page.getByTestId('mod-0-verb-0').click()
+  await expect(page.getByTestId('formula')).toContainText('물어뜯는다 6')
+  await expect(page.getByTestId('formula-term')).toContainText('격렬하게 ×1.5')
+  await expect(page.getByTestId('formula-result')).toHaveText('= 9')
+})
+
+test('적 예고는 문장과 행동 칩(공격 14)을 함께 보인다', async ({ page }) => {
+  await expect(page.getByTestId('intent-e0')).toContainText('물어뜯는다')
+  await expect(page.getByTestId('intent-e0')).toContainText('공격 14')
+})
+
+test('증폭 요소 패널이 늘 보이고, 유물이 없으면 "없음"', async ({ page }) => {
+  await expect(page.getByTestId('amplifiers')).toBeVisible()
+  await expect(page.getByTestId('amplifiers')).toContainText('없음')
+})
+
+test('적 초상화는 글자가 박힌 아래 띠를 잘라 낸 이미지를 쓴다(1260×540)', async ({ page }) => {
+  const size = await page.evaluate(
+    () =>
+      new Promise<[number, number]>((resolve) => {
+        const img = new Image()
+        img.onload = () => resolve([img.naturalWidth, img.naturalHeight])
+        img.src = '/assets/spider.jpg'
+      }),
+  )
+  expect(size).toEqual([1260, 540])
+})
+
+test('1280×720에서도 핵심 요소가 화면 안에 있다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'amplifiers', 'pile-draw', 'preview-mine', 'preview-enemy', 'intent-e0'])
 })

@@ -3,11 +3,10 @@ import { useMemo, useState } from 'react'
 import { RALLY_ENCOUNTERS, type SlotAddress } from '@/game/content/enemies'
 import type { CombatEvent } from '@/game/combat/events'
 import { BASIC_VERB_INSTANCE, basicVerbAvailable, type RallyAction, type RallyState } from '@/game/rally/combat'
-import { sentenceFormula } from '@/game/rally/formulaText'
-import { linesFromEvents } from '@/game/rally/lines'
+import { sentenceCalc } from '@/game/rally/formula'
 import { previewEvents } from '@/game/rally/preview'
 import { hasVerb, isBlank } from '@/game/rally/sentence'
-import { pileContents } from '@/game/rally/summary'
+import { amplifiers, intentActions, pileContents, previewSummary } from '@/game/rally/summary'
 import { eventNotice, intentTexts, lingeringStates, omitsObject, wordNamer } from '@/game/rally/text'
 import { getWord } from '@/game/content/words'
 import { getSlot } from '@/game/sentence/board'
@@ -19,6 +18,8 @@ import { ControlPanel } from './ControlPanel'
 import { Hand } from './Hand'
 import { CONNECTIVE_DROP_ID, isConnectiveWord, parseDropId } from './placement'
 import { SentenceBoard } from './SentenceBoard'
+import { AmplifierPanel } from './AmplifierPanel'
+import { FormulaChips } from './FormulaChips'
 import { SidePanel } from './SidePanel'
 
 interface CombatScreenProps {
@@ -52,8 +53,15 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
       : (state.deck.hand.find((c) => c.instanceId === selectedId) ?? null)
   const notice = eventNotice(lastEvents)
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
-  const formulas = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : []), [state])
-  const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
+  const calcs = useMemo(() => (state.phase === 'player' ? sentenceCalc(state) : []), [state])
+  const summary = useMemo(() => (state.phase === 'player' ? previewSummary(state) : { mine: [], enemy: [] }), [state])
+  const amplifierItems = useMemo(() => amplifiers(state), [state])
+  const intents = useMemo(() => {
+    if (state.phase !== 'player' || !preview) return {}
+    const texts = intentTexts(state, preview.enemy, nameOf, { withNumbers: false })
+    const actions = intentActions(state)
+    return Object.fromEntries(Object.entries(texts).map(([id, text]) => [id, { text, actions: actions[id] ?? [] }]))
+  }, [state, preview, nameOf])
   const states = useMemo(() => {
     if (state.phase !== 'player') return {}
     const detailed = Object.entries(lingeringStates(state)).map(([id, list]) => [id, list.map((s) => ({ text: s.text, detail: cardSummary(s.wordId, state.build) }))])
@@ -163,33 +171,23 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
               connectivePlaceable={selectedCard !== null && state.connective === null && isConnectiveWord(selectedCard.wordId)}
               onConnectiveClick={onConnectiveClick}
             />
-            <p
-              data-testid="formula"
-              className="text-center font-number text-lg font-bold text-secondary"
-            >
-              {formulas.length > 0
-                ? formulas.map((f) => (
-                    <span key={f.clause} data-clause={f.clause} data-testid="formula-result" className="block">
-                      {state.board.clauses.length > 1 ? `절 ${f.clause + 1}: ` : ''}
-                      {f.text}
-                    </span>
-                  ))
-                : verbPlaced
-                  ? '이 동사에는 계산식이 없습니다'
-                  : '동사를 놓으면 계산식이 보입니다'}
-            </p>
+            <div data-testid="formula">
+              <FormulaChips calcs={calcs} placeholder={verbPlaced ? '이 동사에는 계산식이 없습니다' : '동사를 놓으면 계산식이 보입니다'} />
+            </div>
             <p className="h-5 text-center text-sm text-error" data-testid="message">
               {notice}
             </p>
           </div>
           <SidePanel
-            mine={preview ? linesFromEvents(preview.mine, preview.after.entities) : []}
-            enemy={preview ? linesFromEvents(preview.enemy, preview.after.entities) : []}
+            mine={summary.mine}
+            enemy={summary.enemy}
             canCast={verbPlaced}
             winsNow={preview?.after.phase === 'won'}
           />
         </div>
         <section className="flex items-end gap-3 rounded-xl bg-surface-container-lowest p-2 shadow-2xl">
+          <div className="flex w-56 shrink-0 flex-col gap-2">
+          <AmplifierPanel items={amplifierItems} />
           <ControlPanel
             drawPile={piles.draw.map((d) => ({ text: getWord(d.wordId).text, count: d.count }))}
             discardPile={piles.discard.map((id) => getWord(id).text)}
@@ -204,6 +202,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             }}
             onConfirmDiscard={() => marked && run({ type: 'discard', instanceIds: [...marked] })}
           />
+          </div>
           <Hand
             hand={state.deck.hand}
             build={state.build}

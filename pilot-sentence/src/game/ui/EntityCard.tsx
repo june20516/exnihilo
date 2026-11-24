@@ -1,3 +1,5 @@
+import type { IntentAction } from '@/game/rally/summary'
+import { intentActionText } from './intentText'
 import { ICONS, TONES } from './icons'
 import { Tooltip } from './Tooltip'
 import { blockText } from './describe'
@@ -21,8 +23,8 @@ interface EntityCardProps {
   onPick?: () => void
   /** 지금 내 문장의 대상인 적. */
   targeted?: boolean
-  /** 적이 이번 턴에 실행할 예고 문장. */
-  intent?: string
+  /** 적이 이번 턴에 실행할 예고: 문장과 행동(엔진이 계산한 수치). */
+  intent?: { readonly text: string; readonly actions: readonly IntentAction[] }
   /** 낭독하면(또는 이미) 이 개체에 남는 형용사 상태. text 예: '눈멂 · 적 차례까지', detail은 그 형용사의 효과. */
   states?: readonly { readonly text: string; readonly detail: string }[]
 }
@@ -45,7 +47,17 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
           data-testid={`intent-${entity.id}`}
           className="rounded-md bg-error-container/70 px-2 py-1 text-center text-xs font-semibold leading-tight text-on-error-container shadow"
         >
-          {intent}
+          <span className="block font-prose">{intent.text}</span>
+          {intent.actions.length > 0 && (
+            <span className="mt-0.5 flex flex-wrap justify-center gap-1 font-ui text-[11px]">
+              {intent.actions.map((a, i) => (
+                <span key={i} className="flex items-center gap-0.5 rounded bg-surface-container-lowest/50 px-1">
+                  <Icon name={ICONS[a.kind]} className="text-[12px]" />
+                  {intentActionText(a)}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
       )}
       <div

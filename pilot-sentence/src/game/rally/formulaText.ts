@@ -6,10 +6,11 @@ import type { RallyState } from './combat'
 const PLUS_LABELS: Record<Exclude<FormulaLabel, null>, string> = {
   relic: '유물 ', so: '그래서 ', again: '거듭 ', strength: '힘 ', weak: '', chain: '', vulnerable: '',
 }
-const TIMES_LABELS: Record<Exclude<FormulaLabel, null>, string> = {
+/** 항의 기본 이름(출처 이름이 없을 때). */
+export const TIMES_LABELS: Record<Exclude<FormulaLabel, null>, string> = {
   relic: '유물', so: '그래서', again: '거듭', strength: '힘', weak: '약화', chain: '사슬', vulnerable: '취약',
 }
-const FIZZLE_TEXT: Record<FizzleCause, string> = { noObject: '무효(대상 없음)', frozen: '무효(빙결)' }
+export const FIZZLE_TEXT: Record<FizzleCause, string> = { noObject: '무효(대상 없음)', frozen: '무효(빙결)' }
 
 /** 식 문자열을 쌓는다. 곱하기 앞에 더하기가 있으면 괄호로 묶는다. 1이나 0인 항은 생략한다. */
 function expression(calc: ClauseCalc): string {

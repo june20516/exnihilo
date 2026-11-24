@@ -25,7 +25,7 @@ test('런 시작: 상단에 층·HP·화폐가 보이고 한 화면에 들어간
   await expect(page.getByTestId('run-floor')).toContainText('1/7')
   await expect(page.getByTestId('run-gold')).toContainText('0')
   await expect(page.getByTestId('run-hp')).toContainText('60')
-  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula'])
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'amplifiers', 'pile-draw'])
 })
 
 test('1층 승리: 연출이 끝난 뒤 상점이 열리고 화폐 25를 받는다', async ({ page }) => {

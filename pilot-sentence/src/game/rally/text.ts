@@ -95,12 +95,17 @@ export function sentenceText(state: RallyState): string[] {
   })
 }
 
-/** 적 예고 문장과, 미리보기에서 그 적이 내는 수치(피해·보호 등). 적 id → 문구. */
+/**
+ * 적 예고 문장과, 미리보기에서 그 적이 내는 수치(피해·보호 등). 적 id → 문구.
+ * withNumbers가 false면 문장만 돌려준다(화면은 수치를 rally/summary의 intentActions 칩으로 따로 그린다).
+ */
 export function intentTexts(
   state: RallyState,
   enemyEvents: readonly CombatEvent[],
   nameOf: (word: PlacedWord) => string,
+  options: { readonly withNumbers?: boolean } = {},
 ): Record<string, string> {
+  const withNumbers = options.withNumbers ?? true
   const texts: Record<string, string> = {}
   let sealsAhead = 0
   RALLY_ENCOUNTERS[state.encounterId]?.enemies.forEach((_, index) => {
@@ -126,15 +131,12 @@ export function intentTexts(
       if (e.type === 'grew' && e.entityId === id) return [`최대 HP +${e.amount}`]
       return []
     })
-    texts[id] = frozenNote ? `${sentence}${frozenNote}` : numbers.length > 0 ? `${sentence} — ${numbers.join(', ')}` : sentence
+    if (!withNumbers) texts[id] = sentence
+    else texts[id] = frozenNote ? `${sentence}${frozenNote}` : numbers.length > 0 ? `${sentence} — ${numbers.join(', ')}` : sentence
   })
   return texts
 }
 
-/**
- * 개체별 형용사 상태 표시: 이미 남은 상태와, 지금 문장대로 낭독하면 남을 상태.
- * 낭독과 적 차례는 한 번에 처리되므로 화면은 "남을 상태"를 놓는 순간부터 보여 준다. 예: { e0: ['눈멂 ×2 · 적 차례까지'] }
- */
 /** 개체에 남은(또는 이번 낭독으로 남을) 형용사 상태 하나: 표시 문구와, 그 상태를 만든 형용사. */
 export interface LingeringState {
   readonly text: string
@@ -161,6 +163,10 @@ export function lingeringStates(state: RallyState): Record<string, LingeringStat
   return result
 }
 
+/**
+ * 개체별 형용사 상태 표시: 이미 남은 상태와, 지금 문장대로 낭독하면 남을 상태.
+ * 낭독과 적 차례는 한 번에 처리되므로 화면은 "남을 상태"를 놓는 순간부터 보여 준다. 예: { e0: ['눈멂 ×2 · 적 차례까지'] }
+ */
 export function lingeringTexts(state: RallyState): Record<string, string[]> {
   return Object.fromEntries(Object.entries(lingeringStates(state)).map(([id, states]) => [id, states.map((s) => s.text)]))
 }
