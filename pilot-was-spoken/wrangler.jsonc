@@ -1,0 +1,13 @@
+// Cloudflare Workers 정적 자산 배포 설정. `npm run deploy`로 빌드 후 올린다.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "was-spoken",
+  "compatibility_date": "2026-11-24",
+  "assets": {
+    "directory": "./dist",
+    // 주소 경로가 없는 단일 페이지라, 없는 경로는 index.html로 보낸다.
+    "not_found_handling": "single-page-application"
+  },
+  // 사용자 지정 도메인: 배포할 때 DNS 레코드와 인증서를 함께 만든다(luden.app이 이 계정에 있어야 한다).
+  "routes": [{ "pattern": "was-spoken.luden.app", "custom_domain": true }]
+}
