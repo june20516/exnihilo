@@ -6,6 +6,7 @@ import type { PlacedWord, SlotState } from '@/game/sentence/board'
 import { ROLE_NAMES } from './describe'
 import { Icon } from './Icon'
 import { dropId } from './placement'
+import { HEAD_ICONS, ROLE_ICONS, SLOT_SIZES } from './slotStyle'
 import { KIND_STYLES } from './wordStyle'
 
 interface SlotViewProps {
@@ -21,6 +22,8 @@ interface SlotViewProps {
   onModifierClick: (index: number) => void
   /** 지원 동사의 빈 목적어가 주어와 같아 문구에서 생략되는가(rally/text omitsObject). */
   omitted?: boolean
+  /** 절이 둘이라 높이가 모자라면 칸을 작게 그린다. */
+  compact?: boolean
 }
 
 /** 놓은 내 단어를 판 밖으로 끌면 뺀다. 드래그 id는 `placed:{dropId}`. */
@@ -49,22 +52,33 @@ export function Droppable({
 }
 
 const HEAD_LABELS = { player: '내 단어', enemy: '원문', implied: '생략', emptyVerb: '비어 있음' } as const
+/** 칸 이름(아이콘 + 이름). */
+export function RoleLabel({ icon, children }: { icon: string; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-0.5 font-ui text-xs font-bold tracking-widest text-outline">
+      <Icon name={icon} className="text-[15px]" />
+      {children}
+    </span>
+  )
+}
 
 export const HIGHLIGHT = 'ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.5)] cursor-pointer'
 
 export function SlotView(props: SlotViewProps) {
-  const { slot, address, active, nameOf, particle, headPlaceable, modifierPlaceable, onHeadClick, onModifierClick, omitted = false } =
+  const { slot, address, active, nameOf, particle, headPlaceable, modifierPlaceable, onHeadClick, onModifierClick, omitted = false, compact = false } =
     props
+  const size = SLOT_SIZES[compact ? 'compact' : 'normal']
+  const headKind = slot.head.owner === 'blank' ? (address.role === 'verb' ? 'emptyVerb' : 'implied') : slot.head.owner
   const headDef = getWord(slot.head.wordId)
   const slotId = `${address.clause}-${address.role}`
   const isVerb = address.role === 'verb'
 
   return (
     <div className={`flex flex-col items-center gap-1 ${active ? '' : 'opacity-30'}`} data-active={active}>
-      <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+      <RoleLabel icon={ROLE_ICONS[address.role]}>
         {ROLE_NAMES[address.role]}
         {!active && ' (자동사라 없음)'}
-      </span>
+      </RoleLabel>
       <div className="flex items-end gap-1.5">
         {slot.modifiers.map((modifier, index) => {
           const modifierDef = modifier ? getWord(modifier.wordId) : null
@@ -78,18 +92,18 @@ export function SlotView(props: SlotViewProps) {
                   data-testid={`mod-${slotId}-${index}`}
                   data-modifier={`${slotId}:${index}`}
                   onClick={() => onModifierClick(index)}
-                  className={`flex h-16 min-w-14 flex-col items-center justify-center rounded-lg px-2 transition-all ${
+                  className={`flex ${size.box} ${size.modifier} flex-col items-center justify-center rounded-xl px-2 transition-all ${
                     modifier ? 'bg-surface-container-high shadow-md' : 'border border-dashed border-outline-variant/60'
                   } ${modifierPlaceable && active ? HIGHLIGHT : ''} ${isOver && modifierPlaceable ? 'scale-110' : ''}`}
                 >
                   {modifier && modifierDef ? (
                     <PlacedDraggable id={dropId(address, index)} enabled={modifier.owner === 'player'}>
-                      <span className={`font-card text-sm font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
+                      <span className={`font-card font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
                         {nameOf(modifier)}
                       </span>
                     </PlacedDraggable>
                   ) : (
-                    <span className="text-xs text-outline-variant">＋</span>
+                    <Icon name="add" className="text-[18px] text-outline-variant" />
                   )}
                 </button>
               )}
@@ -105,7 +119,7 @@ export function SlotView(props: SlotViewProps) {
               data-testid={`slot-${slotId}`}
               data-slot={slotId}
               onClick={onHeadClick}
-              className={`relative flex h-16 min-w-28 flex-col items-center justify-center rounded-lg px-3 shadow-xl transition-all ${
+              className={`relative flex ${size.box} ${size.head} flex-col items-center justify-center rounded-xl shadow-xl transition-all ${
                 active
                   ? isVerb
                     ? 'bg-primary-container'
@@ -116,14 +130,15 @@ export function SlotView(props: SlotViewProps) {
               {slot.sealed && <Icon name="lock" className="absolute right-1 top-1 text-[13px] text-secondary" />}
               <PlacedDraggable id={dropId(address, null)} enabled={slot.head.owner === 'player'}>
                 <span
-                  className={`font-card text-xl font-black tracking-tight ${
+                  className={`font-card font-black leading-tight tracking-tight ${
                     isVerb ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
                   } ${slot.head.owner === 'blank' ? 'opacity-40' : ''}`}
                 >
                   {omitted ? '—' : nameOf(slot.head)}
                 </span>
-                <span className="flex items-center gap-1 font-ui text-[10px] text-on-surface-variant">
-                  {omitted ? '주어와 같아 생략' : HEAD_LABELS[slot.head.owner === 'blank' ? (isVerb ? 'emptyVerb' : 'implied') : slot.head.owner]}
+                <span className="flex items-center gap-0.5 font-ui text-xs text-on-surface-variant">
+                  <Icon name={omitted ? 'visibility_off' : HEAD_ICONS[headKind]} className="text-[13px]" />
+                  {omitted ? '주어와 같아 생략' : HEAD_LABELS[headKind]}
                 </span>
               </PlacedDraggable>
             </button>
@@ -132,7 +147,7 @@ export function SlotView(props: SlotViewProps) {
         {particle && active && !omitted && (
           <span
             data-testid={`particle-${slotId}`}
-            className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high font-card text-lg font-bold text-secondary shadow-md"
+            className={`${size.particle} flex items-center justify-center rounded-full bg-surface-container-high font-card font-bold text-secondary shadow-md`}
           >
             {particle}
           </span>

@@ -1,3 +1,4 @@
+import { HeaderSlotProvider } from '@/game/ui/HeaderSlot'
 import { RallySandbox } from './RallySandbox'
 import { RunScreen } from './RunScreen'
 import { Stage } from './Stage'
@@ -21,7 +22,9 @@ export default function App() {
   const seed = readInitialSeed()
   return (
     <Stage>
-      {params.get('mode') === 'rally' ? <RallySandbox initialSeed={seed} /> : <RunScreen seed={seed} debugEnemyHp={readDebugEnemyHp()} />}
+      <HeaderSlotProvider>
+        {params.get('mode') === 'rally' ? <RallySandbox initialSeed={seed} /> : <RunScreen seed={seed} debugEnemyHp={readDebugEnemyHp()} />}
+      </HeaderSlotProvider>
     </Stage>
   )
 }

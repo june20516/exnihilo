@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { type EncounterTier, RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { FLOORS } from '@/game/run/floors'
 import type { RunState } from '@/game/run/run'
+import { HeaderSlot } from './HeaderSlot'
 import { Icon } from './Icon'
 
 const TIER_NAMES: Record<EncounterTier, string> = { normal: '일반', elite: '정예', boss: '보스' }
@@ -22,22 +23,24 @@ export function RunTopBar({ state, busy, onNewRun }: RunTopBarProps) {
   const player = state.phase === 'combat' ? state.combat?.entities.find((e) => e.side === 'ally' && e.defId === PLAYER_DEF_ID) : null
   const encounter = state.phase === 'combat' && state.combat ? RALLY_ENCOUNTERS[state.combat.encounterId]?.name : null
   return (
-    <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md">
-      <div className="flex items-center gap-4">
-        <span className="font-prose text-lg font-bold">문장 던전</span>
-        <span className="font-ui text-base font-bold text-secondary" data-testid="run-floor">
+    <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md short:h-11">
+      <div className="flex min-w-0 items-center gap-4">
+        <span className="shrink-0 font-prose text-lg font-bold">문장 던전</span>
+        <span className="flex shrink-0 items-center gap-1 font-ui text-base font-bold text-secondary" data-testid="run-floor">
+          <Icon name="stairs" className="text-[20px]" />
           {state.floor}/{FLOORS.length} · {floor ? TIER_NAMES[floor.tier] : ''}
           {encounter ? ` · ${encounter}` : ''}
         </span>
+        <HeaderSlot />
       </div>
       <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1 text-sm font-bold text-error" data-testid="run-hp">
-          <Icon name="favorite" className="text-[16px]" />
-          HP {player?.hp ?? state.hp} / {player?.maxHp ?? state.maxHp}
+        <span className="flex items-center gap-1 text-sm font-bold text-primary" data-testid="run-hp">
+          <Icon name="favorite" className="text-[20px]" />
+          HP <b className="font-number text-lg font-normal">{player?.hp ?? state.hp} / {player?.maxHp ?? state.maxHp}</b>
         </span>
         <span className="flex items-center gap-1 text-sm font-bold text-secondary" data-testid="run-gold">
-          <Icon name="paid" className="text-[16px]" />
-          화폐 {state.gold}
+          <Icon name="paid" className="text-[20px]" />
+          화폐 <b className="font-number text-lg font-normal">{state.gold}</b>
         </span>
         <button
           type="button"

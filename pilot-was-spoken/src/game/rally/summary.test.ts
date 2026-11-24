@@ -5,7 +5,7 @@ import type { WordId } from '@/game/content/words'
 import { EMPTY_BUILD } from '@/game/build/build'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
 import { previewEvents } from './preview'
-import { amplifiers, intentActions, pileContents, previewSummary } from './summary'
+import { amplifiers, finalHp, intentActions, pileContents, previewSummary } from './summary'
 import './testFixtures'
 
 const V = { clause: 0, role: 'verb' } as const
@@ -102,4 +102,19 @@ test('previewSummary·intentActions는 미리 계산한 미리보기를 받아�
   const preview = previewEvents(s)
   expect(previewSummary(s, preview)).toEqual(previewSummary(s))
   expect(intentActions(s, preview)).toEqual(intentActions(s))
+})
+
+test('finalHp: 낭독과 적 차례를 모두 거친 HP. 적은 낭독 결과, 나는 적 차례 결과', () => {
+  const s = placed(['bite'])
+  const result = finalHp(previewSummary(s))
+  expect(result.e0).toEqual({ before: 30, after: 24, died: false })
+  const player = result[PLAYER_ID]
+  expect(player?.before).toBe(s.entities.find((e) => e.id === PLAYER_ID)?.hp)
+  expect(player?.after).toBeLessThan(player?.before ?? 0)
+})
+
+test('finalHp: 두 구간에 모두 나오면 처음 HP는 낭독 전, 나중 HP는 적 차례 뒤', () => {
+  const change = (hpBefore: number, hpAfter: number, died = false) => ({ id: 'x', name: 'x', side: 'enemy' as const, hpBefore, hpAfter, maxHp: 30, chips: [], died })
+  expect(finalHp({ mine: [change(30, 20)], enemy: [change(20, 18)] }).x).toEqual({ before: 30, after: 18, died: false })
+  expect(finalHp({ mine: [change(5, 0, true)], enemy: [] }).x).toEqual({ before: 5, after: 0, died: true })
 })

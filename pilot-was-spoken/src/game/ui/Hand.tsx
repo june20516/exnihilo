@@ -42,6 +42,8 @@ function CardTip({ facts }: { facts: CardFacts }) {
 
 /** 기본 동사 열과 손패 줄 사이 간격(gap-2, px). */
 const HAND_ROW_GAP = 8
+/** 겹치지 않을 때 카드 사이 간격(px). 겹침을 잴 때 이 간격만큼 폭을 덜 쓴 것으로 본다. */
+const CARD_GAP = 6
 
 export function Hand({ hand, board, build, selectedId, marked, disabled, onSelect, basic }: HandProps) {
   const basicDef = getWord(basic.wordId)
@@ -61,7 +63,7 @@ export function Hand({ hand, board, build, selectedId, marked, disabled, onSelec
     observer.observe(row)
     return () => observer.disconnect()
   }, [])
-  const overlap = overlapFor(hand.length, available)
+  const overlap = overlapFor(hand.length, available - CARD_GAP * Math.max(0, hand.length - 1))
   return (
     <div className="flex min-w-0 flex-1 items-end justify-center gap-2" data-testid="hand">
       <div className="flex flex-col items-center gap-1 border-r border-outline-variant pr-2">
@@ -79,7 +81,10 @@ export function Hand({ hand, board, build, selectedId, marked, disabled, onSelec
             onSelect={() => onSelect(BASIC_VERB_INSTANCE)}
           />
         </Tooltip>
-        <span className="font-ui text-[10px] text-outline">기본 동사</span>
+        <span className="flex items-center gap-0.5 font-ui text-xs text-outline">
+          <Icon name="all_inclusive" className="text-[14px]" />
+          기본 동사
+        </span>
       </div>
       <div ref={rowRef} className="flex items-end">
         {hand.map((card, index) => {
@@ -91,7 +96,7 @@ export function Hand({ hand, board, build, selectedId, marked, disabled, onSelec
             <div
               key={card.instanceId}
               className={`relative transition-[margin] hover:z-40 ${front ? 'z-30' : 'z-0'}`}
-              style={{ marginLeft: index === 0 ? 0 : -overlap }}
+              style={{ marginLeft: index === 0 ? 0 : overlap > 0 ? -overlap : CARD_GAP }}
             >
               <Tooltip longPress content={<CardTip facts={facts} />}>
                 <WordTile

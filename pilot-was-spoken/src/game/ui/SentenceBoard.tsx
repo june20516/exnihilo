@@ -4,7 +4,9 @@ import { attachParticle } from '@/game/grammar/josa'
 import { getWord } from '@/game/content/words'
 import { type Board, isSlotActive, type PlacedWord } from '@/game/sentence/board'
 import { CONNECTIVE_DROP_ID, canPlaceHead, canPlaceModifier } from './placement'
-import { Droppable, HIGHLIGHT, SlotView } from './SlotView'
+import { Icon } from './Icon'
+import { ROLE_ICONS, SLOT_SIZES } from './slotStyle'
+import { Droppable, HIGHLIGHT, RoleLabel, SlotView } from './SlotView'
 
 interface SentenceBoardProps {
   board: Board
@@ -23,13 +25,11 @@ interface SentenceBoardProps {
 
 export function SentenceBoard(props: SentenceBoardProps) {
   const { board, nameOf, selectedWordId, onHeadClick, onModifierClick, connective, connectivePlaceable, onConnectiveClick, omitsObject } = props
+  const compact = board.clauses.length > 1
   return (
-    <section
-      className="flex min-h-0 flex-1 flex-col justify-center gap-3 rounded-xl bg-surface-container-low p-4 shadow-xl short:gap-1 short:p-1.5"
-      data-testid="sentence"
-    >
+    <section className="flex min-h-0 flex-col justify-center gap-2 short:gap-1" data-testid="sentence">
       {board.clauses.map((clause, clauseIndex) => (
-        <div key={clauseIndex} className="flex flex-wrap items-end justify-center gap-2" data-clause={clauseIndex}>
+        <div key={clauseIndex} className="flex flex-wrap items-end justify-center gap-2.5" data-clause={clauseIndex}>
           {FRAMES[clause.frameId].slots.map((slotDef) => {
             const slot = clause.slots.find((s) => s.role === slotDef.role)
             if (!slot) return null
@@ -50,11 +50,12 @@ export function SentenceBoard(props: SentenceBoardProps) {
                 onHeadClick={() => onHeadClick(at)}
                 onModifierClick={(index) => onModifierClick(at, index)}
                 omitted={slot.role === 'object' && omitsObject(clauseIndex)}
+                compact={compact}
               />
             )
           })}
           {clauseIndex === 0 && (
-            <ConnectiveSlot connective={connective} placeable={connectivePlaceable} onClick={onConnectiveClick} />
+            <ConnectiveSlot connective={connective} placeable={connectivePlaceable} onClick={onConnectiveClick} compact={compact} />
           )}
         </div>
       ))}
@@ -63,10 +64,12 @@ export function SentenceBoard(props: SentenceBoardProps) {
 }
 
 /** 첫 절 끝의 연결어 칸. 연결어를 놓으면 둘째 절이 열리고, 차 있는 칸을 누르면 연결어가 손패로 돌아온다. */
-function ConnectiveSlot({ connective, placeable, onClick }: { connective: PlacedWord | null; placeable: boolean; onClick: () => void }) {
+function ConnectiveSlot(props: { connective: PlacedWord | null; placeable: boolean; onClick: () => void; compact: boolean }) {
+  const { connective, placeable, onClick, compact } = props
+  const size = SLOT_SIZES[compact ? 'compact' : 'normal']
   return (
-    <div className="flex flex-col items-center gap-1">
-      <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">연결어</span>
+    <div className="ml-2 flex flex-col items-center gap-1">
+      <RoleLabel icon={ROLE_ICONS.connective}>연결어</RoleLabel>
       <Droppable id={CONNECTIVE_DROP_ID}>
         {(isOver, ref) => (
           <button
@@ -75,14 +78,14 @@ function ConnectiveSlot({ connective, placeable, onClick }: { connective: Placed
             data-testid="connective-slot"
             onClick={onClick}
             title={connective ? '누르면 손패로 돌아옵니다' : '연결어를 놓으면 둘째 절이 열립니다'}
-            className={`flex h-16 min-w-16 items-center justify-center rounded-lg px-2 transition-all ${
+            className={`flex ${size.box} ${compact ? 'min-w-16' : 'min-w-20'} items-center justify-center rounded-xl px-2 transition-all ${
               connective ? 'bg-primary/20 shadow-md' : 'border border-dashed border-outline-variant/60'
             } ${placeable ? HIGHLIGHT : ''} ${isOver && placeable ? 'scale-105' : ''}`}
           >
             {connective ? (
-              <span className="font-card text-lg font-black text-primary">{getWord(connective.wordId).text}</span>
+              <span className={`font-card font-black text-primary ${compact ? 'text-lg' : 'text-2xl'}`}>{getWord(connective.wordId).text}</span>
             ) : (
-              <span className="text-xs text-outline-variant">＋</span>
+              <Icon name="add_link" className="text-[26px] text-outline-variant" />
             )}
           </button>
         )}

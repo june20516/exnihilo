@@ -244,3 +244,20 @@ export function pileContents(state: RallyState): { draw: { wordId: WordId; count
   const draw = [...counts].map(([wordId, count]) => ({ wordId, count })).sort((a, b) => b.count - a.count || getWord(a.wordId).text.localeCompare(getWord(b.wordId).text, 'ko'))
   return { draw, discard: state.deck.discardPile.map((c) => c.wordId), emptyDrawHpLoss: RALLY_RULES.emptyDrawHpLoss }
 }
+
+/** 개체 카드에 그릴 예상 HP: 낭독 전 HP → 낭독과 이어지는 적의 차례를 모두 거친 HP. */
+export interface FinalHp {
+  readonly before: number
+  readonly after: number
+  readonly died: boolean
+}
+
+/** 미리보기 두 구간을 개체별로 합친다. 처음 HP는 먼저 나온 구간, 나중 HP와 처치는 마지막 구간에서 가져온다. */
+export function finalHp(summary: { readonly mine: readonly EntityChange[]; readonly enemy: readonly EntityChange[] }): Readonly<Record<string, FinalHp>> {
+  const result: Record<string, FinalHp> = {}
+  for (const change of [...summary.mine, ...summary.enemy]) {
+    const earlier = result[change.id]
+    result[change.id] = { before: earlier?.before ?? change.hpBefore, after: change.hpAfter, died: earlier?.died === true || change.died }
+  }
+  return result
+}

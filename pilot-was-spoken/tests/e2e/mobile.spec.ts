@@ -35,7 +35,27 @@ test.describe('가로(844×390, 터치)', () => {
 
   test('늘 보이는 요소가 모두 화면 안에 있고, 안내는 보이지 않는다', async ({ page }) => {
     await expect(page.getByTestId('rotate-notice')).toBeHidden()
-    await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'preview-mine', 'preview-enemy', 'pile-draw', 'amplifiers', 'intent-e0', 'discard'])
+    await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'drawer-preview-handle', 'drawer-resources-handle', 'pile-draw', 'amplifiers', 'intent-e0', 'discard'])
+  })
+
+  test('적 초상화가 보이고(높이 40px 이상), 844×390에서는 스크롤 없이 한 화면이다', async ({ page }) => {
+    const portrait = await page.locator('[data-portrait="e0"]').boundingBox()
+    expect(portrait?.height ?? 0).toBeGreaterThanOrEqual(40)
+    await expectContentFits(page, 'stage')
+  })
+
+  test('미리보기 서랍: 탭하면 열려 화면 안에 보이고, 바깥쪽으로 밀면 닫힌다', async ({ page }) => {
+    await page.getByTestId('drawer-preview-handle').tap()
+    await expect(page.getByTestId('drawer-preview')).toHaveAttribute('data-open', 'true')
+    await expect(page.getByTestId('preview-mine')).toBeInViewport({ ratio: 1 })
+    const handle = page.getByTestId('drawer-preview-handle')
+    const box = await handle.boundingBox()
+    if (!box) throw new Error('손잡이를 찾을 수 없습니다.')
+    const at = (x: number) => ({ pointerType: 'touch', clientX: x, clientY: box.y + box.height / 2, bubbles: true, isPrimary: true })
+    await handle.dispatchEvent('pointerdown', at(box.x + 10))
+    await handle.dispatchEvent('pointermove', at(box.x + 60))
+    await handle.dispatchEvent('pointerup', at(box.x + 60))
+    await expect(page.getByTestId('drawer-preview')).toHaveAttribute('data-open', 'false')
   })
 
   test('눌려서 겹치지 않는다: 전투 영역 → 문장판 → 손패 순서, 미리보기는 내용을 담을 높이', async ({ page }) => {
@@ -46,9 +66,6 @@ test.describe('가로(844×390, 터치)', () => {
     await expectStacked(page, 'battlefield', 'sentence')
     await expectStacked(page, 'sentence', 'formula')
     await expectStacked(page, 'formula', 'hand')
-    // 미리보기는 개체 한 줄(이름·HP·막대·칩)이 목록 안에 넘치지 않고 다 들어가야 한다.
-    await expectContentFits(page, 'preview-mine-list')
-    await expectContentFits(page, 'preview-enemy-list')
     await expectContentFits(page, 'sentence')
   })
 
@@ -70,6 +87,19 @@ test.describe('가로(844×390, 터치)', () => {
     await longPress(page, page.getByTestId('tile-guard').first())
     await expect(page.getByTestId('tooltip')).toBeInViewport()
     await expect(page.getByTestId('tooltip')).toContainText('보호 6')
+  })
+})
+
+test.describe('가로(844×320, 더 낮은 화면)', () => {
+  test.use({ viewport: { width: 844, height: 320 }, hasTouch: true, isMobile: true })
+  test('높이에 맞춰 더 줄이지 않고(폭 기준 비율 유지), 아래는 세로 스크롤로 보인다', async ({ page }) => {
+    await page.goto('/?mode=rally&seed=5')
+    await expect(page.getByTestId('end-turn')).toBeAttached()
+    const stage = page.getByTestId('stage')
+    expect(Number(await stage.evaluate((el) => getComputedStyle(el).zoom))).toBeCloseTo(844 / 1180, 2)
+    expect(await stage.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+    await page.getByTestId('end-turn').scrollIntoViewIfNeeded()
+    await expectInViewport(page, ['end-turn'])
   })
 })
 

@@ -25,18 +25,13 @@ test('툴팁: 서고 숫자에 마우스를 올리면 tooltip이 화면 안에 �
   await expect(page.getByTestId('tooltip')).toBeInViewport()
 })
 
-test('손패 겹침: 이웃과 겹쳐 놓이고, 마우스를 올린 카드는 중심에서 자기 자신이 맨 위다', async ({ page }) => {
+test('손패 겹침: 폭이 넉넉하면 겹치지 않는다', async ({ page }) => {
   const tiles = page.getByTestId('hand').locator('[data-instance-id]:not([data-instance-id="basic"])')
   await expect(tiles).toHaveCount(6)
   const a = await tiles.nth(1).boundingBox()
   const b = await tiles.nth(2).boundingBox()
   if (!a || !b) throw new Error('카드 위치를 찾을 수 없습니다.')
-  expect(a.x + a.width).toBeGreaterThan(b.x)
-  await tiles.nth(1).hover()
-  const box = await tiles.nth(1).boundingBox()
-  if (!box) throw new Error('카드 위치를 찾을 수 없습니다.')
-  const topId = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-instance-id]')?.getAttribute('data-instance-id') ?? null, [box.x + box.width / 2, box.y + box.height / 2])
-  expect(topId).toBe(await tiles.nth(1).getAttribute('data-instance-id'))
+  expect(a.x + a.width).toBeLessThanOrEqual(b.x)
 })
 
 test('놓은 단어를 누르면 손패로 돌아온다(고른 카드가 없을 때)', async ({ page }) => {
@@ -109,6 +104,36 @@ test('막는다를 놓으면 목적어 칸은 주어와 같아 생략으로 보�
   await expect(page.getByTestId('particle-0-object')).toHaveCount(0)
 })
 
+test('개체 카드는 낭독과 적 차례를 거친 예상 HP를 "→ 28"로 보인다', async ({ page }) => {
+  await page.getByTestId('tile-bite').first().click()
+  await page.getByTestId('slot-0-verb').click()
+  await expect(page.getByTestId('hp-e0')).toContainText('34 / 34')
+  await expect(page.getByTestId('hp-after-e0')).toContainText('→ 28')
+})
+
+test('서랍: 손잡이에 마우스를 올리면 열리고 벗어나면 닫힌다. 누르면 열린 채 고정된다', async ({ page }) => {
+  const drawer = page.getByTestId('drawer-preview')
+  await expect(drawer).toHaveAttribute('data-open', 'false')
+  await page.getByTestId('drawer-preview-handle').hover()
+  await expect(drawer).toHaveAttribute('data-open', 'true')
+  await page.getByTestId('cast').hover()
+  await expect(drawer).toHaveAttribute('data-open', 'false')
+  await page.getByTestId('drawer-preview-handle').click()
+  await page.getByTestId('cast').hover()
+  await expect(drawer).toHaveAttribute('data-open', 'true')
+  await page.getByTestId('drawer-preview-handle').click()
+  await expect(drawer).toHaveAttribute('data-open', 'false')
+})
+
+test('왼쪽 서랍은 적용 중·서고(단어별 장수)·망각·서고 바닥 규칙을 보인다', async ({ page }) => {
+  await page.getByTestId('drawer-resources-handle').click()
+  const drawer = page.getByTestId('drawer-resources')
+  await expect(drawer).toContainText('적용 중')
+  await expect(drawer).toContainText('×')
+  await expect(drawer).toContainText('망각')
+  await expect(drawer).toContainText('서고가 비면')
+})
+
 test('미리보기는 개체별 HP "34 → 28"과 피해 칩을 보인다', async ({ page }) => {
   await page.getByTestId('tile-bite').first().click()
   await page.getByTestId('slot-0-verb').click()
@@ -150,9 +175,12 @@ test('적 초상화는 글자가 박힌 아래 띠를 잘라 낸 이미지를 �
 
 test('1280×720에서도 핵심 요소가 화면 안에 있다', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
-  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'amplifiers', 'pile-draw', 'preview-mine', 'preview-enemy', 'intent-e0'])
+  await expectInViewport(page, ['cast', 'end-turn', 'clear', 'hand', 'formula', 'amplifiers', 'pile-draw', 'drawer-preview-handle', 'drawer-resources-handle', 'intent-e0'])
   await expectStacked(page, 'battlefield', 'sentence')
   await expectStacked(page, 'formula', 'hand')
-  await expectContentFits(page, 'preview-mine-list')
   await expectContentFits(page, 'sentence')
+  await expectContentFits(page, 'stage')
+  await page.getByTestId('drawer-preview-handle').click()
+  await expect(page.getByTestId('preview-mine')).toBeInViewport({ ratio: 1 })
+  await expect(page.getByTestId('preview-enemy')).toBeInViewport({ ratio: 1 })
 })

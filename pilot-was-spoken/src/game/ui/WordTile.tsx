@@ -51,7 +51,7 @@ export function WordTile({ def, facts, instanceId, selected, marked, disabled, d
       {...listeners}
       // 드래그를 꺼도(버리기 모드) 클릭은 받는다: dnd-kit의 aria-disabled를 실제 비활성 여부로 덮어쓴다.
       aria-disabled={disabled}
-      className={`flex h-40 w-32 touch-none short:h-28 flex-col justify-between rounded-xl bg-surface-container p-2 text-left shadow-lg
+      className={`flex h-40 w-32 touch-none short:h-[118px] flex-col justify-between rounded-xl bg-surface-container p-2 text-left shadow-lg short:p-1.5
         ${isDragging ? 'shadow-2xl ring-2 ring-secondary' : 'transition-all duration-200'}
         ${selected && !isDragging ? '-translate-y-2 ring-2 ring-secondary shadow-2xl' : 'hover:-translate-y-1'}
         ${marked ? '-translate-y-2 ring-2 ring-error' : ''}
@@ -63,20 +63,23 @@ export function WordTile({ def, facts, instanceId, selected, marked, disabled, d
           {KIND_LABELS[def.kind]}
         </span>
       </div>
-      <span data-word-text className={`text-center font-card text-lg font-black leading-tight tracking-tight ${style.text}`}>
+      <span data-word-text className={`text-center font-card text-2xl font-black leading-tight tracking-tight short:text-xl ${style.text}`}>
         {def.text}
       </span>
-      <p className={`flex flex-col gap-0.5 rounded border-t-2 bg-surface-container-lowest/60 p-1 text-[11px] leading-tight text-on-surface-variant ${TONE_BORDER[facts.tone]}`}>
+      <p className={`flex flex-col gap-0.5 rounded border-t-2 bg-surface-container-lowest/60 p-1 text-[13px] leading-tight text-on-surface-variant ${TONE_BORDER[facts.tone]}`}>
         {facts.facts.map((f, i) => (
           <span key={i} className={`flex items-center gap-0.5 ${TONES[f.kind] ?? ''}`}>
-            <Icon name={ICONS[f.kind]} className="text-[12px]" />
+            <Icon name={ICONS[f.kind]} className="text-[15px]" />
             <span className="truncate">{f.text}</span>
           </span>
         ))}
         {facts.badges.length > 0 && (
           <span className="flex flex-wrap gap-0.5">
             {facts.badges.map((b) => (
-              <span key={b} className="rounded bg-surface-container-high px-1 text-[10px] text-on-surface">{b}</span>
+              <span key={b} className="flex items-center gap-0.5 rounded bg-surface-container-high px-1 text-[11px] text-on-surface">
+                <Icon name="schedule" className="text-[12px]" />
+                {b}
+              </span>
             ))}
           </span>
         )}

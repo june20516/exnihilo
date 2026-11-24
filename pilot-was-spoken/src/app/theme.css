@@ -58,4 +58,8 @@ body { -webkit-touch-callout: none; }
   .stage { display: none; }
 }
 body { font-family: var(--font-ui); color: var(--color-on-surface); user-select: none; }
-.material-symbols-outlined { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; line-height: 1; display: inline-block; }
+/* 아이콘 상자는 글꼴 로드 전에도 1em 정사각형: 로드 전 이름 글자(예: backspace)가 넓게 그려져 배치를 밀지 않게 한다. */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; line-height: 1; display: inline-block;
+  width: 1em; height: 1em; overflow: hidden; white-space: nowrap; flex-shrink: 0; font-feature-settings: "liga";
+}

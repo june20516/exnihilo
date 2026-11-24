@@ -1,4 +1,5 @@
 import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
+import { HeaderSlot } from './HeaderSlot'
 import { Icon } from './Icon'
 
 interface TopBarProps {
@@ -13,10 +14,11 @@ interface TopBarProps {
 export function TopBar(props: TopBarProps) {
   const { encounterId, seed, deckSize, onEncounter, onRestart, onOpenDeck } = props
   return (
-    <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md">
-      <div className="flex items-center gap-3">
-        <span className="font-prose text-lg font-bold">문장 던전</span>
-        <span className="font-ui text-[10px] uppercase tracking-widest text-on-surface-variant">기본 랠리</span>
+    <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md short:h-11">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="shrink-0 font-prose text-lg font-bold">문장 던전</span>
+        <span className="shrink-0 font-ui text-[10px] uppercase tracking-widest text-on-surface-variant">기본 랠리</span>
+        <HeaderSlot />
       </div>
       <div className="flex items-center gap-2">
         <select

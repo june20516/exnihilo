@@ -6,7 +6,7 @@ import { BASIC_VERB_INSTANCE, basicVerbAvailable, type RallyAction, type RallySt
 import { sentenceCalc } from '@/game/rally/formula'
 import { previewEvents } from '@/game/rally/preview'
 import { hasVerb, isBlank } from '@/game/rally/sentence'
-import { amplifiers, intentActions, pileContents, previewSummary } from '@/game/rally/summary'
+import { amplifiers, finalHp, intentActions, pileContents, previewSummary } from '@/game/rally/summary'
 import { eventNotice, intentTexts, lingeringStates, omitsObject, wordNamer } from '@/game/rally/text'
 import { getWord } from '@/game/content/words'
 import { getSlot } from '@/game/sentence/board'
@@ -14,11 +14,15 @@ import { cardSummary } from './describe'
 import { PLACED_DRAG_PREFIX } from './SlotView'
 import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
-import { ControlPanel } from './ControlPanel'
+import { ActionColumn } from './ActionColumn'
+import { CombatChips } from './CombatChips'
+import { Drawer } from './Drawer'
+import { IntoHeader } from './HeaderSlot'
+import { Icon } from './Icon'
+import { ResourcePanel } from './ResourcePanel'
 import { Hand } from './Hand'
 import { CONNECTIVE_DROP_ID, isConnectiveWord, parseDropId } from './placement'
 import { SentenceBoard } from './SentenceBoard'
-import { AmplifierPanel } from './AmplifierPanel'
 import { FormulaChips } from './FormulaChips'
 import { SidePanel } from './SidePanel'
 
@@ -37,6 +41,8 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** 버리기 모드에서 표시한 카드. null이면 버리기 모드가 아니다. */
   const [marked, setMarked] = useState<ReadonlySet<string> | null>(null)
+  /** 카드를 끄는 중이면 서랍이 마우스에 반응하지 않는다. */
+  const [dragging, setDragging] = useState(false)
 
   const portraits = useMemo(() => {
     const map: Record<string, string> = { player: '/assets/explorer.jpg' }
@@ -68,7 +74,10 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
     const detailed = Object.entries(lingeringStates(state)).map(([id, list]) => [id, list.map((s) => ({ text: s.text, detail: cardSummary(s.wordId, state.build) }))])
     return Object.fromEntries(detailed)
   }, [state])
+  const projections = useMemo(() => finalHp(summary), [summary])
   const piles = useMemo(() => pileContents(state), [state])
+  const drawPile = piles.draw.map((d) => ({ text: getWord(d.wordId).text, count: d.count }))
+  const discardPile = piles.discard.map((id) => getWord(id).text)
   const verbPlaced = hasVerb(state.board)
 
   /** 배치 이외의 행동: 선택과 버리기 표시를 풀고 보낸다. */
@@ -125,6 +134,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
+    setDragging(false)
     const activeId = String(event.active.id)
     if (activeId.startsWith(PLACED_DRAG_PREFIX)) {
       // 놓은 단어를 끌었다: 판의 칸이 아닌 곳에 놓으면 뺀다. 칸 위면 그대로 둔다.
@@ -146,21 +156,32 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(e) => setSelectedId(String(e.active.id).startsWith(PLACED_DRAG_PREFIX) ? null : String(e.active.id))}
+      onDragStart={(e) => {
+        setDragging(true)
+        setSelectedId(String(e.active.id).startsWith(PLACED_DRAG_PREFIX) ? null : String(e.active.id))
+      }}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setSelectedId(null)}
+      onDragCancel={() => {
+        setDragging(false)
+        setSelectedId(null)
+      }}
     >
-      <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-2 short:gap-1 short:p-1">
+      <IntoHeader>
+        <CombatChips drawPile={drawPile} discardPile={discardPile} emptyDrawHpLoss={piles.emptyDrawHpLoss} turn={state.turn} amplifiers={amplifierItems} />
+      </IntoHeader>
+      <main className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-2.5 px-3 pb-3 pt-2.5 short:gap-1.5 short:px-1.5 short:pb-1.5 short:pt-1.5">
         <Battlefield
           entities={state.entities}
           portraits={portraits}
           targetId={state.targetId}
           intents={intents}
           states={states}
+          projections={projections}
           onPickEnemy={canAct ? (entityId) => run({ type: 'target', entityId }) : null}
         />
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_320px] short:grid-cols-[minmax(0,1fr)_250px] gap-2">
-          <div className="flex min-h-0 flex-col gap-1">
+        {/* 문장판: 가운데 문장·계산식·알림, 양쪽 벽에 서랍(왼쪽 자원, 오른쪽 미리보기 상세). */}
+        <section data-testid="board-panel" className="relative min-h-0 overflow-hidden rounded-2xl bg-surface-container-low shadow-xl">
+          <div className="flex h-full min-h-0 flex-col items-center justify-center gap-1.5 px-14 py-2 short:gap-1 short:px-11 short:py-1.5">
             <SentenceBoard
               board={state.board}
               nameOf={nameOf}
@@ -175,35 +196,19 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             <div data-testid="formula">
               <FormulaChips calcs={calcs} placeholder={verbPlaced ? '이 동사에는 계산식이 없습니다' : '동사를 놓으면 계산식이 보입니다'} />
             </div>
-            <p className="h-5 text-center text-sm text-error" data-testid="message">
+            <p className="flex h-5 items-center gap-1 text-center font-ui text-sm text-error" data-testid="message">
+              {notice && <Icon name="info" className="text-[16px]" />}
               {notice}
             </p>
           </div>
-          <SidePanel
-            mine={summary.mine}
-            enemy={summary.enemy}
-            canCast={verbPlaced}
-            winsNow={preview?.after.phase === 'won'}
-          />
-        </div>
-        <section className="flex items-end gap-3 rounded-xl bg-surface-container-lowest p-2 shadow-2xl">
-          <div className="flex w-56 shrink-0 flex-col gap-2">
-          <AmplifierPanel items={amplifierItems} />
-          <ControlPanel
-            drawPile={piles.draw.map((d) => ({ text: getWord(d.wordId).text, count: d.count }))}
-            discardPile={piles.discard.map((id) => getWord(id).text)}
-            emptyDrawHpLoss={piles.emptyDrawHpLoss}
-            turn={state.turn}
-            discardsLeft={state.discardsLeft}
-            markedCount={marked ? marked.size : null}
-            disabled={!canAct}
-            onToggleDiscard={() => {
-              setSelectedId(null)
-              setMarked((current) => (current ? null : new Set()))
-            }}
-            onConfirmDiscard={() => marked && run({ type: 'discard', instanceIds: [...marked] })}
-          />
-          </div>
+          <Drawer side="left" icon="inventory_2" label="자원" width={300} testId="drawer-resources" hoverDisabled={dragging}>
+            <ResourcePanel amplifiers={amplifierItems} drawPile={drawPile} discardPile={discardPile} emptyDrawHpLoss={piles.emptyDrawHpLoss} />
+          </Drawer>
+          <Drawer side="right" icon="visibility" label="미리보기" width={320} testId="drawer-preview" hoverDisabled={dragging}>
+            <SidePanel mine={summary.mine} enemy={summary.enemy} canCast={verbPlaced} winsNow={preview?.after.phase === 'won'} />
+          </Drawer>
+        </section>
+        <section className="flex items-end gap-3 short:gap-2">
           <Hand
             hand={state.deck.hand}
             build={state.build}
@@ -214,39 +219,21 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             onSelect={onSelectCard}
             basic={{ wordId: state.build.basicVerb, available: basicVerbAvailable(state) }}
           />
-          {/* 버튼은 기준 크기에서 60px 이상: 가장 작은 화면(비율 약 0.67)에서도 터치 대상 40px. */}
-          <div className="flex w-52 shrink-0 flex-col gap-2">
-            <button
-              type="button"
-              data-testid="cast"
-              disabled={!canAct || !verbPlaced}
-              onClick={() => run({ type: 'cast' })}
-              className="h-16 rounded-xl bg-secondary-container px-4 font-ui text-xl font-black text-on-secondary-container shadow-xl disabled:opacity-50"
-            >
-              낭독
-            </button>
-            <div className="flex gap-2">
-            <button
-              type="button"
-              data-testid="end-turn"
-              disabled={!canAct}
-              onClick={() => run({ type: 'endTurn' })}
-              className="flex min-h-[60px] flex-1 flex-col items-start justify-center rounded-xl bg-primary-container px-3 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
-            >
-              <span className="font-ui text-lg font-black">턴 종료</span>
-              <span className="text-[10px] opacity-80">낭독 없이 넘긴다</span>
-            </button>
-            <button
-              type="button"
-              data-testid="clear"
-              disabled={!canAct || sentenceEmpty}
-              onClick={() => run({ type: 'clear' })}
-              className="min-h-[60px] w-[60px] rounded-xl bg-surface-container-high px-1 text-xs font-bold disabled:opacity-40"
-            >
-              문장 비우기
-            </button>
-            </div>
-          </div>
+          <ActionColumn
+            canAct={canAct}
+            canCast={verbPlaced}
+            sentenceEmpty={sentenceEmpty}
+            discardsLeft={state.discardsLeft}
+            markedCount={marked ? marked.size : null}
+            onCast={() => run({ type: 'cast' })}
+            onEndTurn={() => run({ type: 'endTurn' })}
+            onToggleDiscard={() => {
+              setSelectedId(null)
+              setMarked((current) => (current ? null : new Set()))
+            }}
+            onConfirmDiscard={() => marked && run({ type: 'discard', instanceIds: [...marked] })}
+            onClear={() => run({ type: 'clear' })}
+          />
         </section>
       </main>
       {onRestart && state.phase !== 'player' && !busy && <CombatResult outcome={state.phase} onRestart={onRestart} />}

@@ -10,10 +10,10 @@ interface SidePanelProps {
   winsNow: boolean
 }
 
-/** 오른쪽: 이번 라운드에 일어날 일(실제 엔진으로 미리 계산). */
+/** 오른쪽 서랍: 이번 라운드에 일어날 일(실제 엔진으로 미리 계산). 개체 카드의 예상 HP를 구간·칩으로 풀어 보인다. */
 export function SidePanel({ mine, enemy, canCast, winsNow }: SidePanelProps) {
   return (
-    <aside className="flex min-h-0 flex-col gap-2">
+    <aside className="flex flex-col gap-2">
       <PreviewList testId="preview-mine" title="낭독하면" changes={mine} empty={canCast ? '변화 없음' : '동사가 없어 낭독할 수 없다'} />
       <PreviewList
         testId="preview-enemy"
