@@ -329,7 +329,7 @@ ledger의 Ruling 전체. 형식: 결정 — 이유 — 틀렸을 때 비용.
 - Task 6: Ruling: 계산식 칩은 항을 계산 순서대로 나열(괄호 대신 순차 적용) — 칩 하나하나가 실제 적용 순서라 읽는 순서 = 계산 순서 — 비용: 괄호식에 익숙한 사람에겐 낯섦
 - Task 6: Ruling: 계산식 칩에 laterValue(되받아친다 반복)를 '(이후 n회는 x)'로 보임 — Plan 7 수정 반영 — 비용: 없음
 - Task 6: Ruling: intentTexts에 withNumbers 옵션 — 화면은 문장만, 수치는 intentActions 칩; 텍스트 플레이는 기존대로 — 비용: 없음
-- Task 6: Ruling: 초상화는 CSS가 아니라 이미지 자체를 잘라 냄(sips, 원본은 public/assets/originals/) — 검증은 e2e에서 이미지 크기 1260×540 — 비용: 다른 비율 카드에서 구도 차이
+- Task 6: Ruling: 초상화는 CSS가 아니라 이미지 자체를 잘라 냄(sips, 원본은 pilot-was-spoken/art/originals/(배포 제외)) — 검증은 e2e에서 이미지 크기 1260×540 — 비용: 다른 비율 카드에서 구도 차이
 - Task 6: Ruling: 상점 강화 상품 설명은 Task 2 결정대로 '지금 → 다음' 유지 — 비용: 없음
 - Task 6: Ruling: 1280 폭에서 연결어 칸이 둘째 줄로 내려감 — 정보 손실 없음, 한 화면 유지 — 비용: 배치 미관
 - Task 7: Ruling: 한 배치를 기준 크기 1180×580에서 맞추고 그보다 작은 화면은 루트를 CSS zoom으로 줄임(Stage.tsx) — 844×390에서 비율 0.672, 60px 버튼이 40px — 비용: 드래그 중 카드가 손가락보다 덜 움직여 보일 수 있음(탭 배치는 영향 없음)
