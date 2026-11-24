@@ -14,7 +14,9 @@
  */
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
 import { applyStructure, type BuildState, EMPTY_BUILD, effectiveWord, isUpgradable, MAX_SLOTS, type RelicId } from '@/game/build/build'
-import { RELICS } from '@/game/build/relics'
+import { RELICS, relicEffects } from '@/game/build/relics'
+import { hooksFromEffects } from '@/game/rally/hooks'
+import { VULNERABLE_MULTIPLIER } from '@/kit/core/entity'
 import { BALANCE } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { type AdjectiveMod, type AdverbMod, getWord, type WordId } from '@/game/content/words'
@@ -127,8 +129,6 @@ function clauseConfigs(pool: Counts, build: BuildState, verbs: readonly WordId[]
 
 // ───────────────────────── 해석식 ─────────────────────────
 
-const CHAIN_FACTOR = 2
-const VULNERABLE = 1.5
 
 interface ClauseContext {
   /** 긴 문장·생략·그래서가 더하는 피해 기본값. */
@@ -140,11 +140,15 @@ interface ClauseContext {
   readonly borrowed: ClauseCfg | null
 }
 
-const has = (build: BuildState, relic: RelicId) => build.relics.includes(relic)
+/** 해석식도 엔진과 같은 유물 효과 데이터로 훅을 만든다. 주어는 생략했다고 본다(생략의 미학 최대치). */
+function relicHooks(build: BuildState, wordsOnBoard: number, clauseCount: number) {
+  return hooksFromEffects(relicEffects(build.relics), { countedWords: wordsOnBoard, subjectBlank: true, clause: 0, clauseCount })
+}
 
 function slotStats(ids: readonly WordId[], build: BuildState) {
   const mods = ids.flatMap((id) => adjectiveMods(id, build))
-  const chain = has(build, 'adjectiveChain') && ids.length >= 2 ? CHAIN_FACTOR : 1
+  const boost = relicHooks(build, 0, 1).chainBoost
+  const chain = boost && ids.length >= boost.minAdjectives ? boost.factor : 1
   return {
     outMul: mods.reduce((p, m) => (m.kind === 'outgoingDamageMul' ? p * m.value : p), 1) * chain,
     outFlat: mods.reduce((s, m) => (m.kind === 'outgoingFlat' ? s + m.amount : s), 0),
@@ -157,7 +161,7 @@ function adverbStats(ids: readonly WordId[], build: BuildState) {
   const mods = ids.flatMap((id) => adverbMods(id, build))
   const power = mods.reduce((p, m) => (m.kind === 'powerMul' ? p * m.value : p), 1)
   return {
-    power: has(build, 'stress') ? power * power : power,
+    power: relicHooks(build, 0, 1).adverbTwice ? power * power : power,
     repeat: mods.reduce((r, m) => (m.kind === 'repeat' ? Math.max(r, m.count) : r), 1),
   }
 }
@@ -185,7 +189,7 @@ function clauseBurst(cfg: ClauseCfg, ctx: ClauseContext, build: BuildState): num
   if (damage === 0) return 0
   const base = damage + ctx.damageBonus
   const outgoing = (base * adverbs.power + ctx.strength + subject.outFlat) * subject.outMul
-  const hit = Math.max(0, Math.floor(outgoing * (ctx.vulnerable ? VULNERABLE : 1) * object.inMul) - object.inFlat)
+  const hit = Math.max(0, Math.floor(outgoing * (ctx.vulnerable ? VULNERABLE_MULTIPLIER : 1) * object.inMul) - object.inFlat)
   return hit * (adverbs.repeat + ctx.repeatBonus)
 }
 
@@ -203,7 +207,7 @@ function setupEffect(verb: WordId, build: BuildState): { strength: number; vulne
 }
 
 function bonusFor(build: BuildState, wordsOnBoard: number): number {
-  return (has(build, 'longSentence') ? 2 * wordsOnBoard : 0) + (has(build, 'ellipsis') ? 4 : 0)
+  return relicHooks(build, wordsOnBoard, 1).damageBonus ?? 0
 }
 
 const NEUTRAL: Omit<ClauseContext, 'damageBonus'> = { strength: 0, vulnerable: false, repeatBonus: 0, borrowed: null }
@@ -213,7 +217,7 @@ function evaluate(mode: Mode, clauses: readonly ClauseCfg[], build: BuildState):
   const words = clauses.reduce((s, c) => s + cardsOf(c), 0) + (mode === 'single' ? 0 : 1)
   const bonus = bonusFor(build, words)
   if (mode === 'single') {
-    return clauseBurst(clauses[0], { ...NEUTRAL, damageBonus: bonus, repeatBonus: has(build, 'echo') ? 1 : 0 }, build)
+    return clauseBurst(clauses[0], { ...NEUTRAL, damageBonus: bonus, repeatBonus: relicHooks(build, 0, 1).repeatBonus ?? 0 }, build)
   }
   const [first, second] = clauses
   const b1 = clauseBurst(first, { ...NEUTRAL, damageBonus: bonus }, build)

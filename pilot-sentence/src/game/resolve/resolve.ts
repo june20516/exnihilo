@@ -46,15 +46,17 @@ export interface SlotMods {
   readonly selfDamageAfter: number
 }
 
-/** 수식의 사슬: 형용사가 2개 이상인 슬롯은 배율 ×2. */
-export const CHAIN_FACTOR = 2
-
 export function adjectiveCount(slot: SlotState, lookup: WordLookup = getWord): number {
   return slot.modifiers.filter((m) => m !== null && lookup(m.wordId).effect.type === 'adjective').length
 }
 
-export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord, chainBoost = false): SlotMods {
-  const chain = chainBoost && adjectiveCount(slot, lookup) >= 2 ? CHAIN_FACTOR : 1
+/** 수식의 사슬 훅이 이 슬롯에 주는 배율. 형용사 수가 모자라거나 훅이 없으면 1. */
+export function chainFactorOf(slot: SlotState, lookup: WordLookup, chainBoost: ChainBoost | undefined): number {
+  return chainBoost && adjectiveCount(slot, lookup) >= chainBoost.minAdjectives ? chainBoost.factor : 1
+}
+
+export function collectSlotMods(slot: SlotState, lookup: WordLookup = getWord, chainBoost?: ChainBoost): SlotMods {
+  const chain = chainFactorOf(slot, lookup, chainBoost)
   const mods: AdjectiveMod[] = slot.modifiers.flatMap((m) => {
     const effect = m ? lookup(m.wordId).effect : null
     return effect?.type === 'adjective' ? effect.mods : []
@@ -144,13 +146,18 @@ class EntityTable {
 /**
  * 빌드 레이어(유물·연결어·층 배율)가 해석에 끼어드는 자리. 모두 선택이며, 없으면 기본 규칙과 같다.
  */
+export interface ChainBoost {
+  readonly factor: number
+  readonly minAdjectives: number
+}
+
 export interface ClauseHooks {
   /** 피해 동작 기본값 가산. */
   readonly damageBonus?: number
   /** 보호·회복 동작 기본값 가산. */
   readonly supportBonus?: number
-  /** 한 슬롯에 형용사가 2개 이상이면 그 슬롯 배율 ×2(수식의 사슬). */
-  readonly chainBoost?: boolean
+  /** 한 슬롯에 형용사가 minAdjectives개 이상이면 그 슬롯 배율 ×factor(수식의 사슬). */
+  readonly chainBoost?: ChainBoost
   /** 부사 세기를 두 번 적용(강세). */
   readonly adverbTwice?: boolean
   /** 독을 거는 효과 가산. */

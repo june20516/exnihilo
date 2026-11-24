@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["scripts", "src"],
+  "exclude": ["src/**/*.tsx", "src/app", "src/main.tsx"]
+}

@@ -1,9 +1,10 @@
 import { type Entity, scaleIncoming, scaleOutgoing, VULNERABLE_MULTIPLIER, WEAK_MULTIPLIER } from '@/kit/core/entity'
 import { wordLookup } from '@/game/build/build'
 import type { VerbAction } from '@/game/content/words'
-import { adjectiveCount, CHAIN_FACTOR, collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
+import { chainFactorOf, collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
 import { type Board, getSlot } from '@/game/sentence/board'
-import { type ClauseRun, materializeFor, type RallyState, runSentence } from './combat'
+import { type ClauseRun, type RallyState, runSentence } from './combat'
+import { materializeFor } from './hooks'
 import { isBlank } from './sentence'
 
 /**
@@ -82,7 +83,7 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   // 사슬 배율은 식에 따로 보이도록 슬롯 배율과 나눠 계산한다.
   const sourceMods = collectSlotMods(subjectSlot, lookup)
   const targetMods = collectSlotMods(objectSlot, lookup)
-  const chainOf = (slot: typeof subjectSlot) => (hooks.chainBoost && adjectiveCount(slot, lookup) >= 2 ? CHAIN_FACTOR : 1)
+  const chainOf = (slot: typeof subjectSlot) => chainFactorOf(slot, lookup, hooks.chainBoost)
   const sourceChain = chainOf(subjectSlot)
   const targetChain = chainOf(objectSlot)
   const base = action.amount + (hooks.damageBonus ?? 0)

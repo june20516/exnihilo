@@ -2,11 +2,12 @@ import { BALANCE } from '@/game/content/balance'
 import type { SlotAddress } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
-import { type CardInst, clauseHooks, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
+import { type CardInst, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
+import { clauseHooks, hooksFromEffects } from '@/game/rally/hooks'
 import { sentenceFormula } from '@/game/rally/formulaText'
 import '@/game/rally/testFixtures'
 import { EMPTY_BUILD, type RelicId } from './build'
-import { RELICS } from './relics'
+import { RELICS, type RelicEffect } from './relics'
 
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
@@ -97,4 +98,38 @@ test('긴 문장: 연결어 카드도 문장에 놓인 단어로 센다', () => 
 
 test('메아리 문구는 실제 동작(첫 절의 반복 횟수 +1)과 같다', () => {
   expect(RELICS.echo.text).toContain('반복 횟수 +1')
+})
+
+// ── 효과 데이터화 (Plan 7 Task 1) ──
+
+/** 효과 정의에서 수치 필드만 뽑는다(문구에 그대로 나와야 하는 값). */
+function amountsOf(effect: RelicEffect): number[] {
+  return Object.entries(effect).flatMap(([key, value]) => (key !== 'kind' && typeof value === 'number' ? [value] : []))
+}
+
+test('모든 유물 정의는 effect를 갖고, 효과 문구에 effect의 수치가 들어 있다', () => {
+  for (const relic of Object.values(RELICS)) {
+    expect(relic.effect, relic.id).toBeDefined()
+    for (const amount of amountsOf(relic.effect)) expect(relic.text, relic.id).toContain(String(amount))
+  }
+})
+
+const context = { countedWords: 3, subjectBlank: true, clause: 0, clauseCount: 1 }
+
+test('훅은 유물 id가 아니라 효과로 만든다: 같은 종류의 효과가 둘이면 더해진다', () => {
+  const effects: RelicEffect[] = [
+    { kind: 'perWordBonus', amount: 2 },
+    { kind: 'perWordBonus', amount: 1 },
+    { kind: 'blankSubjectBonus', amount: 4 },
+  ]
+  expect(hooksFromEffects(effects, context)).toEqual({ damageBonus: 3 * 3 + 4, supportBonus: 3 * 3 })
+})
+
+test('효과 종류마다 맞는 훅을 낸다', () => {
+  expect(hooksFromEffects([{ kind: 'chainBoost', factor: 2, minAdjectives: 2 }], context)).toEqual({ chainBoost: { factor: 2, minAdjectives: 2 } })
+  expect(hooksFromEffects([{ kind: 'adverbTwice' }], context)).toEqual({ adverbTwice: true })
+  expect(hooksFromEffects([{ kind: 'poisonBonus', amount: 2 }], context)).toEqual({ poisonBonus: 2 })
+  expect(hooksFromEffects([{ kind: 'soloRepeat', amount: 1 }], context)).toEqual({ repeatBonus: 1 })
+  expect(hooksFromEffects([{ kind: 'soloRepeat', amount: 1 }], { ...context, clauseCount: 2 })).toEqual({})
+  expect(hooksFromEffects([{ kind: 'blankSubjectBonus', amount: 4 }], { ...context, subjectBlank: false })).toEqual({})
 })

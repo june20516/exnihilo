@@ -3,14 +3,15 @@ import { addStatus, clearBlock, createEntity, type Entity, isAlive, tickEndOfTur
 import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
-import type { Balance } from '@/game/content/balance'
+import { type Balance, RALLY_RULES } from '@/game/content/balance'
 import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent, type SlotAddress } from '@/game/content/enemies'
-import { type ConnectiveMode, getWord, type WordId } from '@/game/content/words'
+import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
 import { type ClauseHooks, lingeringMods, resolveClause, type ResolvedClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
-import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isBlank, isDefensiveVerb, materialize } from './sentence'
+import { clauseHooks, connectiveMode, materializeFor, returnsFirstVerb, soBonusFrom } from './hooks'
+import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isDefensiveVerb } from './sentence'
 
 export interface CardInst extends CardInstance {
   readonly wordId: WordId
@@ -106,12 +107,6 @@ export type RallyAction =
   | { readonly type: 'cast' }
   | { readonly type: 'endTurn' }
 
-/** spec §1·§4의 규칙 값. 손패 상한과 버리기 횟수는 빌드 상태(EMPTY_BUILD 기본 8·1)에 있다. */
-export const RALLY_RULES = { startHand: 6, drawPerTurn: 5 } as const
-
-/** 적 예고 문장의 수식어 칸 수(내 빌드와 무관). 예고 문장 표시(rally/text)도 이 값을 쓴다. */
-export const ENEMY_MODIFIER_SLOTS = 2
-
 export const PLAYER_ID = 'p'
 
 type Result = Reduced<RallyState, CombatEvent>
@@ -127,59 +122,6 @@ export function enemyIntent(state: RallyState, enemyIndex: number): RallyIntent 
   const spec = getEncounter(state.encounterId).enemies[enemyIndex]
   if (!spec) throw new Error(`적이 없습니다: ${enemyIndex}`)
   return spec.intents[(state.turn - 1) % spec.intents.length]
-}
-
-const has = (state: RallyState, relic: BuildState['relics'][number]) => state.build.relics.includes(relic)
-
-/**
- * 낭독할 내 절에 끼어드는 빌드 훅(유물). 기본값과 같은 필드는 넣지 않는다.
- * 미리보기와 계산식도 이 함수를 쓴다.
- */
-/** 긴 문장이 세는 단어: 실행되는(켜진) 칸에 놓인 내 단어와 연결어 카드. */
-function countedWords(state: RallyState): number {
-  const onActiveSlots = state.board.clauses.flatMap((c, clause) =>
-    c.slots
-      .filter((slot) => isSlotActive(state.board, { clause, role: slot.role }))
-      .flatMap((slot) => [slot.head, ...slot.modifiers])
-      .filter((w) => w !== null && w.owner === 'player'),
-  )
-  return onActiveSlots.length + (state.connective ? 1 : 0)
-}
-
-export function clauseHooks(state: RallyState, clause: number): ClauseHooks {
-  const hooks: { -readonly [K in keyof ClauseHooks]: ClauseHooks[K] } = {}
-  let damageBonus = 0
-  if (has(state, 'longSentence')) {
-    const bonus = countedWords(state) * 2
-    damageBonus += bonus
-    if (bonus > 0) hooks.supportBonus = bonus
-  }
-  const subject = state.board.clauses[clause]?.slots.find((s) => s.role === 'subject')
-  if (has(state, 'ellipsis') && subject && isBlank(subject.head)) damageBonus += 4
-  if (damageBonus > 0) hooks.damageBonus = damageBonus
-  if (has(state, 'adjectiveChain')) hooks.chainBoost = true
-  if (has(state, 'stress')) hooks.adverbTwice = true
-  if (has(state, 'poisonGrammar')) hooks.poisonBonus = 2
-  if (has(state, 'echo') && clause === 0 && state.board.clauses.length === 1) hooks.repeatBonus = 1
-  return hooks
-}
-
-export function connectiveMode(state: RallyState): ConnectiveMode | null {
-  const effect = state.connective ? getWord(state.connective.wordId).effect : null
-  return effect?.type === 'connective' ? effect.mode : null
-}
-
-/** 낭독할 때 빈칸을 채우는 방식(허수아비 화자, 그러면서). */
-export function materializeFor(state: RallyState): Board {
-  return materialize(state.board, state.targetId, {
-    impliedSubject: has(state, 'scarecrowSpeaker') ? 'scarecrow' : undefined,
-    borrowModifiers: connectiveMode(state) === 'while',
-  })
-}
-
-/** 그래서: 앞 절에서 적이 받은 피해 합의 절반(내림). */
-export function soBonusFrom(burst: number): number {
-  return Math.floor(burst / 2)
 }
 
 /** 낭독 직전, 절마다의 실행 조건. 계산식은 이것으로 실제와 같은 값을 낸다. */
@@ -530,7 +472,7 @@ function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
       events.push({ type: 'sealed', role })
       continue
     }
-    const board = enemyBoard(intent.clause, enemyId, ENEMY_MODIFIER_SLOTS)
+    const board = enemyBoard(intent.clause, enemyId, RALLY_RULES.enemyModifierSlots)
     const executed = runClause(current, board, 0, { damageScale: current.enemyScale.damage }, 'enemy')
     current = executed.state
     events.push(...executed.events)
@@ -566,7 +508,7 @@ function cast(state: RallyState): Result {
   const power = sentencePower(state)
   const cleared = clearSentence(executed.state)
   // 울림: 첫 절의 동사 카드는 버림 더미 대신 손패로 돌아온다.
-  const verbCard = has(state, 'resonance') ? getSlot(state.board, { clause: 0, role: 'verb' }).head.instanceId : null
+  const verbCard = returnsFirstVerb(state) ? getSlot(state.board, { clause: 0, role: 'verb' }).head.instanceId : null
   const used = cleared.cards
   const returned = used.filter((c) => c.instanceId === verbCard)
   const spent = used.filter((c) => c.instanceId !== verbCard)

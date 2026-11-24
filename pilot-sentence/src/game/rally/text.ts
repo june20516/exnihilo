@@ -6,7 +6,9 @@ import { attachParticle } from '@/game/grammar/josa'
 import { renderClause, type RenderToken } from '@/game/grammar/render'
 import { getSlot, type PlacedWord } from '@/game/sentence/board'
 import { wordLookup } from '@/game/build/build'
-import { ENEMY_MODIFIER_SLOTS, enemyIntent, materializeFor, nextSealRole, type RallyState, runSentence } from './combat'
+import { RALLY_RULES } from '@/game/content/balance'
+import { enemyIntent, nextSealRole, type RallyState, runSentence } from './combat'
+import { materializeFor } from './hooks'
 import { enemyBoard, hasVerb } from './sentence'
 
 /** 화면과 텍스트 플레이가 함께 쓰는 문장·문구. */
@@ -85,7 +87,7 @@ export function intentTexts(
       if (!frozenNote) sealsAhead++
       return
     }
-    const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, ENEMY_MODIFIER_SLOTS), 0, nameOf))
+    const sentence = joinTokens(renderClause(enemyBoard(intent.clause, id, RALLY_RULES.enemyModifierSlots), 0, nameOf))
     // 맞힐 때 거는 독은 피해 이벤트 바로 뒤에 오므로, 마지막으로 피해를 준 개체의 것으로 본다.
     let lastHitter: string | null = null
     const numbers = enemyEvents.flatMap((e) => {
