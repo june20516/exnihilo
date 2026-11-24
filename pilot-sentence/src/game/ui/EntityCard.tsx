@@ -1,14 +1,17 @@
+import { ICONS, TONES } from './icons'
+import { Tooltip } from './Tooltip'
 import { blockText } from './describe'
 import type { Entity, StatusKind } from '@/kit/core/entity'
 import { Icon } from './Icon'
 
-const STATUS_BADGES: { kind: StatusKind; icon: string; label: string; tone: string }[] = [
-  { kind: 'block', icon: 'shield', label: '보호', tone: 'text-tertiary' },
-  { kind: 'strength', icon: 'fitness_center', label: '힘', tone: 'text-secondary' },
-  { kind: 'poison', icon: 'science', label: '독', tone: 'text-tertiary' },
-  { kind: 'weak', icon: 'trending_down', label: '약화', tone: 'text-error' },
-  { kind: 'vulnerable', icon: 'heart_broken', label: '취약', tone: 'text-error' },
-  { kind: 'freeze', icon: 'bedtime', label: '빙결', tone: 'text-secondary' },
+/** 상태 배지: 이름과, 툴팁으로 보일 뜻(지속 포함). 아이콘·색은 ui/icons.ts. */
+const STATUS_BADGES: { kind: StatusKind; label: string; meaning: string }[] = [
+  { kind: 'block', label: '보호', meaning: '받는 피해를 먼저 막는다. 덩어리마다 남은 턴이 지나면 자기 차례 시작에 사라진다.' },
+  { kind: 'strength', label: '힘', meaning: '주는 피해에 힘만큼 더한다. 전투 내내 유지된다.' },
+  { kind: 'poison', label: '독', meaning: '차례가 끝날 때 독만큼 HP를 잃고(보호 무시) 독이 1 준다.' },
+  { kind: 'weak', label: '약화', meaning: '주는 피해 ×0.75. 차례가 끝날 때마다 1 준다.' },
+  { kind: 'vulnerable', label: '취약', meaning: '받는 피해 ×1.5. 차례가 끝날 때마다 1 준다.' },
+  { kind: 'freeze', label: '빙결', meaning: '다음 행동 하나를 하지 못한다(기어이로 무시).' },
 ]
 
 interface EntityCardProps {
@@ -20,8 +23,8 @@ interface EntityCardProps {
   targeted?: boolean
   /** 적이 이번 턴에 실행할 예고 문장. */
   intent?: string
-  /** 낭독하면(또는 이미) 이 개체에 남는 형용사 상태. 예: '눈멂 · 적 차례까지'. */
-  states?: readonly string[]
+  /** 낭독하면(또는 이미) 이 개체에 남는 형용사 상태. text 예: '눈멂 · 적 차례까지', detail은 그 형용사의 효과. */
+  states?: readonly { readonly text: string; readonly detail: string }[]
 }
 
 export function EntityCard({ entity, portrait, onPick, targeted = false, intent, states = [] }: EntityCardProps) {
@@ -69,23 +72,22 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
       </span>
       <div className="flex min-h-4 flex-wrap gap-x-2 font-ui text-[11px]">
         {STATUS_BADGES.filter((b) => entity.statuses[b.kind] > 0).map((b) => (
-          <span
-            key={b.kind}
-            data-testid={b.kind === 'block' ? `block-${entity.id}` : undefined}
-            className={`flex items-center gap-0.5 ${b.tone}`}
-            title={b.label}
-          >
-            <Icon name={b.icon} className="text-[12px]" />
-            {b.kind === 'block' ? blockText(entity.blockChunks) : `${b.label} ${entity.statuses[b.kind]}`}
-          </span>
+          <Tooltip key={b.kind} testId={`status-${entity.id}-${b.kind}`} content={<><b>{b.label}</b> — {b.meaning}</>}>
+            <span data-testid={b.kind === 'block' ? `block-${entity.id}` : undefined} className={`flex items-center gap-0.5 ${TONES[b.kind] ?? ''}`}>
+              <Icon name={ICONS[b.kind]} className="text-[12px]" />
+              {b.kind === 'block' ? blockText(entity.blockChunks) : `${b.label} ${entity.statuses[b.kind]}`}
+            </span>
+          </Tooltip>
         ))}
       </div>
       {states.length > 0 && (
         <div data-testid={`states-${entity.id}`} className="flex flex-wrap gap-1 font-ui text-[11px]">
-          {states.map((text) => (
-            <span key={text} className="rounded bg-tertiary/20 px-1 text-tertiary">
-              {text}
-            </span>
+          {states.map((s) => (
+            <Tooltip key={s.text} content={<><b>{s.text}</b> — {s.detail}</>}>
+              <span data-state className="rounded bg-tertiary/20 px-1 text-tertiary">
+                {s.text}
+              </span>
+            </Tooltip>
           ))}
         </div>
       )}

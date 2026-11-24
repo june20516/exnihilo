@@ -2,8 +2,12 @@ import { Tooltip } from './Tooltip'
 import { Icon } from './Icon'
 
 interface ControlPanelProps {
-  drawCount: number
-  discardCount: number
+  /** 서고: 단어별 장수(순서는 감춘다). */
+  drawPile: readonly { readonly text: string; readonly count: number }[]
+  /** 망각: 들어간 순서대로의 단어 문구. */
+  discardPile: readonly string[]
+  /** 서고가 바닥났을 때 못 뽑은 장수당 잃는 HP(규칙 값). */
+  emptyDrawHpLoss: number
   turn: number
   discardsLeft: number
   /** 버리기 모드에서 표시한 카드 수. 버리기 모드가 아니면 null. */
@@ -15,15 +19,38 @@ interface ControlPanelProps {
 
 /** 왼쪽 아래: 덱 상태와 버리기. */
 export function ControlPanel(props: ControlPanelProps) {
-  const { drawCount, discardCount, turn, discardsLeft, markedCount, disabled, onToggleDiscard, onConfirmDiscard } = props
+  const { drawPile, discardPile, emptyDrawHpLoss, turn, discardsLeft, markedCount, disabled, onToggleDiscard, onConfirmDiscard } = props
   const discarding = markedCount !== null
+  const drawCount = drawPile.reduce((sum, d) => sum + d.count, 0)
   return (
     <div className="flex w-56 shrink-0 flex-col gap-2">
       <div className="flex justify-between rounded-xl bg-surface-container px-3 py-2 font-ui text-xs text-on-surface-variant shadow-lg">
-        <Tooltip testId="pile-draw" content={`서고 ${drawCount}장`}>
+        <Tooltip
+          testId="pile-draw"
+          content={
+            <>
+              <b>서고</b> — 앞으로 뽑을 카드(순서는 모름)
+              <br />
+              {drawPile.length > 0
+                ? drawPile.map((d) => `${d.text} ×${d.count}`).join(', ')
+                : `비어 있음: 뽑아야 할 때 못 뽑은 장수마다 HP ${emptyDrawHpLoss}를 잃습니다.`}
+            </>
+          }
+        >
           <span>서고 {drawCount}</span>
         </Tooltip>
-        <span data-testid="discard-pile">망각 {discardCount}</span>
+        <Tooltip
+          testId="pile-discard"
+          content={
+            <>
+              <b>망각</b> — 쓰거나 버린 카드(들어간 순서). 저절로 서고로 돌아오지 않습니다.
+              <br />
+              {discardPile.length > 0 ? discardPile.join(' → ') : '비어 있음'}
+            </>
+          }
+        >
+          <span data-testid="discard-pile">망각 {discardPile.length}</span>
+        </Tooltip>
         <span data-testid="turn">턴 {turn}</span>
       </div>
       <button

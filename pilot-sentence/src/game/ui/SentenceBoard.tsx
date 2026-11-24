@@ -17,10 +17,12 @@ interface SentenceBoardProps {
   /** 선택한 카드를 연결어 칸에 놓을 수 있는가(강조 표시). */
   connectivePlaceable: boolean
   onConnectiveClick: () => void
+  /** 이 절의 목적어를 주어와 같아 생략하는가. */
+  omitsObject: (clause: number) => boolean
 }
 
 export function SentenceBoard(props: SentenceBoardProps) {
-  const { board, nameOf, selectedWordId, onHeadClick, onModifierClick, connective, connectivePlaceable, onConnectiveClick } = props
+  const { board, nameOf, selectedWordId, onHeadClick, onModifierClick, connective, connectivePlaceable, onConnectiveClick, omitsObject } = props
   return (
     <section
       className="flex min-h-0 flex-1 flex-col justify-center gap-3 rounded-xl bg-surface-container-low p-4 shadow-xl"
@@ -47,6 +49,7 @@ export function SentenceBoard(props: SentenceBoardProps) {
                 modifierPlaceable={selectedWordId !== null && active && canPlaceModifier(at, selectedWordId)}
                 onHeadClick={() => onHeadClick(at)}
                 onModifierClick={(index) => onModifierClick(at, index)}
+                omitted={slot.role === 'object' && omitsObject(clauseIndex)}
               />
             )
           })}

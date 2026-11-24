@@ -7,7 +7,12 @@ import { sentenceFormula } from '@/game/rally/formulaText'
 import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
 import { hasVerb, isBlank } from '@/game/rally/sentence'
-import { eventNotice, intentTexts, lingeringTexts, wordNamer } from '@/game/rally/text'
+import { pileContents } from '@/game/rally/summary'
+import { eventNotice, intentTexts, lingeringStates, omitsObject, wordNamer } from '@/game/rally/text'
+import { getWord } from '@/game/content/words'
+import { getSlot } from '@/game/sentence/board'
+import { cardSummary } from './describe'
+import { PLACED_DRAG_PREFIX } from './SlotView'
 import { Battlefield } from './Battlefield'
 import { CombatResult } from './CombatResult'
 import { ControlPanel } from './ControlPanel'
@@ -49,7 +54,12 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
   const formulas = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : []), [state])
   const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
-  const states = useMemo(() => (state.phase === 'player' ? lingeringTexts(state) : {}), [state])
+  const states = useMemo(() => {
+    if (state.phase !== 'player') return {}
+    const detailed = Object.entries(lingeringStates(state)).map(([id, list]) => [id, list.map((s) => ({ text: s.text, detail: cardSummary(s.wordId, state.build) }))])
+    return Object.fromEntries(detailed)
+  }, [state])
+  const piles = useMemo(() => pileContents(state), [state])
   const verbPlaced = hasVerb(state.board)
 
   /** 배치 이외의 행동: 선택과 버리기 표시를 풀고 보낸다. */
@@ -93,7 +103,28 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
     state.connective === null &&
     state.board.clauses.every((c) => c.slots.every((s) => isBlank(s.head) && s.modifiers.every((m) => m === null)))
 
+  /** 놓은 내 단어를 뺀다(고른 카드가 없을 때 누르거나, 판 밖으로 끌 때). */
+  const unplace = (at: SlotAddress, modifierIndex?: number) => run({ type: 'unplace', at, modifierIndex })
+  const placedAt = (at: SlotAddress, modifierIndex?: number) => {
+    const slot = getSlot(state.board, at)
+    const word = modifierIndex === undefined ? slot.head : slot.modifiers[modifierIndex]
+    return word?.owner === 'player'
+  }
+  const onSlotClick = (at: SlotAddress, modifierIndex?: number) => {
+    if (selectedCard) place(selectedCard.instanceId, at, modifierIndex)
+    else if (placedAt(at, modifierIndex)) unplace(at, modifierIndex)
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
+    const activeId = String(event.active.id)
+    if (activeId.startsWith(PLACED_DRAG_PREFIX)) {
+      // 놓은 단어를 끌었다: 판의 칸이 아닌 곳에 놓으면 뺀다. 칸 위면 그대로 둔다.
+      const from = parseDropId(activeId.slice(PLACED_DRAG_PREFIX.length))
+      const overSlot = event.over ? parseDropId(String(event.over.id)) !== null || String(event.over.id) === CONNECTIVE_DROP_ID : false
+      if (from && !overSlot) unplace(from.at, from.modifierIndex)
+      setSelectedId(null)
+      return
+    }
     if (event.over && String(event.over.id) === CONNECTIVE_DROP_ID) {
       connect(String(event.active.id))
       return
@@ -106,7 +137,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(e) => setSelectedId(String(e.active.id))}
+      onDragStart={(e) => setSelectedId(String(e.active.id).startsWith(PLACED_DRAG_PREFIX) ? null : String(e.active.id))}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setSelectedId(null)}
     >
@@ -125,8 +156,9 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
               board={state.board}
               nameOf={nameOf}
               selectedWordId={selectedCard?.wordId ?? null}
-              onHeadClick={(at) => selectedCard && place(selectedCard.instanceId, at)}
-              onModifierClick={(at, index) => selectedCard && place(selectedCard.instanceId, at, index)}
+              onHeadClick={(at) => onSlotClick(at)}
+              onModifierClick={(at, index) => onSlotClick(at, index)}
+              omitsObject={(clause) => omitsObject(state, clause)}
               connective={state.connective}
               connectivePlaceable={selectedCard !== null && state.connective === null && isConnectiveWord(selectedCard.wordId)}
               onConnectiveClick={onConnectiveClick}
@@ -159,8 +191,9 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
         </div>
         <section className="flex items-end gap-3 rounded-xl bg-surface-container-lowest p-2 shadow-2xl">
           <ControlPanel
-            drawCount={state.deck.drawPile.length}
-            discardCount={state.deck.discardPile.length}
+            drawPile={piles.draw.map((d) => ({ text: getWord(d.wordId).text, count: d.count }))}
+            discardPile={piles.discard.map((id) => getWord(id).text)}
+            emptyDrawHpLoss={piles.emptyDrawHpLoss}
             turn={state.turn}
             discardsLeft={state.discardsLeft}
             markedCount={marked ? marked.size : null}
@@ -173,6 +206,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
           />
           <Hand
             hand={state.deck.hand}
+            build={state.build}
             board={state.board}
             selectedId={selectedId}
             marked={marked}

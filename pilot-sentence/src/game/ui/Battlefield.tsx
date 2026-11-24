@@ -8,8 +8,8 @@ interface BattlefieldProps {
   targetId: string | null
   /** 적 id → 이번 턴 예고 문장. */
   intents: Readonly<Record<string, string>>
-  /** 개체별 형용사 상태 표시(rally/text의 lingeringTexts). */
-  states: Readonly<Record<string, readonly string[]>>
+  /** 개체별 형용사 상태 표시(문구와 효과). */
+  states: Readonly<Record<string, readonly { readonly text: string; readonly detail: string }[]>>
   /** 적을 눌러 대상을 바꾼다. 행동할 수 없을 때는 null. */
   onPickEnemy: ((entityId: string) => void) | null
 }

@@ -1,4 +1,4 @@
-import { useDroppable } from '@dnd-kit/core'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { ReactNode } from 'react'
 import type { SlotAddress } from '@/game/content/enemies'
 import { getWord } from '@/game/content/words'
@@ -19,6 +19,22 @@ interface SlotViewProps {
   modifierPlaceable: boolean
   onHeadClick: () => void
   onModifierClick: (index: number) => void
+  /** 지원 동사의 빈 목적어가 주어와 같아 문구에서 생략되는가(rally/text omitsObject). */
+  omitted?: boolean
+}
+
+/** 놓은 내 단어를 판 밖으로 끌면 뺀다. 드래그 id는 `placed:{dropId}`. */
+export const PLACED_DRAG_PREFIX = 'placed:'
+
+/** 놓은 내 단어만 끌 수 있게 감싼다. 클릭은 그대로 부모 버튼에 간다(6px 이상 움직여야 드래그). */
+function PlacedDraggable({ id, enabled, children }: { id: string; enabled: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `${PLACED_DRAG_PREFIX}${id}`, disabled: !enabled })
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 60 } : undefined
+  return (
+    <span ref={setNodeRef} style={style} {...attributes} {...listeners} role={undefined} tabIndex={undefined} className={`flex flex-col items-center ${isDragging ? 'opacity-70' : ''}`}>
+      {children}
+    </span>
+  )
 }
 
 export function Droppable({
@@ -37,7 +53,7 @@ const HEAD_LABELS = { player: '내 단어', enemy: '원문', implied: '생략', 
 export const HIGHLIGHT = 'ring-2 ring-secondary shadow-[0_0_16px_rgba(252,186,91,0.5)] cursor-pointer'
 
 export function SlotView(props: SlotViewProps) {
-  const { slot, address, active, nameOf, particle, headPlaceable, modifierPlaceable, onHeadClick, onModifierClick } =
+  const { slot, address, active, nameOf, particle, headPlaceable, modifierPlaceable, onHeadClick, onModifierClick, omitted = false } =
     props
   const headDef = getWord(slot.head.wordId)
   const slotId = `${address.clause}-${address.role}`
@@ -67,11 +83,11 @@ export function SlotView(props: SlotViewProps) {
                   } ${modifierPlaceable && active ? HIGHLIGHT : ''} ${isOver && modifierPlaceable ? 'scale-110' : ''}`}
                 >
                   {modifier && modifierDef ? (
-                    <>
+                    <PlacedDraggable id={dropId(address, index)} enabled={modifier.owner === 'player'}>
                       <span className={`font-card text-sm font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
                         {nameOf(modifier)}
                       </span>
-                    </>
+                    </PlacedDraggable>
                   ) : (
                     <span className="text-xs text-outline-variant">＋</span>
                   )}
@@ -98,20 +114,22 @@ export function SlotView(props: SlotViewProps) {
               } ${headPlaceable ? HIGHLIGHT : ''} ${isOver && headPlaceable ? 'scale-105' : ''}`}
             >
               {slot.sealed && <Icon name="lock" className="absolute right-1 top-1 text-[13px] text-secondary" />}
-              <span
-                className={`font-card text-xl font-black tracking-tight ${
-                  isVerb ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
-                } ${slot.head.owner === 'blank' ? 'opacity-40' : ''}`}
-              >
-                {nameOf(slot.head)}
-              </span>
-              <span className="flex items-center gap-1 font-ui text-[10px] text-on-surface-variant">
-                {HEAD_LABELS[slot.head.owner === 'blank' ? (isVerb ? 'emptyVerb' : 'implied') : slot.head.owner]}
-              </span>
+              <PlacedDraggable id={dropId(address, null)} enabled={slot.head.owner === 'player'}>
+                <span
+                  className={`font-card text-xl font-black tracking-tight ${
+                    isVerb ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
+                  } ${slot.head.owner === 'blank' ? 'opacity-40' : ''}`}
+                >
+                  {omitted ? '—' : nameOf(slot.head)}
+                </span>
+                <span className="flex items-center gap-1 font-ui text-[10px] text-on-surface-variant">
+                  {omitted ? '주어와 같아 생략' : HEAD_LABELS[slot.head.owner === 'blank' ? (isVerb ? 'emptyVerb' : 'implied') : slot.head.owner]}
+                </span>
+              </PlacedDraggable>
             </button>
           )}
         </Droppable>
-        {particle && active && (
+        {particle && active && !omitted && (
           <span
             data-testid={`particle-${slotId}`}
             className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high font-card text-lg font-bold text-secondary shadow-md"

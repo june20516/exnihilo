@@ -1,10 +1,19 @@
 import { useDraggable } from '@dnd-kit/core'
 import type { WordDef } from '@/game/content/words'
-import { describeWord } from './describe'
+import type { CardFacts } from './describe'
+import { Icon } from './Icon'
+import { ICONS, TONES } from './icons'
 import { KIND_LABELS, KIND_STYLES } from './wordStyle'
+
+/** 카드 색 계열(공격·지원·수식어 등)을 본문 윗선 색으로 보인다. */
+const TONE_BORDER: Readonly<Record<CardFacts['tone'], string>> = {
+  attack: 'border-error', support: 'border-tertiary', modifier: 'border-secondary', target: 'border-primary', other: 'border-outline-variant',
+}
 
 interface WordTileProps {
   def: WordDef
+  /** 카드 본문에 그릴 효과(강화 반영). */
+  facts: CardFacts
   instanceId: string
   selected: boolean
   /** 버리기 모드에서 버릴 카드로 표시됨. */
@@ -19,7 +28,7 @@ interface WordTileProps {
   testId?: string
 }
 
-export function WordTile({ def, instanceId, selected, marked, disabled, draggable, playable, onSelect, testId }: WordTileProps) {
+export function WordTile({ def, facts, instanceId, selected, marked, disabled, draggable, playable, onSelect, testId }: WordTileProps) {
   const style = KIND_STYLES[def.kind]
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: instanceId,
@@ -57,8 +66,20 @@ export function WordTile({ def, instanceId, selected, marked, disabled, draggabl
       <span data-word-text className={`text-center font-card text-lg font-black leading-tight tracking-tight ${style.text}`}>
         {def.text}
       </span>
-      <p className="rounded bg-surface-container-lowest/60 p-1 text-[11px] leading-tight text-on-surface-variant">
-        {describeWord(def)}
+      <p className={`flex flex-col gap-0.5 rounded border-t-2 bg-surface-container-lowest/60 p-1 text-[11px] leading-tight text-on-surface-variant ${TONE_BORDER[facts.tone]}`}>
+        {facts.facts.map((f, i) => (
+          <span key={i} className={`flex items-center gap-0.5 ${TONES[f.kind] ?? ''}`}>
+            <Icon name={ICONS[f.kind]} className="text-[12px]" />
+            <span className="truncate">{f.text}</span>
+          </span>
+        ))}
+        {facts.badges.length > 0 && (
+          <span className="flex flex-wrap gap-0.5">
+            {facts.badges.map((b) => (
+              <span key={b} className="rounded bg-surface-container-high px-1 text-[10px] text-on-surface">{b}</span>
+            ))}
+          </span>
+        )}
         {!playable && def.kind !== 'junk' && (
           <span className="mt-1 block text-error" data-testid="unplayable-note">
             이 문장에서는 쓸 수 없다

@@ -1,5 +1,5 @@
 import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
-import { getWord, type Lasts, LASTS_TEXT } from '@/game/content/words'
+import { getWord, type Lasts, LASTS_TEXT, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
@@ -135,24 +135,34 @@ export function intentTexts(
  * 개체별 형용사 상태 표시: 이미 남은 상태와, 지금 문장대로 낭독하면 남을 상태.
  * 낭독과 적 차례는 한 번에 처리되므로 화면은 "남을 상태"를 놓는 순간부터 보여 준다. 예: { e0: ['눈멂 ×2 · 적 차례까지'] }
  */
-export function lingeringTexts(state: RallyState): Record<string, string[]> {
+/** 개체에 남은(또는 이번 낭독으로 남을) 형용사 상태 하나: 표시 문구와, 그 상태를 만든 형용사. */
+export interface LingeringState {
+  readonly text: string
+  readonly wordId: WordId
+}
+
+/** 개체 id → 남은 형용사 상태들. 같은 상태 이름·같은 지속 시간끼리 묶어 센다. */
+export function lingeringStates(state: RallyState): Record<string, LingeringState[]> {
   const pending = hasVerb(state.board) ? runSentence(state).lingering : {}
   const ids = new Set([...Object.keys(state.lingering), ...Object.keys(pending)])
-  const texts: Record<string, string[]> = {}
+  const result: Record<string, LingeringState[]> = {}
   for (const id of ids) {
-    // 같은 상태 이름·같은 지속 시간끼리 묶어 센다.
-    const counts = new Map<string, { name: string; lasts: Lasts; n: number }>()
+    const counts = new Map<string, { name: string; lasts: Lasts; n: number; wordId: WordId }>()
     for (const wordId of [...(state.lingering[id] ?? []), ...(pending[id] ?? [])]) {
       const effect = wordLookup(state.build)(wordId).effect
       if (effect.type !== 'adjective' || !effect.stateName) continue
       const key = `${effect.stateName}|${effect.lasts}`
-      const entry = counts.get(key) ?? { name: effect.stateName, lasts: effect.lasts, n: 0 }
+      const entry = counts.get(key) ?? { name: effect.stateName, lasts: effect.lasts, n: 0, wordId }
       counts.set(key, { ...entry, n: entry.n + 1 })
     }
     if (counts.size === 0) continue
-    texts[id] = [...counts.values()].map(({ name, lasts, n }) => `${name}${n > 1 ? ` ×${n}` : ''} · ${LASTS_TEXT[lasts]}`)
+    result[id] = [...counts.values()].map(({ name, lasts, n, wordId }) => ({ text: `${name}${n > 1 ? ` ×${n}` : ''} · ${LASTS_TEXT[lasts]}`, wordId }))
   }
-  return texts
+  return result
+}
+
+export function lingeringTexts(state: RallyState): Record<string, string[]> {
+  return Object.fromEntries(Object.entries(lingeringStates(state)).map(([id, states]) => [id, states.map((s) => s.text)]))
 }
 
 const NOTICE_TYPES: ReadonlySet<string> = new Set(['rejected', 'emptyDraw', 'burned', 'recalled'])
