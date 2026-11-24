@@ -4,7 +4,6 @@ export const BALANCE_TARGETS = {
   greedyWinRate: [0.8, 1],
   greedyHpLostOnWin: [10, 30],
   avgTurns: [4, 7],
-  maxDeadTurnRate: 0.05,
   defendRate: [0.2, 0.6],
   /** 무작위 봇 승률은 탐욕 봇보다 이만큼 이상 낮아야 한다. */
   minGreedyEdge: 0.2,

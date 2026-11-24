@@ -1,4 +1,4 @@
-import { RALLY_STARTER_DECK } from './enemies'
+import { CHARACTERS, DEFAULT_CHARACTER } from './characters'
 import { getWord, type VerbAction, WORDS } from './words'
 
 test.each([
@@ -43,6 +43,6 @@ test('새 단어: 되받아친다·떠올린다·때린다', () => {
 })
 
 test('시작 덱: 물어뜯는다 2장과 되받아친다 1장', () => {
-  expect(RALLY_STARTER_DECK.filter((id) => id === 'counter')).toHaveLength(1)
-  expect(RALLY_STARTER_DECK.filter((id) => id === 'bite')).toHaveLength(2)
+  expect(CHARACTERS[DEFAULT_CHARACTER].starterDeck.filter((id) => id === 'counter')).toHaveLength(1)
+  expect(CHARACTERS[DEFAULT_CHARACTER].starterDeck.filter((id) => id === 'bite')).toHaveLength(2)
 })

@@ -1,5 +1,5 @@
+import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
-import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
 import { PLAYER_ID } from '@/game/content/characters'
@@ -15,7 +15,7 @@ const V = { clause: 0, role: 'verb' } as const
 const act = (s: RallyState, a: RallyAction) => reduceRally(s, a).state
 const FILLER: CardInst[] = Array.from({ length: 12 }, (_, i) => ({ instanceId: `f${i}`, wordId: 'bite' }))
 const withHand = (words: WordId[]): RallyState => ({
-  ...startRally('test-dummy', RALLY_STARTER_DECK, 1).state,
+  ...startRally('test-dummy', CHARACTERS[DEFAULT_CHARACTER].starterDeck, 1).state,
   // 서고를 넉넉히 두어 서고 바닥 대가(v3)가 미리보기에 끼어들지 않게 한다.
   deck: { drawPile: FILLER, discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
 })
@@ -63,7 +63,7 @@ describe('계산식', () => {
 })
 
 const RELIC_IDS: RelicId[] = ['longSentence', 'adjectiveChain', 'stress', 'ellipsis', 'scarecrowSpeaker', 'poisonGrammar', 'resonance', 'echo']
-const PROPERTY_DECK: WordId[] = [...RALLY_STARTER_DECK, 'and', 'so', 'while', 'giant', 'twice', 'curse']
+const PROPERTY_DECK: WordId[] = [...CHARACTERS[DEFAULT_CHARACTER].starterDeck, 'and', 'so', 'while', 'giant', 'twice', 'curse']
 
 /** 시드로 정한 무작위 빌드: 유물 0~3개, 강화 0~2개. */
 function randomBuild(seed: number): BuildState {
@@ -140,7 +140,7 @@ test.each(['spider', 'swarm', 'slime'])('계산식의 값은 절마다 실제 �
 })
 
 test('계산식은 강화를 반영한다: 물어뜯는다★ + 격렬하게★ → "9 × 2 = 18"', () => {
-  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, { build: { ...EMPTY_BUILD, upgrades: { bite: 1, fiercely: 1 } } }).state
+  const base = startRally('test-dummy', CHARACTERS[DEFAULT_CHARACTER].starterDeck, 1, { build: { ...EMPTY_BUILD, upgrades: { bite: 1, fiercely: 1 } } }).state
   let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'bite' }, { instanceId: 'h1', wordId: 'fiercely' }] } }
   s = act(s, { type: 'place', instanceId: 'h0', at: V })
   s = act(s, { type: 'place', instanceId: 'h1', at: V })
@@ -214,7 +214,7 @@ test('계산식: 값이 적의 남은 HP 이상이면 처치와 남은 HP를 밝
 })
 
 test('끌어안는다: 내 쪽 피해에는 유물 보너스가 붙고(되받는 피해는 그대로), 계산식도 보인다', () => {
-  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, { build: { ...EMPTY_BUILD, relics: ['ellipsis'] } }).state
+  const base = startRally('test-dummy', CHARACTERS[DEFAULT_CHARACTER].starterDeck, 1, { build: { ...EMPTY_BUILD, relics: ['ellipsis'] } }).state
   let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'embrace' }] } }
   s = act(s, { type: 'place', instanceId: 'h0', at: V })
   const hits = previewEvents(s).mine.filter((e) => e.type === 'damaged')
@@ -223,7 +223,7 @@ test('끌어안는다: 내 쪽 피해에는 유물 보너스가 붙고(되받는
 })
 
 test('계산식: 무효가 될 절은 값 대신 이유를 보인다(대상이 먼저 쓰러짐, 주어 빙결)', () => {
-  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1).state
+  const base = startRally('test-dummy', CHARACTERS[DEFAULT_CHARACTER].starterDeck, 1).state
   const hand: CardInst[] = [{ instanceId: 'h0', wordId: 'bite' }, { instanceId: 'h1', wordId: 'and' }, { instanceId: 'h2', wordId: 'bite' }]
   let s: RallyState = { ...base, entities: base.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 3 } : e)), deck: { drawPile: [], discardPile: [], hand } }
   s = act(s, { type: 'place', instanceId: 'h0', at: V })

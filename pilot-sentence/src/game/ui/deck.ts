@@ -1,4 +1,4 @@
-import { RALLY_STARTER_DECK } from '@/game/content/enemies'
+import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { WORDS, type WordId } from '@/game/content/words'
 
 export const DECK_LIMITS = { min: 12, max: 20 } as const
@@ -20,7 +20,7 @@ export function validateDeck(ids: readonly WordId[]): DeckValidation {
 
 /** 저장된 덱을 읽는다. 없거나 깨졌거나 무효면 시작 덱. */
 export function loadDeck(raw: string | null): WordId[] {
-  if (raw === null) return [...RALLY_STARTER_DECK]
+  if (raw === null) return [...CHARACTERS[DEFAULT_CHARACTER].starterDeck]
   try {
     const parsed: unknown = JSON.parse(raw)
     if (Array.isArray(parsed) && parsed.every((x): x is string => typeof x === 'string') && validateDeck(parsed).ok) {
@@ -29,5 +29,5 @@ export function loadDeck(raw: string | null): WordId[] {
   } catch {
     // 깨진 값은 시작 덱으로 대체한다
   }
-  return [...RALLY_STARTER_DECK]
+  return [...CHARACTERS[DEFAULT_CHARACTER].starterDeck]
 }

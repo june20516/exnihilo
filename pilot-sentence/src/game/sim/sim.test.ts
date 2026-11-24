@@ -62,12 +62,17 @@ test('탐욕 봇은 첫 턴에 아무것도 안 할 때보다 낫다(시드 합�
 test('combatMetrics: 비율과 0으로 나누기', () => {
   const s = game.start(1)
   expect(combatMetrics(s)).toMatchObject({ hpLost: 0, turns: 1, defendRate: 0, bestBurst: 0 })
-  const m = combatMetrics({ ...s, turn: 4, log: { ...s.log, casts: 4, defensiveCasts: 1, deadTurns: 1, bestBurst: 12 } })
-  expect(m).toMatchObject({ deadTurnRate: 0.25, defendRate: 0.25, bestBurst: 12 })
+  const m = combatMetrics({ ...s, turn: 4, log: { ...s.log, casts: 4, defensiveCasts: 1, basicVerbCasts: 2, bestBurst: 12 } })
+  expect(m).toMatchObject({ basicVerbRate: 0.5, defendRate: 0.25, bestBurst: 12 })
 })
 
 test('턴 지표: 선택지 다양성과 뻔한 최선 여부', () => {
   const m = combatTurnMetrics(game)(game.start(1))
   expect(m.choiceDiversity).toBeGreaterThanOrEqual(1)
   expect([0, 1]).toContain(m.obviousBest)
+})
+
+test('합법 행동에 기본 동사 배치가 들어 있다', () => {
+  const s = withHand(game.start(1), ['fiercely'])
+  expect(game.legalActions(s).map((a) => a.key)).toContain('place:strike@0:verb')
 })

@@ -1,7 +1,7 @@
+import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import type { SimGame } from '@/kit/sim/simulate'
-import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
-import { type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
+import { BASIC_VERB_INSTANCE, basicVerbAvailable, type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
 import { hasVerb } from '@/game/rally/sentence'
 
 /** 시뮬레이터용 행동: 엔진 행동과 집계 키(예: `place:bite@0:verb`). */
@@ -60,13 +60,14 @@ export function legalCombatActions(state: RallyState): SimCombatAction[] {
     if (enemy.side !== 'enemy' || enemy.hp <= 0 || enemy.id === state.targetId) continue
     actions.push({ action: { type: 'target', entityId: enemy.id }, key: `target:${enemy.id}` })
   }
+  if (basicVerbAvailable(state)) actions.push(...placementsFor(state, BASIC_VERB_INSTANCE, state.build.basicVerb))
   if (hasVerb(state.board)) actions.push({ action: { type: 'cast' }, key: 'cast' })
   return [...actions, END_TURN]
 }
 
 export function combatGame(
   encounterId: string,
-  deck: readonly WordId[] = RALLY_STARTER_DECK,
+  deck: readonly WordId[] = CHARACTERS[DEFAULT_CHARACTER].starterDeck,
 ): SimGame<RallyState, SimCombatAction> {
   return {
     start: (seed) => startRally(encounterId, deck, seed).state,

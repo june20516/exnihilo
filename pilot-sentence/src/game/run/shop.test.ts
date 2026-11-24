@@ -1,10 +1,10 @@
+import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { createRng } from '@/kit/core/rng'
 import { applyStructure, type BuildState, EMPTY_BUILD, type RelicId } from '@/game/build/build'
-import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { getWord } from '@/game/content/words'
 import { buyFrom, priceOf, rollShop, type ShopState, WORD_POOL } from './shop'
 
-const roll = (seed: number, build = EMPTY_BUILD, deck = RALLY_STARTER_DECK) => rollShop(createRng(seed), deck, build)[0]
+const roll = (seed: number, build = EMPTY_BUILD, deck = CHARACTERS[DEFAULT_CHARACTER].starterDeck) => rollShop(createRng(seed), deck, build)[0]
 
 test('진열 3개는 종류가 서로 다르다(시드 50개)', () => {
   for (let seed = 1; seed <= 50; seed++) {
@@ -42,7 +42,7 @@ test('구매마다 남은 값 ×1.5 올림: 8 → 12 → 18', () => {
 })
 
 test('강화할 단어가 없으면 강화는 나오지 않는다', () => {
-  const upgrades = Object.fromEntries(RALLY_STARTER_DECK.map((id) => [id, 2 as const]))
+  const upgrades = Object.fromEntries(CHARACTERS[DEFAULT_CHARACTER].starterDeck.map((id) => [id, 2 as const]))
   for (let seed = 1; seed <= 30; seed++) {
     expect(roll(seed, { ...EMPTY_BUILD, upgrades }).items.some((i) => i.offer.kind === 'upgrade')).toBe(false)
   }
@@ -52,7 +52,7 @@ test('강화 보상은 내 덱의 동사·수식어 중 2단계 미만', () => {
   for (let seed = 1; seed <= 30; seed++) {
     for (const item of roll(seed, { ...EMPTY_BUILD, upgrades: { bite: 2 } }).items) {
       if (item.offer.kind === 'upgrade') {
-        expect(RALLY_STARTER_DECK).toContain(item.offer.wordId)
+        expect(CHARACTERS[DEFAULT_CHARACTER].starterDeck).toContain(item.offer.wordId)
         expect(item.offer.wordId).not.toBe('bite')
       }
     }

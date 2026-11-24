@@ -1,3 +1,4 @@
+import { type CharacterDef, CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { RALLY_RULES, UPGRADE_RULES } from '@/game/content/balance'
 import { type AdjectiveMod, type AdverbMod, getWord, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
@@ -12,20 +13,27 @@ export interface BuildState {
   readonly slots: Readonly<Record<SlotRole, number>>
   readonly handMax: number
   readonly discardsPerTurn: number
-  /** 단어 종류별 강화 단계. */
-  /** 1 이상 UPGRADE_RULES.maxLevel 이하. */
+  /** 단어 종류별 강화 단계(1 이상 UPGRADE_RULES.maxLevel 이하). */
   readonly upgrades: Readonly<Record<WordId, number>>
   readonly relics: readonly RelicId[]
+  /** 손패 밖 고정 타일로 쓰는 기본 동사(캐릭터가 정한다). */
+  readonly basicVerb: WordId
 }
 
-/** 빈 빌드: 기본 랠리와 같은 값. */
-export const EMPTY_BUILD: BuildState = {
-  slots: { subject: 2, object: 2, verb: 2 },
-  handMax: 6,
-  discardsPerTurn: 1,
-  upgrades: {},
-  relics: [],
+/** 캐릭터 정의에서 시작 빌드를 만든다. */
+export function buildFor(character: CharacterDef): BuildState {
+  return {
+    slots: character.slots,
+    handMax: character.handMax,
+    discardsPerTurn: character.discardsPerTurn,
+    upgrades: {},
+    relics: [],
+    basicVerb: character.basicVerb,
+  }
 }
+
+/** 기본 캐릭터의 시작 빌드(기본 랠리와 테스트가 쓴다). */
+export const EMPTY_BUILD: BuildState = buildFor(CHARACTERS[DEFAULT_CHARACTER])
 
 
 const SLOT_OF: Partial<Record<StructureId, SlotRole>> = { subjectSlot: 'subject', objectSlot: 'object', verbSlot: 'verb' }

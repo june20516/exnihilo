@@ -1,3 +1,4 @@
+import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 /**
  * 한 방 천장 분석: 지금의 카드·강화·유물·구조로 한 번의 낭독이 어디까지 커질 수 있는가.
  *
@@ -18,7 +19,6 @@ import { RELICS, relicEffects } from '@/game/build/relics'
 import { hooksFromEffects } from '@/game/rally/hooks'
 import { VULNERABLE_MULTIPLIER } from '@/kit/core/entity'
 import { RALLY_RULES, RUN_RULES, UPGRADE_RULES } from '@/game/content/balance'
-import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { type AdjectiveMod, type AdverbMod, getWord, type WordId } from '@/game/content/words'
 import { FLOORS } from '@/game/run/floors'
 import { buyFrom, type Offer, priceOf, rollShop, type ShopState, STRUCTURES, WORD_POOL } from '@/game/run/shop'
@@ -186,7 +186,7 @@ function clauseBurst(cfg: ClauseCfg, ctx: ClauseContext, build: BuildState): num
   const object = slotStats(borrowed ? [...cfg.object, ...borrowed.object] : cfg.object, build)
   const adverbs = adverbStats(borrowed ? [...cfg.adverbs, ...borrowed.adverbs] : cfg.adverbs, build)
   const { damage, selfLoss } = verbDamage(cfg.verb, build)
-  if (Math.floor(selfLoss * adverbs.power) >= RALLY_RULES.playerMaxHp) return -1
+  if (Math.floor(selfLoss * adverbs.power) >= CHARACTERS[DEFAULT_CHARACTER].maxHp) return -1
   if (damage === 0) return 0
   const base = damage + ctx.damageBonus
   const outgoing = (base * adverbs.power + ctx.strength + subject.outFlat) * subject.outMul
@@ -414,19 +414,20 @@ console.log('연결어: 그리고 = 두 절 · 그래서 = 절 1 피해 절반�
 
 // 2. 시작 덱
 section('2. 시작 덱 (구매 0)')
-const starter = deckCeiling(RALLY_STARTER_DECK, EMPTY_BUILD)
+const starter = deckCeiling(CHARACTERS[DEFAULT_CHARACTER].starterDeck, EMPTY_BUILD)
 console.log(`덱 전체에서 최고: ${starter.burst}  ${describe(starter)}`)
-const starterHands = handSamples(RALLY_STARTER_DECK, EMPTY_BUILD, 400, createRng(7))
+const starterHands = handSamples(CHARACTERS[DEFAULT_CHARACTER].starterDeck, EMPTY_BUILD, 400, createRng(7))
 console.log(`손패 8장 한 번: 중앙 ${quantile(starterHands, 0.5)} · 상위 25% ${quantile(starterHands, 0.75)} · 최대 ${Math.max(...starterHands)}`)
 
 // 3. 이론 천장: 모든 단어 4장, 모든 강화 2단계, 모든 유물, 칸 4/4/4, 손패 상한별
 section('3. 이론 천장 (모든 단어 4장 · 모두 2단계 강화 · 유물 8종 · 칸 4/4/4)')
 const everything = WORD_POOL.flatMap((id) => [id, id, id, id])
 const maxBuild: BuildState = {
+  ...EMPTY_BUILD,
   slots: { subject: RALLY_RULES.maxSlots, object: RALLY_RULES.maxSlots, verb: RALLY_RULES.maxSlots },
+  // 분석 시나리오: 손패 8장(손패 구조를 두 번 산 경우).
   handMax: 8,
-  discardsPerTurn: 1,
-  upgrades: Object.fromEntries(WORD_POOL.map((id) => [id, 2 as const])),
+  upgrades: Object.fromEntries(WORD_POOL.map((id) => [id, UPGRADE_RULES.maxLevel])),
   relics: Object.keys(RELICS) as RelicId[],
 }
 const theoretical = bestSentence(toCounts(everything), maxBuild, maxBuild.handMax)
@@ -439,9 +440,9 @@ for (const handMax of [10, 13]) {
 // 4. 마음대로 고르는 상점(탐욕): 매 구매마다 천장을 가장 많이 올리는 것
 section('4. 마음대로 고르는 상점 — 구매할 때마다 천장을 가장 올리는 것을 산다 (상점 운 무시)')
 console.log('구매  누적 기본가   천장  (산 것)  → 문장')
-let greedyFinal: { deck: WordId[]; build: BuildState } = { deck: [...RALLY_STARTER_DECK], build: EMPTY_BUILD }
+let greedyFinal: { deck: WordId[]; build: BuildState } = { deck: [...CHARACTERS[DEFAULT_CHARACTER].starterDeck], build: EMPTY_BUILD }
 {
-  let deck: WordId[] = [...RALLY_STARTER_DECK]
+  let deck: WordId[] = [...CHARACTERS[DEFAULT_CHARACTER].starterDeck]
   let build = EMPTY_BUILD
   let spent = 0
   for (let n = 1; n <= 12; n++) {
@@ -499,7 +500,7 @@ const purchaseCounts: number[] = []
 let exampleShown = 0
 for (let seed = 1001; seed < 1001 + RUNS; seed++) {
   let rng = createRng(seed)
-  let state: Purchase = { deck: [...RALLY_STARTER_DECK], build: EMPTY_BUILD, gold: 0, bought: [] }
+  let state: Purchase = { deck: [...CHARACTERS[DEFAULT_CHARACTER].starterDeck], build: EMPTY_BUILD, gold: 0, bought: [] }
   for (const floor of FLOORS.slice(0, -1)) {
     state = { ...state, gold: state.gold + RUN_RULES.rewardGold[floor.tier] }
     const [shop, next] = rollShop(rng, state.deck, state.build)

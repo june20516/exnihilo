@@ -2,20 +2,20 @@ import { isAlive, loseHp } from '@/kit/core/entity'
 import { shuffle } from '@/kit/core/rng'
 import { RALLY_RULES } from '@/game/content/balance'
 import { PLAYER_ID } from '@/game/content/characters'
-import { getWord } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
 import type { PlacedWord } from '@/game/sentence/board'
 import type { CardInst, RallyResult as Result, RallyState } from './combat'
 
+/** 손패 밖 기본 동사 타일의 instanceId. 판에 놓여도 손패·서고·망각 어디에도 들어가지 않는다. */
+export const BASIC_VERB_INSTANCE = 'basic'
+
 /** 카드 흐름: 판의 단어를 카드로 되돌리기, 손패의 동사 확인, 드로우. */
 
 export function cardsFrom(words: readonly PlacedWord[]): CardInst[] {
-  return words.flatMap((w) => (w.owner === 'player' && w.instanceId ? [{ instanceId: w.instanceId, wordId: w.wordId }] : []))
+  // 기본 동사 타일은 카드가 아니므로 돌려주지 않는다(제자리로 돌아간다).
+  return words.flatMap((w) => (w.owner === 'player' && w.instanceId && w.instanceId !== BASIC_VERB_INSTANCE ? [{ instanceId: w.instanceId, wordId: w.wordId }] : []))
 }
 
-export function handHasVerb(hand: readonly CardInst[]): boolean {
-  return hand.some((c) => getWord(c.wordId).effect.type === 'verb')
-}
 
 /**
  * 서고에서 한 장씩 뽑는다. 망각은 저절로 돌아오지 않는다(v3 규칙 spec §3.2).

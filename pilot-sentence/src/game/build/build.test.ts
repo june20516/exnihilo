@@ -7,7 +7,7 @@ const damageOf = (def: WordDef) => (def.effect.type === 'verb' ? def.effect.acti
 const modsOf = (def: WordDef) => (def.effect.type === 'adjective' || def.effect.type === 'adverb' ? def.effect.mods : [])
 
 test('EMPTY_BUILD는 기본 랠리 값', () => {
-  expect(EMPTY_BUILD).toEqual({ slots: { subject: 2, object: 2, verb: 2 }, handMax: 6, discardsPerTurn: 1, upgrades: {}, relics: [] })
+  expect(EMPTY_BUILD).toEqual({ slots: { subject: 2, object: 2, verb: 2 }, handMax: 6, discardsPerTurn: 1, upgrades: {}, relics: [], basicVerb: 'strike' })
 })
 
 test('칸은 4에서 멈추고, 손패·버리기는 1씩 오른다', () => {

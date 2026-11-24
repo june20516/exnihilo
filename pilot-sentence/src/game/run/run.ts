@@ -1,12 +1,12 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import type { Reduced } from '@/kit/core/reduced'
-import { applyStructure, type BuildState, EMPTY_BUILD, withUpgrade } from '@/game/build/build'
-import { RALLY_RULES, RUN_RULES } from '@/game/content/balance'
-import { type EncounterTier, RALLY_STARTER_DECK } from '@/game/content/enemies'
+import { applyStructure, type BuildState, buildFor, withUpgrade } from '@/game/build/build'
+import { RUN_RULES } from '@/game/content/balance'
+import { type EncounterTier } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import { type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
-import { PLAYER_ID } from '@/game/content/characters'
+import { type CharacterId, CHARACTERS, DEFAULT_CHARACTER, PLAYER_ID } from '@/game/content/characters'
 import { FIXED_ENCOUNTERS, FLOORS, goldFor, NORMAL_ENCOUNTERS } from './floors'
 import { buyFrom, type Offer, rollShop, type ShopState } from './shop'
 
@@ -25,6 +25,7 @@ export interface RunLog {
 
 export interface RunState {
   readonly seed: number
+  readonly characterId: CharacterId
   /** 1..7 */
   readonly floor: number
   readonly phase: 'combat' | 'shop' | 'won' | 'lost'
@@ -84,6 +85,7 @@ function startFloor(state: RunState): Result {
   }
   const [combatSeed, afterSeed] = nextInt(rng, 1, SEED_MAX)
   const started = startRally(encounterId, state.deck, combatSeed, {
+    character: CHARACTERS[state.characterId],
     build: state.build,
     playerHp: state.hp,
     playerMaxHp: state.maxHp,
@@ -95,16 +97,18 @@ function startFloor(state: RunState): Result {
   }
 }
 
-export function startRun(seed: number, deck: readonly WordId[] = RALLY_STARTER_DECK): Result {
+export function startRun(seed: number, characterId: CharacterId = DEFAULT_CHARACTER): Result {
+  const character = CHARACTERS[characterId]
   const initial: RunState = {
     seed,
     floor: 1,
     phase: 'combat',
-    hp: RALLY_RULES.playerMaxHp,
-    maxHp: RALLY_RULES.playerMaxHp,
+    characterId,
+    hp: character.maxHp,
+    maxHp: character.maxHp,
     gold: 0,
-    deck,
-    build: EMPTY_BUILD,
+    deck: character.starterDeck,
+    build: buildFor(character),
     combat: null,
     shop: null,
     rng: createRng(seed),

@@ -12,11 +12,13 @@ export const OBVIOUS_GAP = 10
 /** 전투가 끝난 시점의 지표 (v2 spec §7). */
 export function combatMetrics(state: RallyState): Record<string, number> {
   const player = state.entities.find((e) => e.id === PLAYER_ID)
-  const { casts, defensiveCasts, deadTurns, bestBurst } = state.log
+  const { casts, defensiveCasts, basicVerbCasts, emptyDrawHpLost, recalledCards, bestBurst } = state.log
   return {
     hpLost: player ? player.maxHp - player.hp : 0,
     turns: state.turn,
-    deadTurnRate: deadTurns / state.turn,
+    basicVerbRate: casts === 0 ? 0 : basicVerbCasts / casts,
+    emptyDrawHpLost,
+    recalledCards,
     defendRate: casts === 0 ? 0 : defensiveCasts / casts,
     bestBurst,
   }

@@ -1,9 +1,10 @@
+import type { SlotAddress } from '@/game/content/enemies'
 import { addBlock } from '@/kit/core/entity'
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import type { WordId } from '@/game/content/words'
 import { getSlot, playerWordsOnBoard } from '@/game/sentence/board'
 import { applyStructure, type BuildState, EMPTY_BUILD } from '@/game/build/build'
-import { type CardInst, type RallyAction, type RallyOptions, type RallyState, reduceRally, startRally } from './combat'
+import { BASIC_VERB_INSTANCE, basicVerbAvailable, type CardInst, type RallyAction, type RallyOptions, type RallyState, reduceRally, startRally } from './combat'
 import { hasVerb } from './sentence'
 import './testFixtures'
 
@@ -151,8 +152,6 @@ test('기록: 낭독 수, 방어 낭독 수, 최대 한 방, 동사 없는 턴',
   expect(afterBite.log).toMatchObject({ casts: 1, defensiveCasts: 0, bestBurst: 6 })
   const afterGuard = castVerb(afterBite, 'guard').state
   expect(afterGuard.log).toMatchObject({ casts: 2, defensiveCasts: 1, bestBurst: 6 })
-  const noVerbs = act(withHand(start(), ['fiercely'], cards(['hungry'], 'd')), { type: 'endTurn' }).state
-  expect(noVerbs.log.deadTurns).toBe(1)
 })
 
 test('최대 한 방은 적의 남은 HP에 잘리지 않은 문장의 위력이다', () => {
@@ -169,7 +168,7 @@ test('최대 한 방은 적의 남은 HP에 잘리지 않은 문장의 위력이
 test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 동안 내 카드 instanceId 집합이 변하지 않는다(연결어·봉인 포함): %s', (encounterId) => {
   const ids = (s: RallyState) =>
     [...s.deck.hand, ...s.deck.drawPile, ...s.deck.discardPile].map((c) => c.instanceId)
-      .concat(playerWordsOnBoard(s.board).flatMap((w) => (w.instanceId ? [w.instanceId] : [])))
+      .concat(playerWordsOnBoard(s.board).flatMap((w) => (w.instanceId && w.instanceId !== BASIC_VERB_INSTANCE ? [w.instanceId] : [])))
       .concat(s.connective?.instanceId ? [s.connective.instanceId] : [])
       .sort()
   let s = startRally(encounterId, [...DECK, 'and', 'so'], 123).state
@@ -179,8 +178,9 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
   const roles = ['subject', 'object', 'verb'] as const
   let connected = 0
   let sealed = 0
+  let basicPlaced = 0
   for (let i = 0; i < 200 && s.phase === 'player'; i++) {
-    const [kind, r1] = nextInt(rng, 0, 7)
+    const [kind, r1] = nextInt(rng, 0, 8)
     const [pick, r2] = nextInt(r1, 0, Math.max(0, s.deck.hand.length - 1))
     const [roleIndex, r3] = nextInt(r2, 0, 2)
     const [mod, r4] = nextInt(r3, -1, 1)
@@ -198,8 +198,10 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
       { type: 'target', entityId: 'e1' },
       card ? { type: 'connect', instanceId: card.instanceId } : { type: 'clear' },
       { type: 'disconnect' },
+      { type: 'place', instanceId: BASIC_VERB_INSTANCE, at: { clause, role: 'verb' } },
     ]
     s = act(s, actions[kind]).state
+    if (playerWordsOnBoard(s.board).some((w) => w.instanceId === BASIC_VERB_INSTANCE)) basicPlaced++
     expect(ids(s)).toEqual(expected)
     if (s.connective) connected++
     if (s.board.clauses.some((c) => c.slots.some((slot) => slot.sealed))) sealed++
@@ -207,6 +209,7 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
   // 속성이 헛돌지 않도록: 연결어는 실제로 놓였고, 봉인 조우에서는 봉인이 실제로 걸렸다.
   expect(connected).toBeGreaterThan(0)
   if (encounterId === 'test-seal') expect(sealed).toBeGreaterThan(0)
+  expect(basicPlaced).toBeGreaterThan(0)
   expect(getSlot(s.board, V)).toBeDefined()
 })
 
@@ -315,5 +318,52 @@ describe('v3 전투 흐름: 손패 채우기, 망각 비순환, 서고 바닥 �
     expect(block(once, 'e0')).toBe(8)
     const twice = act(once, { type: 'endTurn' }).state
     expect(block(twice, 'e0')).toBe(0)
+  })
+})
+
+describe('기본 동사', () => {
+  const base = () => withHand(start(), ['fiercely', 'and', 'bite'], FILLER)
+  const placeBasic = (s: RallyState, at: SlotAddress = V) => act(s, { type: 'place', instanceId: BASIC_VERB_INSTANCE, at })
+  const allCards = (s: RallyState) => [...s.deck.hand, ...s.deck.drawPile, ...s.deck.discardPile]
+
+  test('기본 동사는 손패 밖에서 동사 칸에 놓이고, 낭독 뒤 망각에 들어가지 않는다', () => {
+    const s = base()
+    const placed = placeBasic(s)
+    expect(placed.events[0]).toMatchObject({ type: 'placed', wordId: 'strike' })
+    expect(placed.state.deck.hand).toHaveLength(3)
+    const r = act(placed.state, { type: 'cast' })
+    expect(hp(r.state, 'e0')).toBe(27)
+    expect(allCards(r.state).some((c) => c.instanceId === BASIC_VERB_INSTANCE)).toBe(false)
+    expect(allCards(r.state)).toHaveLength(allCards(s).length)
+  })
+
+  test('기본 동사는 한 낭독에 한 번만 놓을 수 있다', () => {
+    let s = placeBasic(base()).state
+    s = act(s, { type: 'connect', instanceId: 'h1' }).state
+    expect(placeBasic(s, { clause: 1, role: 'verb' }).events[0]).toMatchObject({ type: 'rejected', reason: 'unplayable' })
+    expect(basicVerbAvailable(s)).toBe(false)
+  })
+
+  test('기본 동사는 턴 종료·비우기·연결어 빼기 뒤 다시 놓을 수 있다', () => {
+    const placed = placeBasic(base()).state
+    expect(basicVerbAvailable(act(placed, { type: 'endTurn' }).state)).toBe(true)
+    expect(basicVerbAvailable(act(placed, { type: 'clear' }).state)).toBe(true)
+    let two = act(base(), { type: 'connect', instanceId: 'h1' }).state
+    two = placeBasic(two, { clause: 1, role: 'verb' }).state
+    const back = act(two, { type: 'disconnect' }).state
+    expect(basicVerbAvailable(back)).toBe(true)
+    expect(allCards(back).some((c) => c.instanceId === BASIC_VERB_INSTANCE)).toBe(false)
+  })
+
+  test('기본 동사를 놓은 낭독은 basicVerbCasts를 센다', () => {
+    const r = act(placeBasic(base()).state, { type: 'cast' })
+    expect(r.state.log.basicVerbCasts).toBe(1)
+  })
+
+  test('밀려난 기본 동사는 손패로 들어가지 않는다', () => {
+    const placed = placeBasic(base()).state
+    const replaced = act(placed, { type: 'place', instanceId: 'h2', at: V }).state
+    expect(replaced.deck.hand.some((c) => c.instanceId === BASIC_VERB_INSTANCE)).toBe(false)
+    expect(basicVerbAvailable(replaced)).toBe(true)
   })
 })

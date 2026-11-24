@@ -1,17 +1,16 @@
-import { PLAYER_DEF_ID, PLAYER_ID } from '@/game/content/characters'
-import { type BuildState, EMPTY_BUILD, wordLookup } from '@/game/build/build'
+import { type CharacterDef, CHARACTERS, DEFAULT_CHARACTER, PLAYER_DEF_ID, PLAYER_ID } from '@/game/content/characters'
+import { buildFor, type BuildState, wordLookup } from '@/game/build/build'
 import { createEntity, type Entity } from '@/kit/core/entity'
 import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
-import { RALLY_RULES } from '@/game/content/balance'
 import type { SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { ClauseHooks, ResolvedClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
 import { enemyDamageTaken, isAliveEnemy, outcomeOf, runClause } from './clauseRun'
-import { cardsFrom, drawCards, recallCards } from './deckFlow'
+import { BASIC_VERB_INSTANCE, cardsFrom, drawCards, recallCards } from './deckFlow'
 import { enemyPhase, getEncounter, startPlayerTurn } from './enemyTurn'
 import { clauseHooks, connectiveMode, materializeFor, returnsFirstVerb, soBonusFrom } from './hooks'
 import { blankClause, blankSentence, firstAliveEnemy, hasVerb, isDefensiveVerb } from './sentence'
@@ -24,8 +23,8 @@ export interface CardInst extends CardInstance {
 export interface RallyLog {
   readonly casts: number
   readonly defensiveCasts: number
-  /** 턴 시작 손패에 동사가 하나도 없던 턴 수. */
-  readonly deadTurns: number
+  /** 기본 동사를 놓은 낭독 수. */
+  readonly basicVerbCasts: number
   /** 서고가 바닥나 잃은 HP의 합. */
   readonly emptyDrawHpLost: number
   /** 떠올리기로 망각에서 서고로 옮긴 카드 수의 합. */
@@ -72,6 +71,8 @@ export interface EnemyScale {
 
 /** 런이 전투를 시작할 때 넘기는 값. 비어 있으면 기본 랠리와 같다. */
 export interface RallyOptions {
+  /** 플레이어 캐릭터. 기본은 DEFAULT_CHARACTER. 이름·최대 HP·(build가 없을 때) 시작 빌드를 정한다. */
+  readonly character?: CharacterDef
   readonly build?: BuildState
   readonly playerHp?: number
   readonly playerMaxHp?: number
@@ -203,10 +204,11 @@ export function startRally(
   options: RallyOptions = {},
 ): Result {
   const encounter = getEncounter(encounterId)
-  const build = options.build ?? EMPTY_BUILD
+  const character = options.character ?? CHARACTERS[DEFAULT_CHARACTER]
+  const build = options.build ?? buildFor(character)
   const enemyScale = options.enemyScale ?? { hp: 1, damage: 1 }
-  const maxHp = options.playerMaxHp ?? RALLY_RULES.playerMaxHp
-  const player = { ...createEntity({ id: PLAYER_ID, defId: PLAYER_DEF_ID, name: '탐험가', side: 'ally', hp: maxHp }), hp: options.playerHp ?? maxHp }
+  const maxHp = options.playerMaxHp ?? character.maxHp
+  const player = { ...createEntity({ id: PLAYER_ID, defId: PLAYER_DEF_ID, name: character.name, side: 'ally', hp: maxHp }), hp: options.playerHp ?? maxHp }
   const enemies = encounter.enemies.map((spec, index) =>
     createEntity({
       id: `e${index}`, defId: spec.defId, name: spec.name, side: 'enemy', hp: Math.round(spec.hp * enemyScale.hp), row: spec.row,
@@ -226,7 +228,7 @@ export function startRally(
     executions: 0,
     rng,
     nextId: cards.length,
-    log: { casts: 0, defensiveCasts: 0, deadTurns: 0, emptyDrawHpLost: 0, recalledCards: 0, bestBurst: 0 },
+    log: { casts: 0, defensiveCasts: 0, basicVerbCasts: 0, emptyDrawHpLost: 0, recalledCards: 0, bestBurst: 0 },
     build,
     enemyScale,
     connective: null,
@@ -240,12 +242,24 @@ function reject(state: RallyState, reason: RejectReason, at: SlotAddress | null 
   return { state, events: [{ type: 'rejected', reason, at }] }
 }
 
+export { BASIC_VERB_INSTANCE }
+
+/** 기본 동사를 지금 놓을 수 있는가: 판(모든 절)에 아직 없을 때. */
+export function basicVerbAvailable(state: RallyState): boolean {
+  return !playerWordsOnBoard(state.board).some((w) => w.instanceId === BASIC_VERB_INSTANCE)
+}
+
 function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }>): Result {
   const { at } = action
-  const card = state.deck.hand.find((c) => c.instanceId === action.instanceId)
+  const isBasic = action.instanceId === BASIC_VERB_INSTANCE
+  if (isBasic && !basicVerbAvailable(state)) return reject(state, 'unplayable', at)
+  const card: CardInst | undefined = isBasic
+    ? { instanceId: BASIC_VERB_INSTANCE, wordId: state.build.basicVerb }
+    : state.deck.hand.find((c) => c.instanceId === action.instanceId)
   if (!card) return reject(state, 'unplayable', at)
   const def = getWord(card.wordId)
-  if (def.kind === 'junk' || def.enemyOnly) return reject(state, 'unplayable', at)
+  // 기본 동사는 덱에 섞이지 않게 enemyOnly로 정의하므로, 그 경우만 enemyOnly 검사를 건너뛴다.
+  if (def.kind === 'junk' || (def.enemyOnly && !isBasic)) return reject(state, 'unplayable', at)
   if (!state.board.clauses[at.clause]) return reject(state, 'slotInactive', at)
   if (getSlot(state.board, at).sealed) return reject(state, 'slotSealed', at)
 
@@ -259,7 +273,7 @@ function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }
   const placed: PlacedWord = { wordId: card.wordId, owner: 'player', instanceId: card.instanceId, targetEntityId }
   const result = placeWord(state.board, at, placed, action.modifierIndex)
   if (!result.ok) return reject(state, result.reason, at)
-  const taken = takeFromHand(state.deck, card.instanceId)
+  const taken = isBasic ? { deck: state.deck } : takeFromHand(state.deck, card.instanceId)
   if (!taken) return reject(state, 'unplayable', at)
   // 밀려난 내 카드는 손패로 돌아간다(문장을 고쳐 짓는 중이므로).
   const deck = { ...taken.deck, hand: [...taken.deck.hand, ...cardsFrom(result.displaced)] }
@@ -356,6 +370,7 @@ function cast(state: RallyState): Result {
       ...executed.state.log,
       casts: executed.state.log.casts + 1,
       defensiveCasts: executed.state.log.defensiveCasts + (isDefensiveVerb(verbId) ? 1 : 0),
+      basicVerbCasts: executed.state.log.basicVerbCasts + (basicVerbAvailable(state) ? 0 : 1),
       recalledCards: executed.state.log.recalledCards + recalledCount,
       bestBurst: Math.max(executed.state.log.bestBurst, power),
     },

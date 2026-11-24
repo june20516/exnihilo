@@ -1,11 +1,12 @@
+import { CHARACTERS, DEFAULT_CHARACTER } from './characters'
 import { FRAMES } from '@/game/grammar/frames'
-import { RALLY_ENCOUNTERS, RALLY_STARTER_DECK } from './enemies'
+import { RALLY_ENCOUNTERS } from './enemies'
 import { getWord, WORDS } from './words'
 
 test('시작 덱은 15장, 모두 플레이어용 단어, 동사 10장', () => {
-  expect(RALLY_STARTER_DECK).toHaveLength(15)
-  for (const id of RALLY_STARTER_DECK) expect(getWord(id).enemyOnly).toBe(false)
-  expect(RALLY_STARTER_DECK.filter((id) => getWord(id).effect.type === 'verb')).toHaveLength(10)
+  expect(CHARACTERS[DEFAULT_CHARACTER].starterDeck).toHaveLength(15)
+  for (const id of CHARACTERS[DEFAULT_CHARACTER].starterDeck) expect(getWord(id).enemyOnly).toBe(false)
+  expect(CHARACTERS[DEFAULT_CHARACTER].starterDeck.filter((id) => getWord(id).effect.type === 'verb')).toHaveLength(10)
 })
 
 test('플레이어 카드 풀은 32장 이상, 요소별로 5장 이상', () => {

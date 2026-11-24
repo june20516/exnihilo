@@ -1,7 +1,7 @@
+import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { useState } from 'react'
 import { PLAYER_POOL, type WordDef, type WordId } from '@/game/content/words'
 import type { WordKind } from '@/game/grammar/frames'
-import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { describeWord } from './describe'
 import { DECK_LIMITS, validateDeck } from './deck'
 import { KIND_LABELS, KIND_STYLES } from './wordStyle'
@@ -99,7 +99,7 @@ export function DeckEditor({ deck, onSave, onClose }: DeckEditorProps) {
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            onClick={() => setDraft([...RALLY_STARTER_DECK])}
+            onClick={() => setDraft([...CHARACTERS[DEFAULT_CHARACTER].starterDeck])}
             className="rounded-lg bg-surface-container-high px-4 py-2 text-sm"
           >
             시작 덱으로

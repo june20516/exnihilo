@@ -27,7 +27,7 @@ const pct = (x: number | undefined) => `${((x ?? 0) * 100).toFixed(0)}%`.padStar
 const num = (x: number | undefined, width = 6) => (x === undefined ? '-' : x.toFixed(1)).padStart(width)
 
 console.log(`시드 ${runs}개, 최대 ${MAX_SIM_TURNS}턴. 탐욕 봇 기준 지표 + 무작위/무행동 승률\n`)
-console.log('조우       승률 HP손실(승) 평균턴 시간초과 동사없는턴 방어율 최대한방 선택지수 뻔한최선 무작위 무행동')
+console.log('조우       승률 HP손실(승) 평균턴 시간초과 기본동사율 방어율 최대한방 선택지수 뻔한최선 무작위 무행동')
 for (const encounterId of encounterIds) {
   const game = combatGame(encounterId)
   const greedy = simulate(game, greedyBot, { seeds, maxTurns: MAX_SIM_TURNS, metrics: combatMetrics, turnMetrics: combatTurnMetrics(game) }).report
@@ -37,6 +37,6 @@ for (const encounterId of encounterIds) {
   const t = greedy.avgTurnMetrics
   console.log(
     `${encounterId.padEnd(8)} ${pct(greedy.winRate)} ${num(greedy.avgMetricsOnWin.hpLost, 10)} ${num(greedy.avgTurns)} ${pct(greedy.timeoutRate).padStart(8)}` +
-      ` ${pct(m.deadTurnRate).padStart(10)} ${pct(m.defendRate).padStart(6)} ${num(m.bestBurst, 8)} ${num(t.choiceDiversity, 8)} ${pct(t.obviousBest).padStart(8)} ${pct(random.winRate)} ${pct(passive.winRate)}`,
+      ` ${pct(m.basicVerbRate).padStart(10)} ${pct(m.defendRate).padStart(6)} ${num(m.bestBurst, 8)} ${num(t.choiceDiversity, 8)} ${pct(t.obviousBest).padStart(8)} ${pct(random.winRate)} ${pct(passive.winRate)}`,
   )
 }

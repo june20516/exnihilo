@@ -7,7 +7,7 @@ import type { SlotRole } from '@/game/grammar/frames'
 import type { Board } from '@/game/sentence/board'
 import { isAliveEnemy, outcomeOf, runClause } from './clauseRun'
 import type { RallyResult as Result, RallyState } from './combat'
-import { drawCards, handHasVerb } from './deckFlow'
+import { drawCards } from './deckFlow'
 import { enemyBoard, firstAliveEnemy } from './sentence'
 
 /** 턴의 흐름: 적의 예고와 봉인, 적 차례, 내 차례 시작. */
@@ -55,9 +55,8 @@ export function startPlayerTurn(state: RallyState): Result {
   }
   const target = drawn.state.entities.find((e) => e.id === drawn.state.targetId)
   const targetId = target && isAlive(target) ? drawn.state.targetId : firstAliveEnemy(drawn.state.entities)
-  const dead = handHasVerb(drawn.state.deck.hand) ? 0 : 1
   return {
-    state: { ...drawn.state, targetId, log: { ...drawn.state.log, deadTurns: drawn.state.log.deadTurns + dead } },
+    state: { ...drawn.state, targetId },
     events: drawn.events,
   }
 }
