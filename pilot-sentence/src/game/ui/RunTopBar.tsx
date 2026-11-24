@@ -24,8 +24,8 @@ export function RunTopBar({ state, busy, onNewRun }: RunTopBarProps) {
   return (
     <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md">
       <div className="flex items-center gap-4">
-        <span className="font-headline text-lg font-bold">문장 던전</span>
-        <span className="font-headline text-base font-bold text-secondary" data-testid="run-floor">
+        <span className="font-prose text-lg font-bold">문장 던전</span>
+        <span className="font-ui text-base font-bold text-secondary" data-testid="run-floor">
           {state.floor}/{FLOORS.length} · {floor ? TIER_NAMES[floor.tier] : ''}
           {encounter ? ` · ${encounter}` : ''}
         </span>
@@ -59,7 +59,7 @@ export function RunTopBar({ state, busy, onNewRun }: RunTopBarProps) {
           <Icon name="refresh" className="text-[16px]" />
           {armed ? '한 번 더 누르면 새 런' : '새 런'}
         </button>
-        <span className="font-label text-xs text-outline" data-testid="run-seed">
+        <span className="font-ui text-xs text-outline" data-testid="run-seed">
           seed {state.seed}
         </span>
       </div>

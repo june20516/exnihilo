@@ -56,7 +56,7 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
             <Icon name="person_apron" className="text-5xl" />
           </div>
         )}
-        <span className="absolute bottom-1 left-2 font-headline text-sm font-bold drop-shadow">{entity.name}</span>
+        <span className="absolute bottom-1 left-2 font-prose text-sm font-bold drop-shadow">{entity.name}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-surface-container-high">
         <div
@@ -64,10 +64,10 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
           style={{ width: `${hpRatio * 100}%` }}
         />
       </div>
-      <span data-testid={`hp-${entity.id}`} className="font-label text-xs">
+      <span data-testid={`hp-${entity.id}`} className="font-number text-sm">
         HP {entity.hp} / {entity.maxHp}
       </span>
-      <div className="flex min-h-4 flex-wrap gap-x-2 font-label text-[11px]">
+      <div className="flex min-h-4 flex-wrap gap-x-2 font-ui text-[11px]">
         {STATUS_BADGES.filter((b) => entity.statuses[b.kind] > 0).map((b) => (
           <span
             key={b.kind}
@@ -81,7 +81,7 @@ export function EntityCard({ entity, portrait, onPick, targeted = false, intent,
         ))}
       </div>
       {states.length > 0 && (
-        <div data-testid={`states-${entity.id}`} className="flex flex-wrap gap-1 font-label text-[11px]">
+        <div data-testid={`states-${entity.id}`} className="flex flex-wrap gap-1 font-ui text-[11px]">
           {states.map((text) => (
             <span key={text} className="rounded bg-tertiary/20 px-1 text-tertiary">
               {text}

@@ -45,7 +45,7 @@ export function SlotView(props: SlotViewProps) {
 
   return (
     <div className={`flex flex-col items-center gap-1 ${active ? '' : 'opacity-30'}`} data-active={active}>
-      <span className="font-label text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+      <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
         {ROLE_NAMES[address.role]}
         {!active && ' (자동사라 없음)'}
       </span>
@@ -68,7 +68,7 @@ export function SlotView(props: SlotViewProps) {
                 >
                   {modifier && modifierDef ? (
                     <>
-                      <span className={`font-headline text-sm font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
+                      <span className={`font-card text-sm font-bold ${KIND_STYLES[modifierDef.kind].text}`}>
                         {nameOf(modifier)}
                       </span>
                     </>
@@ -99,13 +99,13 @@ export function SlotView(props: SlotViewProps) {
             >
               {slot.sealed && <Icon name="lock" className="absolute right-1 top-1 text-[13px] text-secondary" />}
               <span
-                className={`font-headline text-xl font-black tracking-tight ${
+                className={`font-card text-xl font-black tracking-tight ${
                   isVerb ? 'text-on-primary-container' : KIND_STYLES[headDef.kind].text
                 } ${slot.head.owner === 'blank' ? 'opacity-40' : ''}`}
               >
                 {nameOf(slot.head)}
               </span>
-              <span className="flex items-center gap-1 font-label text-[10px] text-on-surface-variant">
+              <span className="flex items-center gap-1 font-ui text-[10px] text-on-surface-variant">
                 {HEAD_LABELS[slot.head.owner === 'blank' ? (isVerb ? 'emptyVerb' : 'implied') : slot.head.owner]}
               </span>
             </button>
@@ -114,7 +114,7 @@ export function SlotView(props: SlotViewProps) {
         {particle && active && (
           <span
             data-testid={`particle-${slotId}`}
-            className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high font-headline text-lg font-bold text-secondary shadow-md"
+            className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high font-card text-lg font-bold text-secondary shadow-md"
           >
             {particle}
           </span>

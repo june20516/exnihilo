@@ -32,7 +32,7 @@ export function Hand({ hand, board, selectedId, marked, disabled, onSelect, basi
           playable={basic.available && canPlayAnywhere(board, basic.wordId)}
           onSelect={() => onSelect(BASIC_VERB_INSTANCE)}
         />
-        <span className="font-label text-[10px] text-outline">기본 동사</span>
+        <span className="font-ui text-[10px] text-outline">기본 동사</span>
       </div>
       {hand.map((card) => {
         const def = getWord(card.wordId)

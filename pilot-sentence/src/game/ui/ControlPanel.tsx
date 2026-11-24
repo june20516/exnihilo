@@ -1,3 +1,4 @@
+import { Tooltip } from './Tooltip'
 import { Icon } from './Icon'
 
 interface ControlPanelProps {
@@ -18,8 +19,10 @@ export function ControlPanel(props: ControlPanelProps) {
   const discarding = markedCount !== null
   return (
     <div className="flex w-56 shrink-0 flex-col gap-2">
-      <div className="flex justify-between rounded-xl bg-surface-container px-3 py-2 font-label text-xs text-on-surface-variant shadow-lg">
-        <span>서고 {drawCount}</span>
+      <div className="flex justify-between rounded-xl bg-surface-container px-3 py-2 font-ui text-xs text-on-surface-variant shadow-lg">
+        <Tooltip testId="pile-draw" content={`서고 ${drawCount}장`}>
+          <span>서고 {drawCount}</span>
+        </Tooltip>
         <span data-testid="discard-pile">망각 {discardCount}</span>
         <span data-testid="turn">턴 {turn}</span>
       </div>
@@ -36,7 +39,7 @@ export function ControlPanel(props: ControlPanelProps) {
           <Icon name="delete_sweep" className="text-[18px]" />
           {discarding ? '버리기 취소' : '버리고 새로 뽑기'}
         </span>
-        <span className="font-label text-xs text-secondary">턴당 {discardsLeft}회</span>
+        <span className="font-ui text-xs text-secondary">턴당 {discardsLeft}회</span>
       </button>
       {discarding && (
         <button

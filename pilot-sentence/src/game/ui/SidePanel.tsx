@@ -18,7 +18,7 @@ const TONE_CLASS: Record<PreviewLine['tone'], string> = {
 function PreviewList({ testId, title, lines, empty }: { testId: string; title: string; lines: readonly PreviewLine[]; empty: string }) {
   return (
     <div data-testid={testId} className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface-container p-3 shadow-inner">
-      <div className="mb-1 font-label text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">{title}</div>
+      <div className="mb-1 font-ui text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">{title}</div>
       <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm">
         {lines.length === 0 && <li className="text-outline">{empty}</li>}
         {lines.map((line, i) => (

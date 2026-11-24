@@ -15,8 +15,8 @@ export function TopBar(props: TopBarProps) {
   return (
     <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md">
       <div className="flex items-center gap-3">
-        <span className="font-headline text-lg font-bold">문장 던전</span>
-        <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">기본 랠리</span>
+        <span className="font-prose text-lg font-bold">문장 던전</span>
+        <span className="font-ui text-[10px] uppercase tracking-widest text-on-surface-variant">기본 랠리</span>
       </div>
       <div className="flex items-center gap-2">
         <select
@@ -50,7 +50,7 @@ export function TopBar(props: TopBarProps) {
           <Icon name="refresh" className="text-[16px]" />
           다시
         </button>
-        <span className="font-label text-xs text-outline" data-testid="seed">
+        <span className="font-ui text-xs text-outline" data-testid="seed">
           seed {seed}
         </span>
       </div>

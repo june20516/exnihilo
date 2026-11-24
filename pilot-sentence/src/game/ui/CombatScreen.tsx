@@ -133,11 +133,11 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
             />
             <p
               data-testid="formula"
-              className="text-center font-headline text-lg font-bold text-secondary"
+              className="text-center font-number text-lg font-bold text-secondary"
             >
               {formulas.length > 0
                 ? formulas.map((f) => (
-                    <span key={f.clause} data-clause={f.clause} className="block">
+                    <span key={f.clause} data-clause={f.clause} data-testid="formula-result" className="block">
                       {state.board.clauses.length > 1 ? `절 ${f.clause + 1}: ` : ''}
                       {f.text}
                     </span>
@@ -186,7 +186,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
               data-testid="cast"
               disabled={!canAct || !verbPlaced}
               onClick={() => run({ type: 'cast' })}
-              className="h-16 rounded-xl bg-secondary-container px-4 font-headline text-xl font-black text-on-secondary-container shadow-xl disabled:opacity-50"
+              className="h-16 rounded-xl bg-secondary-container px-4 font-ui text-xl font-black text-on-secondary-container shadow-xl disabled:opacity-50"
             >
               낭독
             </button>
@@ -197,7 +197,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
               onClick={() => run({ type: 'endTurn' })}
               className="flex h-12 flex-col items-start justify-center rounded-xl bg-primary-container px-4 text-on-primary-container shadow-2xl transition active:scale-95 disabled:opacity-50"
             >
-              <span className="font-headline text-lg font-black">턴 종료</span>
+              <span className="font-ui text-lg font-black">턴 종료</span>
               <span className="text-[10px] opacity-80">낭독 없이 넘긴다</span>
             </button>
             <button

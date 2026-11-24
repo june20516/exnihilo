@@ -63,7 +63,7 @@ export function SentenceBoard(props: SentenceBoardProps) {
 function ConnectiveSlot({ connective, placeable, onClick }: { connective: PlacedWord | null; placeable: boolean; onClick: () => void }) {
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="font-label text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">연결어</span>
+      <span className="font-ui text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">연결어</span>
       <Droppable id={CONNECTIVE_DROP_ID}>
         {(isOver, ref) => (
           <button
@@ -77,7 +77,7 @@ function ConnectiveSlot({ connective, placeable, onClick }: { connective: Placed
             } ${placeable ? HIGHLIGHT : ''} ${isOver && placeable ? 'scale-105' : ''}`}
           >
             {connective ? (
-              <span className="font-headline text-lg font-black text-primary">{getWord(connective.wordId).text}</span>
+              <span className="font-card text-lg font-black text-primary">{getWord(connective.wordId).text}</span>
             ) : (
               <span className="text-xs text-outline-variant">＋</span>
             )}

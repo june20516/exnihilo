@@ -43,7 +43,7 @@ export function DeckEditor({ deck, onSave, onClose }: DeckEditorProps) {
         className="flex items-center gap-2 rounded bg-surface-container px-2 py-1"
         data-testid={`pool-${word.id}`}
       >
-        <span className={`w-24 font-headline text-sm font-bold ${KIND_STYLES[word.kind].text}`}>{word.text}</span>
+        <span className={`w-24 font-card text-sm font-bold ${KIND_STYLES[word.kind].text}`}>{word.text}</span>
         <span className="flex-1 truncate text-[11px] text-on-surface-variant" title={describeWord(word)}>
           {describeWord(word)}
         </span>
@@ -56,7 +56,7 @@ export function DeckEditor({ deck, onSave, onClose }: DeckEditorProps) {
         >
           −
         </button>
-        <span className="w-4 text-center font-label text-sm">{n}</span>
+        <span className="w-4 text-center font-ui text-sm">{n}</span>
         <button
           type="button"
           data-testid={`plus-${word.id}`}
@@ -76,9 +76,9 @@ export function DeckEditor({ deck, onSave, onClose }: DeckEditorProps) {
     >
       <div className="flex h-[85vh] w-[1100px] flex-col gap-3 rounded-xl bg-surface-container-low p-5 shadow-2xl">
         <div className="flex items-center justify-between">
-          <h2 className="font-headline text-xl font-bold">덱 편집</h2>
+          <h2 className="font-prose text-xl font-bold">덱 편집</h2>
           <span
-            className={`font-label text-sm ${validation.ok ? 'text-tertiary' : 'text-error'}`}
+            className={`font-ui text-sm ${validation.ok ? 'text-tertiary' : 'text-error'}`}
             data-testid="deck-count"
           >
             {draft.length}장 ({DECK_LIMITS.min}~{DECK_LIMITS.max}) {validation.ok ? '' : `· ${validation.reason}`}
@@ -87,7 +87,7 @@ export function DeckEditor({ deck, onSave, onClose }: DeckEditorProps) {
         <div className="grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-y-auto">
           {GROUPS.map((group) => (
             <section key={group.title} className="flex flex-col gap-1">
-              <h3 className="font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+              <h3 className="font-ui text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                 {group.title} ({KIND_LABELS[group.kinds[0]]})
               </h3>
               <ul className="flex flex-col gap-1">

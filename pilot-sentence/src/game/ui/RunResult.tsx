@@ -9,7 +9,7 @@ export function RunResult({ state, onNewRun }: { state: RunState; onNewRun: () =
   const bought = state.log.purchases.map((o) => offerName(o, state.build))
   return (
     <main className="flex min-h-0 flex-col items-center gap-4 overflow-hidden p-6" data-testid="run-result">
-      <span className={`font-headline text-5xl font-black ${won ? 'text-secondary' : 'text-error'}`}>{won ? '완주' : '패배'}</span>
+      <span className={`font-prose text-5xl font-black ${won ? 'text-secondary' : 'text-error'}`}>{won ? '완주' : '패배'}</span>
       <p className="text-on-surface-variant">
         도달 {state.floor}/{FLOORS.length}층 · 최대 한 방 <span data-testid="best-burst" className="font-bold text-secondary">{state.log.bestBurst}</span>
       </p>
@@ -20,7 +20,7 @@ export function RunResult({ state, onNewRun }: { state: RunState; onNewRun: () =
       <button
         type="button"
         onClick={onNewRun}
-        className="rounded-xl bg-primary-container px-6 py-3 font-headline text-xl font-bold text-on-primary-container"
+        className="rounded-xl bg-primary-container px-6 py-3 font-ui text-xl font-bold text-on-primary-container"
       >
         새 런
       </button>

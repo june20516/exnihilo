@@ -49,12 +49,12 @@ export function WordTile({ def, instanceId, selected, marked, disabled, draggabl
         ${playable ? '' : 'opacity-50'} disabled:cursor-not-allowed`}
     >
       <div className="flex items-center justify-between">
-        <span className="font-label text-[10px] text-error">{def.kind === 'junk' ? '낼 수 없음' : ''}</span>
-        <span className={`rounded px-1.5 py-0.5 font-label text-[10px] font-bold ${style.tag}`}>
+        <span className="font-ui text-[10px] text-error">{def.kind === 'junk' ? '낼 수 없음' : ''}</span>
+        <span className={`rounded px-1.5 py-0.5 font-ui text-[10px] font-bold ${style.tag}`}>
           {KIND_LABELS[def.kind]}
         </span>
       </div>
-      <span className={`text-center font-headline text-lg font-black leading-tight tracking-tight ${style.text}`}>
+      <span data-word-text className={`text-center font-card text-lg font-black leading-tight tracking-tight ${style.text}`}>
         {def.text}
       </span>
       <p className="rounded bg-surface-container-lowest/60 p-1 text-[11px] leading-tight text-on-surface-variant">

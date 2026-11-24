@@ -11,7 +11,7 @@ export function BuildSummary({ build, deck }: { build: BuildState; deck: readonl
   return (
     <div className="grid min-h-0 grid-cols-2 gap-3 text-sm">
       <section className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3">
-        <h3 className="font-headline text-base font-bold">빌드</h3>
+        <h3 className="font-ui text-base font-bold">빌드</h3>
         <p className="text-on-surface-variant">
           수식어 칸 주어 {build.slots.subject} · 목적어 {build.slots.object} · 동사 {build.slots.verb} · 손패 상한 {build.handMax} · 턴당
           버리기 {build.discardsPerTurn}
@@ -28,7 +28,7 @@ export function BuildSummary({ build, deck }: { build: BuildState; deck: readonl
         </ul>
       </section>
       <section className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3" data-testid="build-deck">
-        <h3 className="font-headline text-base font-bold">덱 {deck.length}장</h3>
+        <h3 className="font-ui text-base font-bold">덱 {deck.length}장</h3>
         <p className="leading-relaxed text-on-surface-variant">
           {[...counts]
             .map(([id, n]) => `${getWord(id).text}${build.upgrades[id] ? `+${build.upgrades[id]}` : ''}${n > 1 ? ` ×${n}` : ''}`)

@@ -32,14 +32,16 @@
   --color-error: #ffb4ab;
   --color-error-container: #93000a;
 
-  --font-headline: "Noto Serif KR", "Noto Serif", serif;
-  --font-body: "Noto Serif KR", "Noto Serif", serif;
-  --font-label: "Space Grotesk", "Noto Serif KR", sans-serif;
+  /* 쓰임별 폰트 토큰(표시 spec §3.9). 컴포넌트는 font-card/prose/ui/number 클래스만 쓴다. */
+  --font-card: "Song Myung", "Hahmlet", serif;
+  --font-prose: "Hahmlet", "Song Myung", serif;
+  --font-ui: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --font-number: "Do Hyeon", "Pretendard", sans-serif;
 
   --radius-lg: 0.25rem;
   --radius-xl: 0.5rem;
 }
 
 html, body { margin: 0; background: var(--color-surface-container-lowest); }
-body { font-family: var(--font-body); color: var(--color-on-surface); user-select: none; }
+body { font-family: var(--font-ui); color: var(--color-on-surface); user-select: none; }
 .material-symbols-outlined { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; line-height: 1; display: inline-block; }
