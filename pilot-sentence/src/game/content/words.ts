@@ -69,15 +69,17 @@ export interface WordDef {
   readonly rarity: Rarity
   readonly effect: WordEffect
   readonly enemyOnly: boolean
+  /** 상점 단어 풀에 나오는가. 카드 정의는 남기되 상점에서 빼려면 false(예: 천천히, 형용사 상태 spec §6). */
+  readonly inShop: boolean
 }
 
-type WordInput = Omit<WordDef, 'enemyOnly' | 'rarity'> & Partial<Pick<WordDef, 'enemyOnly' | 'rarity'>>
+type WordInput = Omit<WordDef, 'enemyOnly' | 'rarity' | 'inShop'> & Partial<Pick<WordDef, 'enemyOnly' | 'rarity' | 'inShop'>>
 
 function defineWords(inputs: readonly WordInput[]): Record<WordId, WordDef> {
   const words: Record<WordId, WordDef> = {}
   for (const input of inputs) {
     if (words[input.id]) throw new Error(`중복 단어 id: ${input.id}`)
-    words[input.id] = { enemyOnly: false, rarity: 'common', ...input }
+    words[input.id] = { enemyOnly: false, rarity: 'common', inShop: true, ...input }
   }
   return words
 }
@@ -135,7 +137,7 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   // 부사
   { id: 'fiercely', text: '격렬하게', kind: 'adverb', rarity: 'starter', effect: adverb({ kind: 'powerMul', value: 1.5 }) },
   { id: 'twice', text: '두 번', kind: 'adverb', rarity: 'rare', effect: adverb({ kind: 'repeat', count: 2 }) },
-  { id: 'slowly', text: '천천히', kind: 'adverb', effect: adverb({ kind: 'powerMul', value: 0.5 }) },
+  { id: 'slowly', text: '천천히', kind: 'adverb', inShop: false, effect: adverb({ kind: 'powerMul', value: 0.5 }) },
   { id: 'again', text: '거듭', kind: 'adverb', rarity: 'uncommon', effect: adverb({ kind: 'executionBonus' }) },
   { id: 'persist', text: '기어이', kind: 'adverb', effect: adverb({ kind: 'ignoreFreeze' }) },
   // 적 전용

@@ -6,7 +6,7 @@ import { type ClauseSpec, RALLY_ENCOUNTERS, type RallyIntent } from '@/game/cont
 import { WORDS, type WordDef, type WordId } from '@/game/content/words'
 
 const testVerb = (id: WordId, text: string, kind: WordDef['kind'], effect: WordDef['effect']): WordDef => ({
-  id, text, kind, effect, enemyOnly: true, rarity: 'common',
+  id, text, kind, effect, enemyOnly: true, rarity: 'common', inShop: false,
 })
 
 WORDS['testBite'] = testVerb('testBite', '물어뜯는다', 'verbTransitive', { type: 'verb', range: 'melee', actions: [{ kind: 'damage', amount: 7 }] })
