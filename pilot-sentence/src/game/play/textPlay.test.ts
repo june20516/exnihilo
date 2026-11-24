@@ -266,3 +266,11 @@ describe('v3: 기본 동사, 새로고침, 보호 덩어리, 저장 호환', () 
     expect(() => run(migrated, { type: 'show' })).not.toThrow()
   })
 })
+
+test('take 1 동사로 놓은 동사를 손패로 되돌린다', () => {
+  expect(parseCommand(['take', '1', '동사'])).toEqual({ type: 'take', clause: 1, role: 'verb', modifier: null })
+  let s = withHand(fresh(), ['bite'])
+  s = run(s, { type: 'place', hand: 1, clause: 1, role: 'verb', modifier: null }).state ?? s
+  const r = run(s, { type: 'take', clause: 1, role: 'verb', modifier: null })
+  expect(r.state?.combat?.deck.hand.map((c) => c.wordId)).toContain('bite')
+})

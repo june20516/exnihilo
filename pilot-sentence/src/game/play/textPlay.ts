@@ -43,6 +43,7 @@ export type PlayCommand =
   | { readonly type: 'buy'; readonly item: number }
   | { readonly type: 'leave' }
   | { readonly type: 'reroll' }
+  | { readonly type: 'take'; readonly clause: number; readonly role: SlotRole; readonly modifier: number | null }
 
 export const USAGE = [
   '명령 (번호는 모두 1부터):',
@@ -51,6 +52,7 @@ export const USAGE = [
   '  place <손패#|카드id> <절#> <주어|목적어|동사|연결어> [칸#]   (손패# 0은 기본 동사)',
   '                                          카드를 놓는다. 형용사는 주어·목적어, 부사는 동사에. 칸#로 수식어 자리를 고른다',
   '  target <적#>                            빈 목적어가 가리킬 적',
+  '  take <절#> <주어|목적어|동사> [칸#]       놓은 단어 하나를 손패로 되돌린다(칸#이면 그 수식어)',
   '  discard <손패#|카드id...>               버리고 그만큼 다시 뽑는다(턴당 횟수 제한)',
   '  (카드 id는 손패 목록의 괄호 안 값. 놓을 때마다 손패 번호가 당겨지므로 여러 장을 놓을 땐 id가 안전하다)',
   '  clear                                   놓은 카드를 모두 손패로',
@@ -103,6 +105,14 @@ export function parseCommand(args: readonly string[]): ParseResult {
       if (rest[3] === undefined) return { type: 'place', hand, clause, role, modifier: null }
       const modifier = positive(rest[3])
       return modifier === null ? need('칸#은 1 이상의 정수입니다.') : { type: 'place', hand, clause, role, modifier }
+    }
+    case 'take': {
+      const clause = positive(rest[0])
+      const role = rest[1] === undefined ? undefined : ROLE_WORDS[rest[1]]
+      if (clause === null || role === undefined || role === 'connective') return need('take <절#> <주어|목적어|동사> [칸#]')
+      if (rest[2] === undefined) return { type: 'take', clause, role, modifier: null }
+      const modifier = positive(rest[2])
+      return modifier === null ? need('칸#은 1 이상의 정수입니다.') : { type: 'take', clause, role, modifier }
     }
     case 'target': {
       const enemy = positive(rest[0])
@@ -160,6 +170,12 @@ function toRunAction(state: RunState, command: Exclude<PlayCommand, { type: 'new
       if (missing !== undefined) return missingCard(missing)
       return combat({ type: 'discard', instanceIds: ids.filter((id): id is string => id !== undefined) })
     }
+    case 'take':
+      return combat({
+        type: 'unplace',
+        at: { clause: command.clause - 1, role: command.role },
+        modifierIndex: command.modifier === null ? undefined : command.modifier - 1,
+      })
     case 'clear':
       return combat({ type: 'clear' })
     case 'cast':

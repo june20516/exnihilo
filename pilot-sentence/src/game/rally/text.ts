@@ -62,10 +62,37 @@ export function wordNamer(state: RallyState): (word: PlacedWord) => string {
   }
 }
 
-/** 내 문장을 절마다 한 줄로. */
+/**
+ * 이 절에서 목적어를 문구에서 생략하는가: 지원 동사의 빈 목적어가 채워진 결과 주어와 같은 대상일 때다
+ * (예: "당신이 당신을 막는다" → "당신이 막는다"). 목적어 칸에 내 수식어가 있으면 생략하지 않는다.
+ */
+export function omitsObject(state: RallyState, clause: number): boolean {
+  const verbHead = getSlot(state.board, { clause, role: 'verb' }).head
+  if (verbHead.owner === 'blank') return false
+  const verb = getWord(verbHead.wordId).effect
+  if (verb.type !== 'verb' || verb.range !== 'support') return false
+  const object = getSlot(state.board, { clause, role: 'object' })
+  if (object.head.owner !== 'blank' || object.modifiers.some((m) => m !== null && m.owner === 'player')) return false
+  const shown = materializeFor(state)
+  const subjectHead = getSlot(shown, { clause, role: 'subject' }).head
+  const objectHead = getSlot(shown, { clause, role: 'object' }).head
+  return subjectHead.wordId === objectHead.wordId && subjectHead.targetEntityId === objectHead.targetEntityId
+}
+
+/** 내 문장을 절마다 한 줄로. 주어와 같은 빈 목적어는 생략한다. */
 export function sentenceText(state: RallyState): string[] {
   const nameOf = wordNamer(state)
-  return state.board.clauses.map((_, clause) => joinTokens(renderClause(state.board, clause, nameOf)))
+  return state.board.clauses.map((_, clause) => {
+    const tokens = renderClause(state.board, clause, nameOf)
+    if (!omitsObject(state, clause)) return joinTokens(tokens)
+    // 목적어 토큰과, 목적어 head 바로 뒤의 조사를 뺀다.
+    const kept = tokens.filter((t, i) => {
+      if (t.kind !== 'particle') return t.address.role !== 'object'
+      const before = tokens[i - 1]
+      return !(before && before.kind === 'head' && before.address.role === 'object')
+    })
+    return joinTokens(kept)
+  })
 }
 
 /** 적 예고 문장과, 미리보기에서 그 적이 내는 수치(피해·보호 등). 적 id → 문구. */

@@ -19,6 +19,8 @@ export type FizzleReason = 'noSubject' | 'noObject' | 'frozen'
 
 export type CombatEvent =
   | { readonly type: 'placed'; readonly at: SlotAddress; readonly wordId: WordId; readonly modifierIndex: number | null }
+  /** 놓은 단어 하나를 손패(기본 동사는 제자리)로 되돌렸다. */
+  | { readonly type: 'unplaced'; readonly at: SlotAddress; readonly wordId: WordId; readonly modifierIndex: number | null }
   | { readonly type: 'rejected'; readonly reason: RejectReason; readonly at: SlotAddress | null }
   | { readonly type: 'clauseExecuted'; readonly clause: number }
   | { readonly type: 'fizzled'; readonly clause: number; readonly reason: FizzleReason }

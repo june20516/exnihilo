@@ -142,6 +142,25 @@ export function revertSlot(board: Board, at: SlotAddress): { board: Board; displ
   }
 }
 
+/**
+ * 한 자리(head 또는 수식어 칸 하나)만 원문으로 되돌린다. 그 자리에 원문이 아닌 단어가 있었으면 그 단어를 돌려준다.
+ * 같은 칸의 다른 자리(head를 빼면 수식어)는 그대로 둔다.
+ */
+export function revertOne(board: Board, at: SlotAddress, modifierIndex?: number): { board: Board; removed: PlacedWord | null } {
+  const slot = getSlot(board, at)
+  if (modifierIndex === undefined) {
+    if (slot.head === slot.originalHead) return { board, removed: null }
+    return { board: updateSlot(board, at, (s) => ({ ...s, head: s.originalHead })), removed: slot.head }
+  }
+  const current = slot.modifiers[modifierIndex]
+  const original = slot.originalModifiers[modifierIndex] ?? null
+  if (current === undefined || current === null || current === original) return { board, removed: null }
+  return {
+    board: updateSlot(board, at, (s) => ({ ...s, modifiers: s.modifiers.map((m, i) => (i === modifierIndex ? original : m)) })),
+    removed: current,
+  }
+}
+
 export function playerWordsOnBoard(board: Board): PlacedWord[] {
   return board.clauses.flatMap((clause) =>
     clause.slots.flatMap((slot) =>

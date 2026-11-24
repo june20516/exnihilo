@@ -8,7 +8,7 @@ import type { SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import type { ClauseHooks, ResolvedClause } from '@/game/resolve/resolve'
-import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
+import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll, revertOne } from '@/game/sentence/board'
 import { enemyDamageTaken, isAliveEnemy, outcomeOf, runClause } from './clauseRun'
 import { BASIC_VERB_INSTANCE, cardsFrom, drawCards, recallCards } from './deckFlow'
 import { enemyPhase, getEncounter, startPlayerTurn } from './enemyTurn'
@@ -93,6 +93,8 @@ export type RallyAction =
   | { readonly type: 'target'; readonly entityId: string }
   | { readonly type: 'discard'; readonly instanceIds: readonly string[] }
   | { readonly type: 'clear' }
+  /** 놓은 단어 하나를 뺀다. modifierIndex가 없으면 head. */
+  | { readonly type: 'unplace'; readonly at: SlotAddress; readonly modifierIndex?: number }
   | { readonly type: 'connect'; readonly instanceId: string }
   | { readonly type: 'disconnect' }
   | { readonly type: 'cast' }
@@ -287,6 +289,19 @@ function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }
   }
 }
 
+/** 놓은 단어 하나를 빼서 손패로 돌린다(기본 동사는 제자리). 대가도 버리기 횟수도 없다. */
+function unplace(state: RallyState, action: Extract<RallyAction, { type: 'unplace' }>): Result {
+  const { at, modifierIndex } = action
+  if (!state.board.clauses[at.clause]) return reject(state, 'slotInactive', at)
+  if (getSlot(state.board, at).sealed) return reject(state, 'slotSealed', at)
+  const r = revertOne(state.board, at, modifierIndex)
+  if (!r.removed || r.removed.owner !== 'player') return reject(state, 'unplayable', at)
+  return {
+    state: { ...state, board: r.board, deck: { ...state.deck, hand: [...state.deck.hand, ...cardsFrom([r.removed])] } },
+    events: [{ type: 'unplaced', at, wordId: r.removed.wordId, modifierIndex: modifierIndex ?? null }],
+  }
+}
+
 function discard(state: RallyState, instanceIds: readonly string[]): Result {
   if (instanceIds.length === 0) return reject(state, 'unplayable')
   const handIds = new Set(state.deck.hand.map((c) => c.instanceId))
@@ -402,6 +417,8 @@ export function reduceRally(state: RallyState, action: RallyAction): Result {
       return discard(state, action.instanceIds)
     case 'clear':
       return { state: returnPlacedToHand(state), events: [{ type: 'cleared' }] }
+    case 'unplace':
+      return unplace(state, action)
     case 'connect':
       return connect(state, action.instanceId)
     case 'disconnect':

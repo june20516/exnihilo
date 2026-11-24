@@ -180,7 +180,7 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
   let sealed = 0
   let basicPlaced = 0
   for (let i = 0; i < 200 && s.phase === 'player'; i++) {
-    const [kind, r1] = nextInt(rng, 0, 8)
+    const [kind, r1] = nextInt(rng, 0, 9)
     const [pick, r2] = nextInt(r1, 0, Math.max(0, s.deck.hand.length - 1))
     const [roleIndex, r3] = nextInt(r2, 0, 2)
     const [mod, r4] = nextInt(r3, -1, 1)
@@ -199,6 +199,7 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
       card ? { type: 'connect', instanceId: card.instanceId } : { type: 'clear' },
       { type: 'disconnect' },
       { type: 'place', instanceId: BASIC_VERB_INSTANCE, at: { clause, role: 'verb' } },
+      { type: 'unplace', at: { clause, role: roles[roleIndex] }, modifierIndex: mod < 0 ? undefined : mod },
     ]
     s = act(s, actions[kind]).state
     if (playerWordsOnBoard(s.board).some((w) => w.instanceId === BASIC_VERB_INSTANCE)) basicPlaced++
@@ -374,5 +375,49 @@ describe('기본 동사', () => {
     const replaced = act(placed, { type: 'place', instanceId: 'h2', at: V }).state
     expect(replaced.deck.hand.some((c) => c.instanceId === BASIC_VERB_INSTANCE)).toBe(false)
     expect(basicVerbAvailable(replaced)).toBe(true)
+  })
+})
+
+describe('unplace: 놓은 단어 하나씩 빼기', () => {
+  const O = { clause: 0, role: 'object' } as const
+  const base = () => withHand(start(), ['bite', 'fiercely', 'cracked', 'and', 'slash'], FILLER)
+  const placed = () => {
+    let s = act(base(), { type: 'place', instanceId: 'h0', at: V }).state
+    s = act(s, { type: 'place', instanceId: 'h1', at: V, modifierIndex: 0 }).state
+    return act(s, { type: 'place', instanceId: 'h2', at: O, modifierIndex: 0 }).state
+  }
+
+  test('head를 빼면 손패로 돌아오고 같은 칸의 수식어는 남는다', () => {
+    const r = act(placed(), { type: 'unplace', at: V })
+    expect(r.events).toContainEqual({ type: 'unplaced', at: V, wordId: 'bite', modifierIndex: null })
+    expect(r.state.deck.hand.map((c) => c.instanceId)).toContain('h0')
+    expect(getSlot(r.state.board, V).modifiers[0]?.instanceId).toBe('h1')
+  })
+
+  test('수식어를 빼면 손패로 돌아온다', () => {
+    const r = act(placed(), { type: 'unplace', at: O, modifierIndex: 0 })
+    expect(r.state.deck.hand.map((c) => c.instanceId)).toContain('h2')
+    expect(getSlot(r.state.board, O).modifiers[0]).toBeNull()
+  })
+
+  test('기본 동사를 빼면 손패에 들어가지 않고 다시 놓을 수 있다', () => {
+    const s = act(base(), { type: 'place', instanceId: BASIC_VERB_INSTANCE, at: V }).state
+    const r = act(s, { type: 'unplace', at: V })
+    expect(r.state.deck.hand.some((c) => c.instanceId === BASIC_VERB_INSTANCE)).toBe(false)
+    expect(basicVerbAvailable(r.state)).toBe(true)
+  })
+
+  test('빈칸을 빼려 하면 unplayable로 거절된다', () => {
+    expect(act(base(), { type: 'unplace', at: V }).events[0]).toMatchObject({ type: 'rejected', reason: 'unplayable' })
+    expect(act(placed(), { type: 'unplace', at: V, modifierIndex: 1 }).events[0]).toMatchObject({ type: 'rejected', reason: 'unplayable' })
+  })
+
+  test('둘째 절 단어를 빼도 첫째 절과 연결어는 그대로다', () => {
+    let s = act(placed(), { type: 'connect', instanceId: 'h3' }).state
+    s = act(s, { type: 'place', instanceId: 'h4', at: { clause: 1, role: 'verb' } }).state
+    const r = act(s, { type: 'unplace', at: { clause: 1, role: 'verb' } })
+    expect(r.state.connective?.instanceId).toBe('h3')
+    expect(getSlot(r.state.board, V).head.instanceId).toBe('h0')
+    expect(r.state.deck.hand.map((c) => c.instanceId)).toContain('h4')
   })
 })
