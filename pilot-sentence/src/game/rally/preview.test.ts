@@ -301,3 +301,23 @@ test('되받아친다 + 두 번: 첫 반복이 보호를 다 쓰므로 둘째 �
   const hits = reduceRally(s, { type: 'cast' }).events.filter((e) => e.type === 'damaged' && e.entityId === 'e0')
   expect(hits.map((h) => (h.type === 'damaged' ? h.amount + h.blocked : -1))).toEqual([8, 0])
 })
+
+describe('계산식 항의 출처', () => {
+  test("[격렬하게] 물어뜯는다: 기본 출처 '물어뜯는다', 배율 항 sources ['격렬하게']", () => {
+    const s = act(act(withHand(['bite', 'fiercely']), { type: 'place', instanceId: 'h0', at: V }), { type: 'place', instanceId: 'h1', at: V, modifierIndex: 0 })
+    const [calc] = sentenceCalc(s)
+    expect(calc?.baseSource).toBe('물어뜯는다')
+    expect(calc?.terms.find((t) => t.kind === 'times' && t.factor === 1.5)?.sources).toEqual(['격렬하게'])
+  })
+  test("긴 문장 유물이 있으면 가산 항 sources에 '긴 문장'", () => {
+    const base = startRally('test-dummy', CHARACTERS[DEFAULT_CHARACTER].starterDeck, 1, { build: { ...EMPTY_BUILD, relics: ['longSentence'] } }).state
+    const s = act({ ...base, deck: { drawPile: FILLER, discardPile: [], hand: [{ instanceId: 'h0', wordId: 'bite' }] } }, { type: 'place', instanceId: 'h0', at: V })
+    const [calc] = sentenceCalc(s)
+    expect(calc?.terms.find((t) => t.kind === 'plus' && t.label === 'relic')?.sources).toEqual(['긴 문장'])
+  })
+  test("되받아친다의 기본 출처는 '보호'", () => {
+    const base = withHand(['counter'])
+    const s = act({ ...base, entities: base.entities.map((e) => (e.id === PLAYER_ID ? addBlock(e, 5, 0) : e)) }, { type: 'place', instanceId: 'h0', at: V })
+    expect(sentenceCalc(s)[0]?.baseSource).toBe('보호')
+  })
+})

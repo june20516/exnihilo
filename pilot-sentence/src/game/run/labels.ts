@@ -3,7 +3,7 @@ import { type BuildState, effectiveWord, type StructureId, withUpgrade } from '@
 import { RELICS } from '@/game/build/relics'
 import { getWord, type WordId } from '@/game/content/words'
 import type { WordKind } from '@/game/grammar/frames'
-import { describeWord } from '@/game/ui/describe'
+import { cardSummary, describeWord } from '@/game/ui/describe'
 import type { Offer } from './shop'
 
 export const KIND_NAMES: Record<WordKind, string> = {
@@ -16,7 +16,7 @@ export const STRUCTURE_NAMES: Record<StructureId, string> = {
 export function cardText(wordId: WordId, build: BuildState): string {
   const def = effectiveWord(wordId, build)
   const level = build.upgrades[wordId]
-  return `${def.text}${level ? `+${level}` : ''} [${KIND_NAMES[def.kind]}] ${describeWord(def)}`
+  return `${def.text}${level ? `+${level}` : ''} [${KIND_NAMES[def.kind]}] ${cardSummary(wordId, build)}`
 }
 
 const KIND_TAGS: Record<Offer['kind'], string> = { word: '단어', upgrade: '강화', structure: '구조', relic: '유물' }

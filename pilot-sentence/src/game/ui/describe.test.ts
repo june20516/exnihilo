@@ -1,6 +1,7 @@
 import { PLAYER_POOL } from '@/game/content/words'
 import { getWord } from '@/game/content/words'
-import { blockText, describeWord } from './describe'
+import { EMPTY_BUILD } from '@/game/build/build'
+import { blockText, cardFacts, describeWord } from './describe'
 
 test.each([
   ['bite', '피해 6'],
@@ -46,4 +47,30 @@ test('blockText: 보호 합과 이월 몫(남은 턴)을 보인다', () => {
   expect(blockText([{ amount: 6, turnsLeft: 0 }, { amount: 4, turnsLeft: 2 }])).toBe('보호 10 · 4는 2턴 유지')
   expect(blockText([{ amount: 9, turnsLeft: 0 }])).toBe('보호 9')
   expect(blockText([])).toBe('')
+})
+
+describe('cardFacts: 카드 설명 구조값', () => {
+  const build = (upgrades: Record<string, number> = {}) => ({ ...EMPTY_BUILD, upgrades })
+  test("벤다 강화 1단계: damage 15, base 10, tone attack", () => {
+    const f = cardFacts('slash', build({ slash: 1 }))
+    expect(f.tone).toBe('attack')
+    expect(f.facts).toEqual([expect.objectContaining({ kind: 'damage', value: 15, base: 10, text: '피해 10→15' })])
+  })
+  test("막는다: block 6, to subject, 배지 '1턴 유지', tone support", () => {
+    const f = cardFacts('guard', build())
+    expect(f.tone).toBe('support')
+    expect(f.facts).toEqual([expect.objectContaining({ kind: 'block', value: 6, base: null, to: 'subject' })])
+    expect(f.badges).toContain('1턴 유지')
+  })
+  test("금이 간: inMul 1.5, 배지 '적 차례까지', tone modifier", () => {
+    const f = cardFacts('cracked', build())
+    expect(f).toMatchObject({ tone: 'modifier', badges: ['적 차례까지'] })
+    expect(f.facts[0]).toMatchObject({ kind: 'inMul', value: 1.5 })
+  })
+  test('되받아친다: counter 사실 하나, tone attack', () => {
+    const f = cardFacts('counter', build())
+    expect(f.tone).toBe('attack')
+    expect(f.facts.map((x) => x.kind)).toEqual(['counter'])
+  })
+  test("숨는다는 배지에 '자동사'", () => expect(cardFacts('hide', build()).badges).toContain('자동사'))
 })

@@ -1,6 +1,7 @@
 import { type Entity, scaleIncoming, scaleOutgoing, VULNERABLE_MULTIPLIER, WEAK_MULTIPLIER } from '@/kit/core/entity'
 import { wordLookup } from '@/game/build/build'
-import type { VerbAction } from '@/game/content/words'
+import { RELICS, type RelicEffect } from '@/game/build/relics'
+import type { VerbAction, WordDef, WordId } from '@/game/content/words'
 import { chainFactorOf, collectAdverbs, collectSlotMods, resolveTargets } from '@/game/resolve/resolve'
 import { type Board, getSlot } from '@/game/sentence/board'
 import { type ClauseRun, type RallyState, runSentence } from './combat'
@@ -14,9 +15,9 @@ import { isBlank } from './sentence'
 
 /** 식의 항. 항 순서가 곧 계산 순서다. label은 무엇에서 온 항인지(유물, 사슬, 약화 등). */
 export type FormulaTerm =
-  | { readonly kind: 'plus'; readonly amount: number; readonly label: FormulaLabel }
-  | { readonly kind: 'times'; readonly factor: number; readonly label: FormulaLabel }
-  | { readonly kind: 'minus'; readonly amount: number }
+  | { readonly kind: 'plus'; readonly amount: number; readonly label: FormulaLabel; readonly sources: readonly string[] }
+  | { readonly kind: 'times'; readonly factor: number; readonly label: FormulaLabel; readonly sources: readonly string[] }
+  | { readonly kind: 'minus'; readonly amount: number; readonly sources: readonly string[] }
 
 export type FormulaLabel = 'relic' | 'so' | 'again' | 'strength' | 'weak' | 'chain' | 'vulnerable' | null
 
@@ -29,6 +30,8 @@ export interface ClauseCalc {
   readonly base: number
   /** 기본 수치가 카드 수치가 아니라 다른 값일 때 그 이름. 'block'이면 보호 합. */
   readonly baseLabel: 'block' | null
+  /** 기본 수치의 출처 이름: 동사 문구, 되받아친다면 '보호'. */
+  readonly baseSource: string
   readonly terms: readonly FormulaTerm[]
   /** 1회분 값. 무효면 0. */
   readonly value: number
@@ -74,17 +77,19 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   // 되받아친다의 위력은 카드 수치가 아니라 주어의 보호 합이다(해석기와 같은 시점의 값).
   const baseLabel = action.kind === 'counter' ? 'block' : null
   const baseAmount = action.kind === 'counter' ? (source?.statuses.block ?? 0) : action.amount
-  const fizzled = (fizzle: FizzleCause): ClauseCalc => ({ clause, base: baseAmount, baseLabel, terms: [], value: 0, laterValue: null, repeat: adverbs.repeat, lethalHp: null, fizzle })
+  const baseSource = action.kind === 'counter' ? '보호' : lookup(verbSlot.head.wordId).text
+  const sources = termSources(state, board, clause, lookup)
+  const fizzled = (fizzle: FizzleCause): ClauseCalc => ({ clause, base: baseAmount, baseLabel, baseSource, terms: [], value: 0, laterValue: null, repeat: adverbs.repeat, lethalHp: null, fizzle })
   if (source && source.statuses.freeze > 0 && !adverbs.ignoreFreeze) return fizzled('frozen')
 
   if (action.kind !== 'damage' && action.kind !== 'mutualDamage' && action.kind !== 'counter') {
     const bonus = action.kind === 'block' || action.kind === 'heal' ? (hooks.supportBonus ?? 0) : 0
     const value = Math.floor((action.amount + bonus) * adverbs.power)
     const terms: FormulaTerm[] = [
-      { kind: 'plus', amount: bonus, label: 'relic' },
-      { kind: 'times', factor: adverbs.power, label: null },
+      { kind: 'plus', amount: bonus, label: 'relic', sources: sources.supportRelics },
+      { kind: 'times', factor: adverbs.power, label: null, sources: sources.adverbs },
     ]
-    return { clause, base: action.amount, baseLabel, terms, value, laterValue: null, repeat: adverbs.repeat, lethalHp: null, fizzle: null }
+    return { clause, base: action.amount, baseLabel, baseSource, terms, value, laterValue: null, repeat: adverbs.repeat, lethalHp: null, fizzle: null }
   }
 
   if (!target || target.hp <= 0) return fizzled('noObject')
@@ -112,23 +117,46 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   const total = value + (laterValue ?? value) * (adverbs.repeat - 1)
 
   const terms: FormulaTerm[] = [
-    { kind: 'plus', amount: (hooks.damageBonus ?? 0) - soBonus, label: 'relic' },
-    { kind: 'plus', amount: soBonus, label: 'so' },
-    { kind: 'times', factor: adverbs.power, label: null },
-    { kind: 'plus', amount: executionBonus, label: 'again' },
-    { kind: 'plus', amount: strength, label: 'strength' },
-    { kind: 'times', factor: weak, label: 'weak' },
-    { kind: 'plus', amount: sourceMods.outgoingFlat, label: null },
-    { kind: 'times', factor: sourceMods.outgoingMul, label: null },
-    { kind: 'times', factor: sourceChain, label: 'chain' },
-    { kind: 'times', factor: vulnerable, label: 'vulnerable' },
-    { kind: 'times', factor: targetMods.incomingMul, label: null },
-    { kind: 'times', factor: targetChain, label: 'chain' },
-    { kind: 'minus', amount: targetMods.incomingFlat },
+    { kind: 'plus', amount: (hooks.damageBonus ?? 0) - soBonus, label: 'relic', sources: sources.damageRelics },
+    { kind: 'plus', amount: soBonus, label: 'so', sources: ['그래서'] },
+    { kind: 'times', factor: adverbs.power, label: null, sources: sources.adverbs },
+    { kind: 'plus', amount: executionBonus, label: 'again', sources: sources.againAdverbs },
+    { kind: 'plus', amount: strength, label: 'strength', sources: ['힘'] },
+    { kind: 'times', factor: weak, label: 'weak', sources: ['약화'] },
+    { kind: 'plus', amount: sourceMods.outgoingFlat, label: null, sources: sources.subjectAdjectives },
+    { kind: 'times', factor: sourceMods.outgoingMul, label: null, sources: sources.subjectAdjectives },
+    { kind: 'times', factor: sourceChain, label: 'chain', sources: sources.chainRelics },
+    { kind: 'times', factor: vulnerable, label: 'vulnerable', sources: ['취약'] },
+    { kind: 'times', factor: targetMods.incomingMul, label: null, sources: sources.objectAdjectives },
+    { kind: 'times', factor: targetChain, label: 'chain', sources: sources.chainRelics },
+    { kind: 'minus', amount: targetMods.incomingFlat, sources: sources.objectAdjectives },
   ]
   // 미리보기의 피해는 적의 남은 HP에서 잘린다. 값이 그 이상이면 처치임을 밝혀 두 숫자가 왜 다른지 보인다.
   const lethalHp = target.side === 'enemy' && total >= target.hp + target.statuses.block ? target.hp : null
-  return { clause, base: baseAmount, baseLabel, terms, value, laterValue, repeat: adverbs.repeat, lethalHp, fizzle: null }
+  return { clause, base: baseAmount, baseLabel, baseSource, terms, value, laterValue, repeat: adverbs.repeat, lethalHp, fizzle: null }
+}
+
+/** 계산식 항의 출처 이름들(칸의 수식어 문구, 가진 유물 이름). */
+function termSources(state: RallyState, board: Board, clause: number, lookup: (id: WordId) => WordDef) {
+  const texts = (role: 'subject' | 'object' | 'verb', kind: 'adjective' | 'adverb', keep: (def: WordDef) => boolean = () => true) =>
+    getSlot(board, { clause, role }).modifiers.flatMap((m) => {
+      if (!m) return []
+      const def = lookup(m.wordId)
+      return def.kind === kind && keep(def) ? [def.text] : []
+    })
+  const relicsWith = (kinds: readonly RelicEffect['kind'][]) =>
+    state.build.relics.filter((id) => kinds.includes(RELICS[id].effect.kind)).map((id) => RELICS[id].name)
+  const subjectBlank = isBlank(getSlot(state.board, { clause, role: 'subject' }).head)
+  const isAgain = (def: WordDef) => def.effect.type === 'adverb' && def.effect.mods.some((m) => m.kind === 'executionBonus')
+  return {
+    adverbs: texts('verb', 'adverb', (def) => !isAgain(def)),
+    againAdverbs: texts('verb', 'adverb', isAgain),
+    subjectAdjectives: texts('subject', 'adjective'),
+    objectAdjectives: texts('object', 'adjective'),
+    damageRelics: relicsWith(subjectBlank ? ['perWordBonus', 'blankSubjectBonus'] : ['perWordBonus']),
+    supportRelics: relicsWith(['perWordBonus']),
+    chainRelics: relicsWith(['chainBoost']),
+  }
 }
 
 /** 내 문장의 계산: 동사가 놓인 절마다 하나(spec §2.3, 런 spec §4.1). */
