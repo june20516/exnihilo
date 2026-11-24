@@ -6,7 +6,7 @@
 
 **Architecture:** 엔진은 `RuleConfig`를 인자로 받는다. 행동은 `place | swap | drawPaid | cast | endTurn`이다. 형용사는 "슬롯에 있는 개체의 성질"로 다룬다. 피해 한 번마다 공격자 슬롯의 outgoing 수식과 피격자 슬롯의 incoming 수식을 적용한다. 미리보기는 상태 사본에서 개입과 실행을 돌린 결과다.
 
-**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-sentence-design.md` 10장 (1~3장과 충돌하면 10장이 우선)
+**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-design.md` 10장 (1~3장과 충돌하면 10장이 우선)
 
 ## Global Constraints
 - Plan 1의 Global Constraints를 따른다.

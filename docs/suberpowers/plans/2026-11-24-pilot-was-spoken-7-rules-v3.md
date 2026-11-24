@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript strict, Vitest, React 19 + Tailwind v4(최소 화면), Playwright, tsx 스크립트
 
-**Spec:** `docs/suberpowers/specs/2026-11-24-pilot-sentence-v3-rules-design.md`
+**Spec:** `docs/suberpowers/specs/2026-11-24-pilot-was-spoken-v3-rules-design.md`
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - 규칙 손잡이 값: 탐험가 `handMax` 6, `RALLY_RULES.emptyDrawHpLoss` 2, 떠올린다 4장, 새로고침 3에서 시작해 +1.
 - 보호 처음 값: 막는다 6/holds 1, 숨는다 10/0, 버틴다 4/3, 거미 웅크린다 8/0, 여왕 웅크린다 10/1, 문지기 버틴다 20/0.
 - 기본 동사: 탐험가의 기본 동사는 id `strike`, 문구 "때린다", 타동사, 공격, 피해 3. 강화 불가, 상점 불가.
-- 테스트 명령: `npx vitest run <경로>`, 전체 `npx vitest run`, 타입 `npx tsc -b`, 린트 `npx oxlint`, e2e `npx playwright test`. 모두 `pilot-sentence/`에서 실행한다.
+- 테스트 명령: `npx vitest run <경로>`, 전체 `npx vitest run`, 타입 `npx tsc -b`, 린트 `npx oxlint`, e2e `npx playwright test`. 모두 `pilot-was-spoken/`에서 실행한다.
 - Minor도 그 자리에서 고친다(사용자 규칙).
 - **확장 가능한 구조(사용자 규칙)**
   - 카드, 유물, 캐릭터, 적, 층은 데이터 정의 표에 두고 엔진은 id로 읽는다. 특정 단어·적 id를 로직에서 분기하지 않는다.
@@ -87,7 +87,7 @@
   - Step 1의 세 명령을 다시 실행해 기준값 파일과 비교한다. 게이트 수치와 ceiling 출력이 같아야 한다.
   - 이어서 `npx oxlint && npx playwright test`
   - Expected: 기준값과 동일, 모두 PASS
-- [ ] **Step 6: Commit**(마지막 묶음): `git commit -m "refactor(pilot-sentence): 유물 효과·손잡이 데이터화, Balance 인자 제거, combat 나누기"`
+- [ ] **Step 6: Commit**(마지막 묶음): `git commit -m "refactor(pilot-was-spoken): 유물 효과·손잡이 데이터화, Balance 인자 제거, combat 나누기"`
 
 ### Task 2: 보호 덩어리 (kit)
 
@@ -218,7 +218,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: 모두 PASS. 시작 덱이 바뀌어 기존 sim·게이트 수치 테스트가 흔들릴 수 있다. `balanceGate.test.ts`가 실패하면 이 task에서는 실패 내용만 ledger에 적고, 튜닝은 Task 9이 맡는다. 다른 테스트 실패는 이 task에서 고친다.
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 보호 이월 카드 속성, 되받아친다·떠올린다·버틴다, 공격/지원 분류"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-was-spoken): 보호 이월 카드 속성, 되받아친다·떠올린다·버틴다, 공격/지원 분류"`
 
 ### Task 4: 전투 흐름 (손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기, 보호 만료)
 
@@ -266,7 +266,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: 모두 PASS. 단 balanceGate는 Task 9이 다루므로, 실패하면 ledger에 기록만 한다.
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-was-spoken): 손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기"`
 
 ### Task 5: 캐릭터 정의와 기본 동사
 
@@ -318,7 +318,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: PASS(balanceGate 수치는 Task 9)
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 캐릭터 정의와 손패 밖 기본 동사"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-was-spoken): 캐릭터 정의와 손패 밖 기본 동사"`
 
 ### Task 6: 상점 새로고침
 
@@ -355,7 +355,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: PASS
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 상점 새로고침"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-was-spoken): 상점 새로고침"`
 
 ### Task 7: 텍스트 플레이와 저장 호환
 
@@ -391,7 +391,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: PASS
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 텍스트 플레이에 v3 규칙과 저장 호환"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-was-spoken): 텍스트 플레이에 v3 규칙과 저장 호환"`
 
 ### Task 8: 최소 화면
 
@@ -421,14 +421,14 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx oxlint && npx vitest run && npx playwright test`
   - Expected: 모두 PASS. 1440×900에서 스크롤이 없다(기존 viewport 검사).
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 기본 동사·보호 이월·새로고침 최소 화면"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-was-spoken): 기본 동사·보호 이월·새로고침 최소 화면"`
 
 ### Task 9: 판정 지표와 튜닝
 
 **Files:**
 - Modify: `src/game/sim/combatBot.ts`, `src/game/sim/runSim.ts`, `src/game/sim/bots.ts`, `src/game/sim/metrics.ts`, `src/game/sim/targets.ts`, `src/game/sim/runTargets.ts`, `src/game/sim/balanceGate.test.ts`, `scripts/run-sim.ts`, `scripts/sim.ts`
 - Modify(튜닝 손잡이만): `src/game/content/words.ts` 보호 값, `src/game/build/build.ts` handMax, `RALLY_RULES.emptyDrawHpLoss`, `SHOP_RULES.reroll`, 적 HP·피해
-- Docs: `docs/lab/worklog/pilot-sentence.md`
+- Docs: `docs/lab/worklog/pilot-was-spoken.md`
 - Test: `src/game/sim/balanceGate.test.ts`, `src/game/sim/runSim.test.ts`
 
 **Interfaces:**
@@ -465,10 +465,10 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
   - 다섯 번 조정해도 통과하지 않으면, 멈추고 결과 표를 보고한다. 이것은 spec이 허락한 "맞지 않으면 보고"다.
 
 - [ ] **Step 5: 작업 로그**
-  - `docs/lab/worklog/pilot-sentence.md`에 "v3 규칙 게이트" 절을 추가한다.
+  - `docs/lab/worklog/pilot-was-spoken.md`에 "v3 규칙 게이트" 절을 추가한다.
   - 내용: 최종 손잡이 값, 기존·새 게이트 표, 보고 지표, attackOnly와 학습 봇의 완주율
 
 - [ ] **Step 6: 통과 확인**: `npx tsc -b && npx oxlint && npx vitest run && npx playwright test`
   - Expected: 모두 PASS
 
-- [ ] **Step 7: Commit**: `git commit -m "feat(pilot-sentence): 때리기만 봇 판정 지표와 v3 튜닝"`
+- [ ] **Step 7: Commit**: `git commit -m "feat(pilot-was-spoken): 때리기만 봇 판정 지표와 v3 튜닝"`

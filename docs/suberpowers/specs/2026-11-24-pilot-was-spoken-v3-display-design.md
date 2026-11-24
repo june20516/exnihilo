@@ -1,6 +1,6 @@
 # 문장 던전 v3: 표시와 조작 정돈
 
-기준 문서: `2026-11-24-pilot-sentence-v3-rules-design.md`(규칙 v3, 이 spec보다 먼저 구현)
+기준 문서: `2026-11-24-pilot-was-spoken-v3-rules-design.md`(규칙 v3, 이 spec보다 먼저 구현)
 근거: `docs/lab/playtest/human-1.md`, 사용자 요청(2026-11-24)
 
 ## 1. 왜

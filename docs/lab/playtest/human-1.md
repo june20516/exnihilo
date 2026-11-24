@@ -41,12 +41,12 @@
 ## 결정 (2026-11-24)
 
 - 파일럿 검증 범위: 결정 구조를 고치는 시도는 한 번만 한다. 2회차 사람 테스트(가능하면 처음 보는 사람 포함)로 "후보 유지/탈락"을 판정하고 파일럿 2로 넘어간다.
-- 규칙 v3 spec: `docs/suberpowers/specs/2026-11-24-pilot-sentence-v3-rules-design.md`
+- 규칙 v3 spec: `docs/suberpowers/specs/2026-11-24-pilot-was-spoken-v3-rules-design.md`
   - 손패 6, 최대치까지 채움, 기본 동사(때린다 3)
   - 망각은 자동으로 돌아오지 않음. 서고가 바닥나면 뽑지 못한 카드당 HP 2 직접 차감(손잡이). 떠올린다로 되돌림
   - 보호의 수치·이월 여부·이월 턴 수는 카드 속성. 적도 적마다 스킬로 정의. 반전 동사 되받아친다
   - 근접/원거리 삭제, 상점 새로고침
-- 표시 v3 spec: `docs/suberpowers/specs/2026-11-24-pilot-sentence-v3-display-design.md`
+- 표시 v3 spec: `docs/suberpowers/specs/2026-11-24-pilot-was-spoken-v3-display-design.md`
   - 시안 없이 바로 구현. 폰트: 카드 Song Myung, 문장 Hahmlet, UI Pretendard, 숫자 Do Hyeon
 - 서고·망각은 이름을 바꾸지 않는다.
 - 백로그로: 캐릭터(C3), 아이템 풀 확장(C2), 적의 서고·망각 개입, 런 단위 장서·영구 망각.

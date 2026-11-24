@@ -14,7 +14,7 @@
 
 **Tech Stack:** TypeScript strict, Vitest, React 19, Playwright
 
-**Spec:** `docs/suberpowers/specs/2026-11-24-pilot-sentence-adjective-states-design.md`
+**Spec:** `docs/suberpowers/specs/2026-11-24-pilot-was-spoken-adjective-states-design.md`
 
 ## Global Constraints
 
@@ -43,8 +43,8 @@
 ### Task 1: 형용사 지속 시간·상태 이름, 카드 설명, 상점 제외
 
 **Files:**
-- Modify: `pilot-sentence/src/game/content/words.ts`, `pilot-sentence/src/game/ui/describe.ts`, `pilot-sentence/src/game/run/shop.ts`
-- Test: `pilot-sentence/src/game/ui/describe.test.ts`, `pilot-sentence/src/game/run/shop.test.ts`, 새 `pilot-sentence/src/game/content/words.test.ts`
+- Modify: `pilot-was-spoken/src/game/content/words.ts`, `pilot-was-spoken/src/game/ui/describe.ts`, `pilot-was-spoken/src/game/run/shop.ts`
+- Test: `pilot-was-spoken/src/game/ui/describe.test.ts`, `pilot-was-spoken/src/game/run/shop.test.ts`, 새 `pilot-was-spoken/src/game/content/words.test.ts`
 
 **Interfaces:**
 - Produces:
@@ -56,20 +56,20 @@
   - `words.test.ts`: 형용사 6장이 spec 표의 `lasts`와 `stateName`을 가진다. 예: `getWord('blind').effect`가 `{ lasts: 'enemyTurn', stateName: '눈멂' }`를 포함하고, `giant`는 `{ lasts: 'cast', stateName: null }`를 포함한다.
   - `describe.test.ts`: `describeWord(getWord('blind'))`가 `'주는 피해 ×0.5 · 적 차례까지'`로 끝나고, `giant`는 `' · 이번 낭독'`으로 끝난다. 기존 형용사 기대 문자열도 이 형식으로 고친다.
   - `shop.test.ts`: `WORD_POOL`에 `'slowly'`가 없고 `'blind'`, `'sturdy'`는 있다.
-- [ ] **Step 2: 실행해 실패 확인.** Run: `cd pilot-sentence && npx vitest run src/game/content src/game/ui/describe.test.ts src/game/run/shop.test.ts` / Expected: FAIL
+- [ ] **Step 2: 실행해 실패 확인.** Run: `cd pilot-was-spoken && npx vitest run src/game/content src/game/ui/describe.test.ts src/game/run/shop.test.ts` / Expected: FAIL
 - [ ] **Step 3: 구현**
   - `adjective(lasts, stateName, ...mods)` 헬퍼로 6장을 정의한다.
   - describe는 효과 문구 뒤에 `· ${LASTS_TEXT[lasts]}`를 붙인다.
   - shop은 `SHOP_EXCLUDED: readonly WordId[] = ['slowly']`를 둬 풀에서 뺀다.
   - 강화(`effectiveWord`)가 adjective의 `lasts`·`stateName`을 보존하는지 tsc로 확인한다.
 - [ ] **Step 4: 통과 확인.** Run: `npx vitest run && npx tsc -b` / Expected: PASS, tsc 0
-- [ ] **Step 5: Commit** `feat(pilot-sentence): 형용사 지속 시간·상태 이름, 천천히 상점 제외`
+- [ ] **Step 5: Commit** `feat(pilot-was-spoken): 형용사 지속 시간·상태 이름, 천천히 상점 제외`
 
 ### Task 2: 남은 상태(엔진)
 
 **Files:**
-- Modify: `pilot-sentence/src/game/resolve/resolve.ts`, `pilot-sentence/src/game/rally/combat.ts`
-- Test: 새 `pilot-sentence/src/game/rally/lingering.test.ts`, `pilot-sentence/src/game/rally/preview.test.ts`
+- Modify: `pilot-was-spoken/src/game/resolve/resolve.ts`, `pilot-was-spoken/src/game/rally/combat.ts`
+- Test: 새 `pilot-was-spoken/src/game/rally/lingering.test.ts`, `pilot-was-spoken/src/game/rally/preview.test.ts`
 
 **Interfaces:**
 - Consumes: Task 1의 adjective 효과 `lasts`
@@ -96,13 +96,13 @@
 - [ ] **Step 2: 실행해 실패 확인.** Run: `npx vitest run src/game/rally/lingering.test.ts src/game/rally/preview.test.ts` / Expected: FAIL
 - [ ] **Step 3: 구현**: 위 Interfaces대로 구현한다.
 - [ ] **Step 4: 통과와 회귀 확인.** Run: `npx vitest run && npx tsc -b && npx oxlint src` / Expected: 모두 통과. 기존 계산식·카드 보존 속성 테스트도 그대로 통과해야 한다.
-- [ ] **Step 5: Commit** `feat(pilot-sentence): 형용사 상태가 적 차례까지 남는다`
+- [ ] **Step 5: Commit** `feat(pilot-was-spoken): 형용사 상태가 적 차례까지 남는다`
 
 ### Task 3: 화면·텍스트 플레이 표시
 
 **Files:**
-- Modify: `pilot-sentence/src/game/ui/EntityCard.tsx`, `pilot-sentence/src/game/ui/Battlefield.tsx`, `pilot-sentence/src/game/ui/CombatScreen.tsx`, `pilot-sentence/src/game/play/textPlay.ts`
-- Test: `pilot-sentence/src/game/play/textPlay.test.ts`, `pilot-sentence/tests/e2e/combat-slice.spec.ts`
+- Modify: `pilot-was-spoken/src/game/ui/EntityCard.tsx`, `pilot-was-spoken/src/game/ui/Battlefield.tsx`, `pilot-was-spoken/src/game/ui/CombatScreen.tsx`, `pilot-was-spoken/src/game/play/textPlay.ts`
+- Test: `pilot-was-spoken/src/game/play/textPlay.test.ts`, `pilot-was-spoken/tests/e2e/combat-slice.spec.ts`
 
 **Interfaces:**
 - Consumes: Task 2의 `RallyState.lingering`, Task 1의 `stateName`·`LASTS_TEXT`
@@ -119,13 +119,13 @@
 - [ ] **Step 2: 실행해 실패 확인.** Run: `npx vitest run src/game/play src/game/rally/text.test.ts && npx playwright test combat-slice` / Expected: FAIL
 - [ ] **Step 3: 구현**
 - [ ] **Step 4: 확인.** Run: `npx vitest run && npx tsc -b && npx oxlint src tests && npx playwright test` / Expected: 모두 통과
-- [ ] **Step 5: Commit** `feat(pilot-sentence): 남은 형용사 상태 표시`
+- [ ] **Step 5: Commit** `feat(pilot-was-spoken): 남은 형용사 상태 표시`
 
 ### Task 4: 기계 검증 재측정
 
 **Files:**
-- Modify: `docs/lab/worklog/pilot-sentence.md`
-- 필요하면: `pilot-sentence/src/game/content/enemies.ts`(튜닝 손잡이)
+- Modify: `docs/lab/worklog/pilot-was-spoken.md`
+- 필요하면: `pilot-was-spoken/src/game/content/enemies.ts`(튜닝 손잡이)
 
 - [ ] **Step 1: 실행** `npx vitest run src/game/sim/balanceGate.test.ts`, `npm run -s gate -- --skip-train`, `npm run -s ceiling -- --runs 200 --sim 60`
 - [ ] **Step 2: 판정**

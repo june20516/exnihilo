@@ -11,11 +11,11 @@
 
 **Tech Stack:** Vite 8, React 19, TypeScript 7(strict), Tailwind v4, Vitest, oxlint, Playwright, @dnd-kit/core, tsx
 
-**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-sentence-v2-base-rally-design.md`
+**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-v2-base-rally-design.md`
 
 ## Global Constraints
 
-- 작업 디렉터리는 `pilot-sentence/`다. 명령은 모두 그 안에서 실행한다.
+- 작업 디렉터리는 `pilot-was-spoken/`다. 명령은 모두 그 안에서 실행한다.
 - `any` 금지, `Math.random` 금지. `src/kit/**`는 `@/game`·`@/app`·React를 import하지 않는다. 엔진 디렉터리(`grammar`, `content`, `sentence`, `resolve`, `combat`, `rally`)는 React를 쓰지 않는다. `.oxlintrc.json`의 엔진 목록에 `src/game/rally/**`를 추가한다(Task 1).
 - 규칙 값(spec §1·§4): 시작 손패 6, 턴당 5장, 손패 상한 8(넘치면 소각), 버리기 턴당 1회, 내 HP 60, 수식어 칸 슬롯당 2.
 - 내 보호는 내 턴 시작에, 적 보호는 적 턴 시작에 0이 된다.
@@ -66,7 +66,7 @@
 - [ ] **Step 1: v1 보존 태그**
 
 ```bash
-git tag pilot-sentence-v1 && git tag --list 'pilot-sentence-*'
+git tag pilot-sentence-v1 && git tag --list 'pilot-was-spoken-*'
 ```
 Expected: `pilot-sentence-v1`
 
@@ -459,7 +459,7 @@ git add -A src tests stitch && git commit -m "feat(ui): 기본 랠리 화면 (�
     - 쓰이지 않는 거부 사유 제거: `notEnoughAp`, `noSwapLeft`, `slotSealed`, `noPaidDraw`, `cannotCast`
   - `src/game/ui/describe.ts`(`describeIntent` 제거), `src/game/content/balance.ts`(`sealExtraCost` 제거), `src/game/fx/registry.ts`(제거된 이벤트의 핸들러 제거)
 - Move: `SlotAddress`, `ClauseSpec` 타입을 `content/encounters.ts`에서 `content/enemies.ts`로 옮기고 import를 고친다.
-- Modify: `docs/lab/worklog/pilot-sentence.md`(v2 기본 랠리 sim 결과표와 게이트 결과 추가)
+- Modify: `docs/lab/worklog/pilot-was-spoken.md`(v2 기본 랠리 sim 결과표와 게이트 결과 추가)
 
 **Interfaces:**
 - Consumes: Task 1~5 전부

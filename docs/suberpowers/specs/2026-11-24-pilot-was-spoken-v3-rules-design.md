@@ -1,6 +1,6 @@
 # 문장 던전 v3: 결정 구조 고치기 (기본 규칙 한 번 수정)
 
-기준 문서: `2026-11-23-pilot-sentence-v2-base-rally-design.md`(기본 랠리), `2026-11-23-pilot-sentence-v2-run-build-design.md`(런·빌드), `2026-11-24-pilot-sentence-adjective-states-design.md`(형용사 상태)
+기준 문서: `2026-11-23-pilot-was-spoken-v2-base-rally-design.md`(기본 랠리), `2026-11-23-pilot-was-spoken-v2-run-build-design.md`(런·빌드), `2026-11-24-pilot-was-spoken-adjective-states-design.md`(형용사 상태)
 근거: `docs/lab/playtest/human-1.md`(사람 테스트 1회차)
 
 ## 1. 왜
@@ -92,7 +92,7 @@
 
 ## 4. 범위 밖
 
-다음은 Plan 8 spec(`2026-11-24-pilot-sentence-v3-display-design.md`)이 다룬다.
+다음은 Plan 8 spec(`2026-11-24-pilot-was-spoken-v3-display-design.md`)이 다룬다.
 - 표시·조작: 문구, 증폭 요소, 강화 수치, 서고·망각 열람, 손패 겹침, 단어 빼기, 시각화, 폰트
 
 이번 spec에서는 새 규칙을 플레이할 수 있을 최소한의 화면만 붙인다. 기본 동사 타일, 보호 덩어리의 합과 이월 표시(글자), 서고 바닥 알림, 손패 넘침 알림, 새로고침 버튼이다.

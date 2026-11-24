@@ -1,7 +1,7 @@
 # 문장 던전 v2 — 런과 빌드 레이어 설계
 
 - 상태: 초안 (사용자 검토 대기)
-- 앞선 문서: `2026-11-23-pilot-sentence-v2-base-rally-design.md`(기본 랠리). 기본 랠리 규칙은 바꾸지 않는다. 이 문서는 그 위에 얹는 층이다.
+- 앞선 문서: `2026-11-23-pilot-was-spoken-v2-base-rally-design.md`(기본 랠리). 기본 랠리 규칙은 바꾸지 않는다. 이 문서는 그 위에 얹는 층이다.
 
 ## 0. 목적과 성공 기준
 
@@ -154,7 +154,7 @@
 
 ## 8. 플레이테스터 에이전트 (단계 B)
 
-- **텍스트 플레이 명령**: `npm run play -- <명령>`. 상태는 `pilot-sentence/.play/state.json`(git 무시)에 저장해 명령 사이에 이어진다.
+- **텍스트 플레이 명령**: `npm run play -- <명령>`. 상태는 `pilot-was-spoken/.play/state.json`(git 무시)에 저장해 명령 사이에 이어진다.
   - 명령: `new [seed]`, `show`, `place <손패#> <절#> <주어|목적어|동사|연결어> [칸#]`, `target <적#>`, `discard <손패#...>`, `clear`, `cast`, `end`, `buy <보상#>`, `leave`
   - `show`는 화면과 같은 정보를 보여 준다: 층, HP, 화폐, 적 예고, 내 문장, 계산식, 두 미리보기, 손패(번호), 상점.
 - **절차**

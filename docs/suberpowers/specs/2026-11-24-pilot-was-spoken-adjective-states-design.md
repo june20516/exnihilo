@@ -1,6 +1,6 @@
 # 문장 던전: 형용사는 꾸민 명사의 상태다 (기본 랠리 규칙 추가)
 
-기준 문서: `2026-11-23-pilot-sentence-v2-base-rally-design.md`(기본 랠리), `2026-11-23-pilot-sentence-v2-run-build-design.md`(런·빌드)
+기준 문서: `2026-11-23-pilot-was-spoken-v2-base-rally-design.md`(기본 랠리), `2026-11-23-pilot-was-spoken-v2-run-build-design.md`(런·빌드)
 
 ## 1. 왜
 
@@ -15,7 +15,7 @@ v2 기본 랠리에서는 서로의 문장을 건드리지 않는다. 그래서 
 - **지속 시간은 카드의 속성이다.** 단어마다 정한다. 이번 단계의 값은 두 가지다.
   - `cast`(이번 낭독): 그 낭독이 실행되는 동안만
   - `enemyTurn`(적 차례까지): 낭독이 끝난 뒤 이어지는 적 차례가 끝날 때까지
-- 이름("이번 낭독", "적 차례까지")은 임시다. `docs/lab/naming/pilot-sentence-naming.md`의 카드 속성 항목에서 세계관 이름을 정한다.
+- 이름("이번 낭독", "적 차례까지")은 임시다. `docs/lab/naming/pilot-was-spoken-naming.md`의 카드 속성 항목에서 세계관 이름을 정한다.
 
 ## 3. 규칙
 
@@ -66,7 +66,7 @@ v2 기본 랠리에서는 서로의 문장을 건드리지 않는다. 그래서 
 
 ## 7. 범위 밖
 
-카드 변형(같은·반쪽·비슷한·한시적 효과), 등급, 자리에 따라 바뀌는 활용형, 지속 시간 값 추가, 세계관 이름은 이번 범위가 아니다. 모두 `docs/lab/backlog/pilot-sentence.md`(볼륨 단계)로 넘긴다.
+카드 변형(같은·반쪽·비슷한·한시적 효과), 등급, 자리에 따라 바뀌는 활용형, 지속 시간 값 추가, 세계관 이름은 이번 범위가 아니다. 모두 `docs/lab/backlog/pilot-was-spoken.md`(볼륨 단계)로 넘긴다.
 
 ## 8. 검증
 

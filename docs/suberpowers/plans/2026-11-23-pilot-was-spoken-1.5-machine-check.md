@@ -8,7 +8,7 @@
 
 **Tech Stack:** 기존 + `tsx`(CLI 실행)
 
-**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-sentence-design.md` (1.6 보호 소멸, 1.8 enrage, 9.3 기계 검증)
+**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-design.md` (1.6 보호 소멸, 1.8 enrage, 9.3 기계 검증)
 
 ## Global Constraints
 - Plan 1의 Global Constraints를 그대로 따른다(경계 규칙, 순수성, worklog, 커밋 형식).

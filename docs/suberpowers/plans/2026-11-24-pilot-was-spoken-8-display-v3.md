@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, Tailwind v4, dnd-kit(Pointer + Touch 센서), Vitest, Playwright(뷰포트·터치 에뮬레이션)
 
-**Spec:** `docs/suberpowers/specs/2026-11-24-pilot-sentence-v3-display-design.md` (규칙은 `…-v3-rules-design.md`, Plan 7로 구현 완료)
+**Spec:** `docs/suberpowers/specs/2026-11-24-pilot-was-spoken-v3-display-design.md` (규칙은 `…-v3-rules-design.md`, Plan 7로 구현 완료)
 
 ## Global Constraints
 
@@ -21,7 +21,7 @@
 - **아이콘**: Material Symbols Outlined. 상태·행동 종류별 아이콘은 `ui/icons.ts` 표 하나에서만 정한다.
 - **한 화면**: 1440×900, 1280×720, 844×390에서 스크롤이 없다. 390×844(세로)에서는 "가로로 돌려 주세요" 안내만 보인다.
 - **확장 가능한 구조(사용자 규칙)**: 아이콘·색·문구 표는 종류(kind)로 찾는다. 특정 단어·유물·적 id로 분기하지 않는다. 수치는 규칙 값(`content/balance.ts`)에서 읽는다.
-- 명령(모두 `pilot-sentence/`에서): `npx tsc -b`, `npx oxlint`, `npx vitest run`, `npx playwright test`
+- 명령(모두 `pilot-was-spoken/`에서): `npx tsc -b`, `npx oxlint`, `npx vitest run`, `npx playwright test`
 - Minor도 그 자리에서 고친다(사용자 규칙).
 
 ## Review Focus
@@ -67,7 +67,7 @@
   - 막는다 문구: `sentenceText`가 materialize한 보드를 렌더할 때, 지원 동사 절의 목적어가 빈칸(owner blank)이고 해석 대상이 주어와 같으면 목적어 토큰을 뺀다.
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: PASS
-- [ ] **Step 5: Commit**: `feat(pilot-sentence): 놓은 단어 하나씩 빼기, 막는다 문구`
+- [ ] **Step 5: Commit**: `feat(pilot-was-spoken): 놓은 단어 하나씩 빼기, 막는다 문구`
 
 ### Task 2: 엔진 — 카드·계산식 구조값
 
@@ -105,7 +105,7 @@
 - [ ] **Step 3: 구현**: 위 인터페이스대로. 사실 문구(text)는 기존 `describeAction`·`describeAdjective`·`describeAdverb` 문구를 재사용한다.
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: PASS
-- [ ] **Step 5: Commit**: `feat(pilot-sentence): 카드 설명·계산식 구조값(강화 전후, 출처)`
+- [ ] **Step 5: Commit**: `feat(pilot-was-spoken): 카드 설명·계산식 구조값(강화 전후, 출처)`
 
 ### Task 3: 엔진 — 미리보기·예고·증폭 요소·서고 구조값
 
@@ -138,7 +138,7 @@
 - [ ] **Step 3: 구현**: 이벤트 → 칩 변환은 `lines.ts`의 이벤트 해석과 같은 규칙을 따른다. 기존 `lines.ts`·`intentTexts`는 텍스트 플레이용으로 유지한다.
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
   - Expected: PASS
-- [ ] **Step 5: Commit**: `feat(pilot-sentence): 미리보기·예고·증폭 요소·서고 구조값`
+- [ ] **Step 5: Commit**: `feat(pilot-was-spoken): 미리보기·예고·증폭 요소·서고 구조값`
 
 ### Task 4: 폰트 토큰, 아이콘 표, 툴팁 컴포넌트
 
@@ -166,7 +166,7 @@
   - 옛 토큰 클래스를 새 토큰으로 옮긴다: 카드 단어·슬롯 단어는 card, 제목·예고·결과 문구는 prose, 숫자(HP·계산식 결과·가격)는 number, 나머지는 ui.
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx oxlint && npx playwright test`
   - Expected: 모두 PASS(기존 e2e 포함)
-- [ ] **Step 5: Commit**: `feat(pilot-sentence): 폰트 토큰 네 개, 아이콘 표, 툴팁 컴포넌트`
+- [ ] **Step 5: Commit**: `feat(pilot-was-spoken): 폰트 토큰 네 개, 아이콘 표, 툴팁 컴포넌트`
 
 ### Task 5: 전투 화면 — 손패 겹침, 단어 빼기, 툴팁(서고·망각·상태·카드)
 
@@ -198,7 +198,7 @@
   - **카드 본문**: `cardFacts`를 아이콘·수치 칩으로 그리고, 배지를 단다. tone은 색으로 보인다.
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx oxlint && npx playwright test`
   - Expected: PASS
-- [ ] **Step 5: Commit**: `feat(pilot-sentence): 손패 겹침, 단어 빼기, 서고·망각·상태·카드 툴팁`
+- [ ] **Step 5: Commit**: `feat(pilot-was-spoken): 손패 겹침, 단어 빼기, 서고·망각·상태·카드 툴팁`
 
 ### Task 6: 전투 화면 — 미리보기·계산식·예고·증폭 요소 시각화와 배치, 적 초상화
 
@@ -227,7 +227,7 @@
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx oxlint && npx vitest run && npx playwright test`
   - Expected: PASS
 - [ ] **Step 5: 화면 캡처**: 1440×900, 1280×720 캡처를 `docs/lab/playtest/screens/v3-*.png`로 남긴다.
-- [ ] **Step 6: Commit**: `feat(pilot-sentence): 미리보기·계산식·예고·증폭 요소 시각화와 배치`
+- [ ] **Step 6: Commit**: `feat(pilot-was-spoken): 미리보기·계산식·예고·증폭 요소 시각화와 배치`
 
 ### Task 7: 모바일 가로 레이아웃
 
@@ -255,4 +255,4 @@
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx oxlint && npx vitest run && npx playwright test`
   - Expected: PASS(데스크탑 e2e 포함)
 - [ ] **Step 5: 화면 캡처**: 844×390 캡처를 `docs/lab/playtest/screens/v3-mobile.png`로 남긴다.
-- [ ] **Step 6: Commit**: `feat(pilot-sentence): 모바일 가로 레이아웃과 터치 입력`
+- [ ] **Step 6: Commit**: `feat(pilot-was-spoken): 모바일 가로 레이아웃과 터치 입력`

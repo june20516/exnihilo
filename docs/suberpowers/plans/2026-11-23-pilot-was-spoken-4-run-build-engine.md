@@ -12,11 +12,11 @@
 
 **Tech Stack:** TypeScript 7(strict), Vitest, tsx(스크립트), oxlint
 
-**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-sentence-v2-run-build-design.md`(이 plan은 단계 A: §1~§7). 기본 규칙은 `docs/suberpowers/specs/2026-11-23-pilot-sentence-v2-base-rally-design.md`를 따른다.
+**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-v2-run-build-design.md`(이 plan은 단계 A: §1~§7). 기본 규칙은 `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-v2-base-rally-design.md`를 따른다.
 
 ## Global Constraints
 
-- 명령은 모두 `pilot-sentence/` 안에서 실행한다.
+- 명령은 모두 `pilot-was-spoken/` 안에서 실행한다.
 - `any` 금지, `Math.random` 금지. `src/kit/**`는 game·app·React를 import하지 않는다. `src/game/run/**`도 엔진 목록(React 금지)에 추가한다(Task 5).
 - 빈 빌드 상태(`EMPTY_BUILD`)와 기본 옵션이면 `rally/`의 모든 기존 테스트와 기본 랠리 게이트(`balanceGate.test.ts`)가 수정 없이 통과해야 한다.
 - 엔진 테스트는 실제 콘텐츠가 아니라 `rally/testFixtures.ts`의 테스트 전용 단어·조우에 기댄다. 콘텐츠 수치를 튜닝해도 엔진 테스트가 깨지지 않아야 한다.
@@ -379,7 +379,7 @@ test('trainShopWeights는 결정적이다(같은 입력 → 같은 가중치)', 
 
 **Files:**
 - Tune: `src/game/content/enemies.ts`, `src/game/content/words.ts`(적 전용 단어 수치만), `src/game/run/floors.ts`, `src/game/run/shop.ts`(가격)
-- Modify: `docs/lab/worklog/pilot-sentence.md`, `src/game/sim/learnedWeights.json`
+- Modify: `docs/lab/worklog/pilot-was-spoken.md`, `src/game/sim/learnedWeights.json`
 
 - [ ] **Step 1: 측정.** Run: `npm run gate`. 표를 작업 로그에 붙인다.
 - [ ] **Step 2: 튜닝.** 게이트가 통과하지 않으면 spec §7.2의 손잡이만 조정한다: 적 HP·피해, 4·5층 배율, 화폐량, 가격, 회복률. 바꾼 값마다 ledger에 `Ruling:`을 남긴다. 기본 랠리 규칙과 빌드 요소의 효과는 바꾸지 않는다. 손잡이로 맞지 않으면 멈추고 측정표를 붙여 보고한다.

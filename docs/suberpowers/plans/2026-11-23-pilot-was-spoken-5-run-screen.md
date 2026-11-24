@@ -11,7 +11,7 @@
 
 **Tech Stack:** Vite 8, React 19, TypeScript strict, Tailwind v4, dnd-kit, Vitest(node 환경), Playwright
 
-**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-sentence-v2-run-build-design.md` §8~§9 (§9가 이 plan의 범위)
+**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-v2-run-build-design.md` §8~§9 (§9가 이 plan의 범위)
 
 ## Global Constraints
 
@@ -35,8 +35,8 @@
 ### Task 1: 보상 문구 공용 모듈
 
 **Files:**
-- Create: `pilot-sentence/src/game/run/labels.ts`, `pilot-sentence/src/game/run/labels.test.ts`
-- Modify: `pilot-sentence/src/game/play/textPlay.ts`(자체 정의를 지우고 labels를 쓴다)
+- Create: `pilot-was-spoken/src/game/run/labels.ts`, `pilot-was-spoken/src/game/run/labels.test.ts`
+- Modify: `pilot-was-spoken/src/game/play/textPlay.ts`(자체 정의를 지우고 labels를 쓴다)
 
 **Interfaces:**
 - Produces:
@@ -52,16 +52,16 @@
   - `offerName({kind:'relic', id:'stress'}, EMPTY_BUILD)` → `'[유물] 강세'`. `offerName({kind:'structure', id:'handSize'}, EMPTY_BUILD)` → `'[구조] 손패 상한 +1'`.
   - `offerDetail({kind:'upgrade', wordId:'fiercely'}, EMPTY_BUILD)`에 `'×1.5'`와 `'×2'`가 모두 들어 있다.
   - `upgradeSummary({...EMPTY_BUILD, upgrades:{fiercely:2}})` → `['격렬하게 2단계']`.
-- [ ] **Step 2: 실행해 실패 확인.** Run: `cd pilot-sentence && npx vitest run src/game/run/labels.test.ts` / Expected: FAIL, `./labels` 모듈 없음
+- [ ] **Step 2: 실행해 실패 확인.** Run: `cd pilot-was-spoken && npx vitest run src/game/run/labels.test.ts` / Expected: FAIL, `./labels` 모듈 없음
 - [ ] **Step 3: textPlay의 정의를 labels.ts로 옮긴다.** textPlay는 import해서 쓴다.
 - [ ] **Step 4: 실행해 통과 확인.** Run: `npx vitest run src/game/run src/game/play` / Expected: PASS(textPlay 15개 포함)
-- [ ] **Step 5: Commit** `refactor(pilot-sentence): 보상 문구를 run/labels로 옮김`
+- [ ] **Step 5: Commit** `refactor(pilot-was-spoken): 보상 문구를 run/labels로 옮김`
 
 ### Task 2: 런 store와 샌드박스 분리
 
 **Files:**
-- Create: `pilot-sentence/src/game/run/debug.ts`, `pilot-sentence/src/game/run/debug.test.ts`, `pilot-sentence/src/app/useRunStore.ts`, `pilot-sentence/src/app/RallySandbox.tsx`
-- Modify: `pilot-sentence/src/game/ui/CombatScreen.tsx`, `pilot-sentence/src/app/useCombatStore.ts`, `pilot-sentence/src/app/App.tsx`, `pilot-sentence/tests/e2e/combat-slice.spec.ts`
+- Create: `pilot-was-spoken/src/game/run/debug.ts`, `pilot-was-spoken/src/game/run/debug.test.ts`, `pilot-was-spoken/src/app/useRunStore.ts`, `pilot-was-spoken/src/app/RallySandbox.tsx`
+- Modify: `pilot-was-spoken/src/game/ui/CombatScreen.tsx`, `pilot-was-spoken/src/app/useCombatStore.ts`, `pilot-was-spoken/src/app/App.tsx`, `pilot-was-spoken/tests/e2e/combat-slice.spec.ts`
 
 **Interfaces:**
 - Produces:
@@ -84,13 +84,13 @@
 - [ ] **Step 3: debug.ts 구현.** 이어서 `useRunStore`, `RallySandbox`를 만들고 CombatScreen을 props 방식으로 바꾼다. App은 `?mode=rally`이면 RallySandbox, 아니면 아직 빈 런 자리(`<div data-testid="run-screen" />`)를 그린다. 런 화면은 Task 4에서 채운다.
 - [ ] **Step 4: e2e 경로 변경.** `combat-slice.spec.ts`의 `page.goto`를 `/?mode=rally&seed=${SEED}`로 바꾼다.
 - [ ] **Step 5: 검증.** Run: `npx vitest run && npx tsc -b && npx oxlint src && npx playwright test` / Expected: 모두 통과(e2e 8개)
-- [ ] **Step 6: Commit** `refactor(pilot-sentence): 런 store, 샌드박스(?mode=rally) 분리`
+- [ ] **Step 6: Commit** `refactor(pilot-was-spoken): 런 store, 샌드박스(?mode=rally) 분리`
 
 ### Task 3: 연결어 칸, 둘째 절, 절마다 계산식
 
 **Files:**
-- Modify: `pilot-sentence/src/game/ui/placement.ts`, `pilot-sentence/src/game/ui/placement.test.ts`, `pilot-sentence/src/game/ui/SentenceBoard.tsx`, `pilot-sentence/src/game/ui/CombatScreen.tsx`
-- Create: `pilot-sentence/tests/e2e/connective.spec.ts`
+- Modify: `pilot-was-spoken/src/game/ui/placement.ts`, `pilot-was-spoken/src/game/ui/placement.test.ts`, `pilot-was-spoken/src/game/ui/SentenceBoard.tsx`, `pilot-was-spoken/src/game/ui/CombatScreen.tsx`
+- Create: `pilot-was-spoken/tests/e2e/connective.spec.ts`
 
 **Interfaces:**
 - Consumes: Task 2의 CombatScreen props
@@ -115,13 +115,13 @@
 - [ ] **Step 4: 실행해 실패 확인.** Run: `npx playwright test connective` / Expected: FAIL, connective-slot 없음
 - [ ] **Step 5: 구현** (placement, SentenceBoard, CombatScreen의 드래그·클릭 처리, 계산식 목록, 비우기 조건)
 - [ ] **Step 6: 검증.** Run: `npx vitest run && npx tsc -b && npx oxlint src && npx playwright test` / Expected: 모두 통과
-- [ ] **Step 7: Commit** `feat(pilot-sentence): 연결어 칸과 둘째 절, 절마다 계산식`
+- [ ] **Step 7: Commit** `feat(pilot-was-spoken): 연결어 칸과 둘째 절, 절마다 계산식`
 
 ### Task 4: 런 화면(상단, 상점, 결과)과 런 e2e
 
 **Files:**
-- Create: `pilot-sentence/src/game/ui/RunTopBar.tsx`, `pilot-sentence/src/game/ui/ShopScreen.tsx`, `pilot-sentence/src/game/ui/RunResult.tsx`, `pilot-sentence/src/app/RunScreen.tsx`, `pilot-sentence/tests/e2e/run.spec.ts`
-- Modify: `pilot-sentence/src/app/App.tsx`
+- Create: `pilot-was-spoken/src/game/ui/RunTopBar.tsx`, `pilot-was-spoken/src/game/ui/ShopScreen.tsx`, `pilot-was-spoken/src/game/ui/RunResult.tsx`, `pilot-was-spoken/src/app/RunScreen.tsx`, `pilot-was-spoken/tests/e2e/run.spec.ts`
+- Modify: `pilot-was-spoken/src/app/App.tsx`
 
 **Interfaces:**
 - Consumes: Task 1 labels, Task 2 `useRunStore`·`weakenNewCombat`·CombatScreen props
@@ -146,9 +146,9 @@
   - 가장 싼 보상을 사면 화폐가 그 값만큼 줄고, 남은 보상의 값이 `ceil(원래 값 × 1.5)`가 된다.
   - 낭독 직후에는 전투 화면(`end-turn`)이 아직 보이고, 연출이 끝난 뒤 상점이 열린다.
   - 넘어가기를 누르면 `2/7`이 보인다.
-  - localStorage의 샌드박스 덱(`pilot-sentence.deck.v2`)에 다른 덱을 저장해 두어도, 런의 덱은 시작 덱 15장이다. 상점의 덱 목록으로 확인한다.
+  - localStorage의 샌드박스 덱(`pilot-was-spoken.deck.v2`)에 다른 덱을 저장해 두어도, 런의 덱은 시작 덱 15장이다. 상점의 덱 목록으로 확인한다.
 - [ ] **Step 2: 실행해 실패 확인.** Run: `npx playwright test run.spec` / Expected: FAIL, run-floor 없음
 - [ ] **Step 3: 구현** (RunTopBar, ShopScreen, RunResult, RunScreen, App 연결). 스타일은 기존 컴포넌트의 토큰(`bg-surface-container-*`, `font-headline` 등)을 따른다.
 - [ ] **Step 4: 검증.** Run: `npx vitest run && npx tsc -b && npx oxlint src && npx playwright test` / Expected: 모두 통과
-- [ ] **Step 5: 스크린샷.** 전투(두 절), 상점, 결과 화면을 `pilot-sentence/stitch/run-*.png`로 남긴다(Playwright MCP 또는 e2e의 `page.screenshot`).
-- [ ] **Step 6: Commit** `feat(pilot-sentence): 런 화면(상단·상점·결과)`
+- [ ] **Step 5: 스크린샷.** 전투(두 절), 상점, 결과 화면을 `pilot-was-spoken/stitch/run-*.png`로 남긴다(Playwright MCP 또는 e2e의 `page.screenshot`).
+- [ ] **Step 6: Commit** `feat(pilot-was-spoken): 런 화면(상단·상점·결과)`

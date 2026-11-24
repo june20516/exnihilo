@@ -3,7 +3,7 @@ import { WORDS, type WordId } from '@/game/content/words'
 
 export const DECK_LIMITS = { min: 12, max: 20 } as const
 /** v2에서 키를 바꿨다: v1 시작 덱(당신·지목 중심)이 저장돼 있어도 새 시작 덱으로 시작한다. */
-export const DECK_STORAGE_KEY = 'pilot-sentence.deck.v2'
+export const DECK_STORAGE_KEY = 'pilot-was-spoken.deck.v2'
 
 export type DeckValidation = { readonly ok: true } | { readonly ok: false; readonly reason: string }
 

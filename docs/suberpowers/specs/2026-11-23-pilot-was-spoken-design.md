@@ -1,8 +1,8 @@
-# Pilot 1: 문장 던전 (pilot-sentence) 설계
+# Pilot 1: 문장 던전 (pilot-was-spoken) 설계
 
 - 작성일: 2026-11-23
 - 기반 문서: `design.md` (구문 트리 기반 '문장 던전' 상세 기획안)
-- 위치: `pilot-sentence/`
+- 위치: `pilot-was-spoken/`
 
 ## 0. 목적과 성공 기준
 
@@ -263,7 +263,7 @@ exnihilo 연구소는 여러 웹 파일럿을 만들어 비교한 뒤 게임 하
 코드는 **`kit/`(장르와 무관한 범용 부품)**과 **`game/`(문장 던전 고유)**으로 나눈다. `kit`은 `game`을 import할 수 없다(ESLint `no-restricted-imports`로 강제). `kit`은 파일럿 2를 시작할 때 실제로 재사용되는 부분만 공용 패키지로 추출할 후보다(9장 참조). 파일럿 1에서는 추출하지 않는다.
 
 ```
-pilot-sentence/
+pilot-was-spoken/
 ├─ src/
 │  ├─ kit/                  # 범용. game을 import하지 않음
 │  │  ├─ core/              # rng(시드), reduce → events 패턴 타입, 개체 HP·상태 이상·진형(전열/후열)
@@ -322,7 +322,7 @@ pilot-sentence/
   - 필요 수량: 적 초상화 13장(거미 완료. 쌍둥이 기사는 1장 공용), 탐험가 1장(완료), 막 배경 2장(동굴 완료), 환경 장소 배경 2장(용암 동굴, 얼음 호수), 이벤트 삽화 4장.
   - 글자가 박힌 이미지 등 불량품은 해당 장만 다시 생성한다.
 - 아이콘은 Material Symbols(Apache 2.0)를 쓴다.
-- `pilot-sentence/assets/CREDITS.md`에 이미지별 Stitch 화면 ID와 프롬프트를 기록한다.
+- `pilot-was-spoken/assets/CREDITS.md`에 이미지별 Stitch 화면 ID와 프롬프트를 기록한다.
 
 ---
 
@@ -402,9 +402,9 @@ pilot-sentence/
 
 ### 9.1 작업 로그와 회고
 
-- `docs/lab/worklog/pilot-sentence.md`: 구현 계획의 작업 단위마다 한 줄씩 남긴다(시작·종료 시각, 단계 분류, 막힌 점, 재작업 여부와 원인).
+- `docs/lab/worklog/pilot-was-spoken.md`: 구현 계획의 작업 단위마다 한 줄씩 남긴다(시작·종료 시각, 단계 분류, 막힌 점, 재작업 여부와 원인).
   - 단계 분류: 기획 / 애셋 / kit / game 엔진 / UI / 연출 / 밸런싱 / 디버깅
-- `docs/lab/retro/pilot-sentence.md`: 파일럿이 끝나면 작성한다. 다음 내용을 담는다.
+- `docs/lab/retro/pilot-was-spoken.md`: 파일럿이 끝나면 작성한다. 다음 내용을 담는다.
   1. 단계별 소요 비중
   2. 가장 비쌌던 재작업 3가지와 원인
   3. 파일럿 2에서 줄일 수 있는 것(재사용할 `kit` 모듈, 바꿀 절차, Stitch 프롬프트 요령)

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Vite, React, TypeScript(strict), Tailwind CSS v4(`@tailwindcss/vite`), Vitest, ESLint(flat config), `@dnd-kit/core`, `motion`, Playwright. 버전은 설치 시점의 최신 안정판을 쓴다.
 
-**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-sentence-design.md`
+**Spec:** `docs/suberpowers/specs/2026-11-23-pilot-was-spoken-design.md`
 
 ## 로드맵 (이 plan은 1/4)
 
@@ -23,7 +23,7 @@ Plan 2~4는 이 plan의 플레이 결과를 반영해 따로 작성한다.
 
 ## Global Constraints
 
-- 작업 위치는 `pilot-sentence/`이고, 경로 별칭은 `@/` = `pilot-sentence/src/`다.
+- 작업 위치는 `pilot-was-spoken/`이고, 경로 별칭은 `@/` = `pilot-was-spoken/src/`다.
 - TypeScript는 `strict: true`이며, `any`는 쓰지 않는다(ESLint `@typescript-eslint/no-explicit-any: error`).
 - `src/kit/**`은 `src/game/**`과 `src/app/**`을 import할 수 없다(ESLint `no-restricted-imports`).
 - `src/kit/**`과 `src/game/**` 중 `ui/`, `fx/`를 뺀 곳에서는 React와 DOM API를 import하지 않는다(엔진의 순수성).
@@ -31,7 +31,7 @@ Plan 2~4는 이 plan의 플레이 결과를 반영해 따로 작성한다.
 - 엔진은 규칙 위반에 예외를 던지지 않고 `rejected` 이벤트를 돌려준다. 예외는 콘텐츠 데이터 오류에만 쓴다.
 - 모든 무작위는 `RngState`를 거친다. `Math.random` 사용을 금지한다(ESLint `no-restricted-properties`).
 - UI 텍스트는 한국어다. 수치는 `src/game/content/balance.ts`에만 둔다.
-- 각 task의 commit 직전에 `docs/lab/worklog/pilot-sentence.md`에 한 줄을 추가한다: `| 날짜 시각 | Task N | 단계 분류 | 막힌 점 | 재작업(원인) |`. 단계 분류는 기획 / 애셋 / kit / game 엔진 / UI / 연출 / 밸런싱 / 디버깅 중 하나다.
+- 각 task의 commit 직전에 `docs/lab/worklog/pilot-was-spoken.md`에 한 줄을 추가한다: `| 날짜 시각 | Task N | 단계 분류 | 막힌 점 | 재작업(원인) |`. 단계 분류는 기획 / 애셋 / kit / game 엔진 / UI / 연출 / 밸런싱 / 디버깅 중 하나다.
 - 커밋 메시지는 한국어로 쓰고, 끝에 세션의 attribution 줄을 붙인다.
 
 ## Review Focus
@@ -47,7 +47,7 @@ Plan 2~4는 이 plan의 플레이 결과를 반영해 따로 작성한다.
 ## File Structure
 
 ```
-pilot-sentence/
+pilot-was-spoken/
 ├─ index.html                         # 폰트 링크(Noto Serif KR, Noto Serif, Space Grotesk, Material Symbols)
 ├─ vite.config.ts / vitest.config.ts / eslint.config.js / tsconfig*.json
 ├─ playwright.config.ts
@@ -77,7 +77,7 @@ pilot-sentence/
 │     ├─ main.tsx, App.tsx, theme.css # Stitch 토큰 → Tailwind @theme
 │     └─ useCombatStore.ts            # useReducer + EffectPlayer 연결
 ├─ tests/e2e/combat-slice.spec.ts
-docs/lab/worklog/pilot-sentence.md
+docs/lab/worklog/pilot-was-spoken.md
 ```
 
 엔진 단위 테스트는 대상 파일 옆에 `*.test.ts`로 둔다.
@@ -87,14 +87,14 @@ docs/lab/worklog/pilot-sentence.md
 ### Task 1: 스캐폴딩과 경계 규칙
 
 **Files:**
-- Create: `pilot-sentence/` 아래 Vite React TS 프로젝트, `eslint.config.js`, `src/app/theme.css`, `src/app/App.tsx`, `docs/lab/worklog/pilot-sentence.md`
-- Move: `pilot-sentence/assets/*.jpg` → `pilot-sentence/public/assets/`
+- Create: `pilot-was-spoken/` 아래 Vite React TS 프로젝트, `eslint.config.js`, `src/app/theme.css`, `src/app/App.tsx`, `docs/lab/worklog/pilot-was-spoken.md`
+- Move: `pilot-was-spoken/assets/*.jpg` → `pilot-was-spoken/public/assets/`
 - Test: `src/app/smoke.test.ts`
 
 **Interfaces:**
 - Produces: `npm run dev | build | test | lint | e2e` 스크립트, `@/` 별칭, Tailwind 테마 토큰(Stitch `battle-v1`의 colors, fontFamily, fontSize를 `@theme`로 옮긴 것: 예 `--color-primary: #ffb3ae`, `--color-surface-container-lowest: #0b0e14`, `--font-headline: "Noto Serif KR", "Noto Serif", serif`, `--font-label: "Space Grotesk", sans-serif`)
 
-- [ ] **Step 1:** `pilot-sentence/`에서 `npm create vite@latest . -- --template react-ts`로 생성한다(기존 `assets/`, `stitch/`는 유지). 이어서 `tailwindcss @tailwindcss/vite @dnd-kit/core motion`과 개발 의존성 `vitest @playwright/test eslint typescript-eslint eslint-plugin-react-hooks`를 설치한다.
+- [ ] **Step 1:** `pilot-was-spoken/`에서 `npm create vite@latest . -- --template react-ts`로 생성한다(기존 `assets/`, `stitch/`는 유지). 이어서 `tailwindcss @tailwindcss/vite @dnd-kit/core motion`과 개발 의존성 `vitest @playwright/test eslint typescript-eslint eslint-plugin-react-hooks`를 설치한다.
 - [ ] **Step 2:** `tsconfig.app.json`에 `strict`와 `paths: { "@/*": ["src/*"] }`를, `vite.config.ts`에 tailwind 플러그인과 alias를 넣는다. `vitest.config.ts`는 `environment: 'node'`, `include: ['src/**/*.test.ts']`로 설정한다. `package.json` 스크립트: `test`는 `vitest run`, `lint`는 `eslint .`, `e2e`는 `playwright test`.
 - [ ] **Step 3:** `eslint.config.js`에 다음 규칙을 넣는다.
   - `src/kit/**`: `no-restricted-imports`로 `@/game/*`, `@/app/*`, 상대 경로 `**/game/**`, `**/app/**` 금지
@@ -103,7 +103,7 @@ docs/lab/worklog/pilot-sentence.md
 - [ ] **Step 4:** 경계 규칙을 검증한다. 임시 파일 `src/kit/_probe.ts`에 `import '@/game/x'`를 쓰고 `npm run lint`를 실행한다. Expected: `no-restricted-imports` 에러. 확인 후 파일을 삭제한다.
 - [ ] **Step 5:** `src/app/theme.css`에 `@import "tailwindcss";`와 `@theme` 토큰을 쓰고, `index.html`에 Stitch 시안과 같은 Google Fonts 링크를 넣는다. `App.tsx`는 배경색과 "문장 던전" 제목만 렌더한다. 이미지는 `public/assets/`로 옮긴다.
 - [ ] **Step 6:** `src/app/smoke.test.ts`에 `expect(1 + 1).toBe(2)`를 쓰고, `npm test && npm run lint && npm run build`를 실행한다. Expected: 모두 통과.
-- [ ] **Step 7:** `docs/lab/worklog/pilot-sentence.md`를 만든다. 표 헤더 `| 일시 | Task | 단계 | 막힌 점 | 재작업(원인) |`를 쓰고 첫 줄을 기록한다. 그다음 커밋한다: `chore(pilot-sentence): Vite/React/Tailwind 스캐폴딩과 kit 경계 규칙`
+- [ ] **Step 7:** `docs/lab/worklog/pilot-was-spoken.md`를 만든다. 표 헤더 `| 일시 | Task | 단계 | 막힌 점 | 재작업(원인) |`를 쓰고 첫 줄을 기록한다. 그다음 커밋한다: `chore(pilot-was-spoken): Vite/React/Tailwind 스캐폴딩과 kit 경계 규칙`
 
 ---
 
@@ -698,7 +698,7 @@ test('핸들러가 실패해도 다음 이벤트를 재생', async () => {
 - [ ] **Step 1:** `describe.test.ts`에 위 예시 6개를 그대로 assertion으로 작성한다. `npm test -- describe` 실행. Expected: FAIL
 - [ ] **Step 2:** `describe.ts`를 구현한다. Expected: PASS
 - [ ] **Step 3:** 컴포넌트를 구현하고 `App.tsx`에서 `CombatScreen encounterId="spider" seed={Date.now() % 1e9}`를 렌더한다(시드 표시를 화면 구석에 둔다).
-- [ ] **Step 4:** `npm run dev`로 실행하고 Playwright MCP 또는 브라우저에서 확인한다. 초기 문장이 `독을 뿜는 거미 가 당신 을 물어뜯는다`로 보여야 한다. 당신 타일 → 주어 슬롯 클릭 시 조사가 "이"로 바뀌고 행동력이 2가 되어야 한다. 턴 종료 후 HP가 52가 되어야 한다(주어 되돌림 예고로 피해 6, 독 틱 2). 스크린샷을 `pilot-sentence/stitch/impl-task10.png`로 저장한다.
+- [ ] **Step 4:** `npm run dev`로 실행하고 Playwright MCP 또는 브라우저에서 확인한다. 초기 문장이 `독을 뿜는 거미 가 당신 을 물어뜯는다`로 보여야 한다. 당신 타일 → 주어 슬롯 클릭 시 조사가 "이"로 바뀌고 행동력이 2가 되어야 한다. 턴 종료 후 HP가 52가 되어야 한다(주어 되돌림 예고로 피해 6, 독 틱 2). 스크린샷을 `pilot-was-spoken/stitch/impl-task10.png`로 저장한다.
 - [ ] **Step 5:** `npm run lint && npm test && npm run build`. Expected: 통과. worklog를 기록하고 커밋한다: `feat(game): 전투 화면 렌더와 클릭 배치`
 
 ---
@@ -749,7 +749,7 @@ test('당신을 주어에 놓고 턴을 끝내면 예고대로 되돌려져 내�
 - [ ] **Step 2:** `npx playwright install chromium && npm run e2e` 실행. Expected: `?seed` 미지원이면 FAIL, 이미 통과하면 그대로 다음 단계로 간다.
 - [ ] **Step 3:** `?seed` 처리, 드래그 앤 드롭, `primitives.ts`, `inkEffects.ts`, `registry.ts`를 구현하고 store에 연결한다.
 - [ ] **Step 4:** `npm run e2e && npm test && npm run lint && npm run build` 실행. Expected: 모두 통과
-- [ ] **Step 5:** 브라우저에서 드래그로 한 판을 끝까지 플레이해 연출이 순서대로 재생되는지, 재생 중 입력이 막히는지 확인한다. 스크린샷을 `pilot-sentence/stitch/impl-task11.png`로 저장한다.
+- [ ] **Step 5:** 브라우저에서 드래그로 한 판을 끝까지 플레이해 연출이 순서대로 재생되는지, 재생 중 입력이 막히는지 확인한다. 스크린샷을 `pilot-was-spoken/stitch/impl-task11.png`로 저장한다.
 - [ ] **Step 6:** worklog를 기록하고 커밋한다: `feat: 드래그 배치, 기본 전투 연출, 슬라이스 e2e`
 
 ---
@@ -757,7 +757,7 @@ test('당신을 주어에 놓고 턴을 끝내면 예고대로 되돌려져 내�
 ### Task 12: 플레이 체크포인트
 
 **Files:**
-- Modify: `docs/lab/worklog/pilot-sentence.md`
+- Modify: `docs/lab/worklog/pilot-was-spoken.md`
 
 - [ ] **Step 1:** `npm test && npm run lint && npm run e2e && npm run build` 전체 실행. Expected: 모두 통과
 - [ ] **Step 2:** 사용자에게 `npm run dev`(포트 표시) 실행법과 함께 플레이를 요청한다. 다음 세 가지 질문에 대한 의견을 받는다.

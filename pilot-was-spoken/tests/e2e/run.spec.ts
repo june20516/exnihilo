@@ -68,7 +68,7 @@ test('넘어가기: 2층 전투가 시작된다', async ({ page }) => {
 })
 
 test('샌드박스 덱이 저장돼 있어도 런은 시작 덱 15장으로 한다', async ({ page }) => {
-  await page.evaluate(() => window.localStorage.setItem('pilot-sentence.deck.v2', JSON.stringify(Array(12).fill('slash'))))
+  await page.evaluate(() => window.localStorage.setItem('pilot-was-spoken.deck.v2', JSON.stringify(Array(12).fill('slash'))))
   await page.reload()
   await winFloorOne(page)
   await expect(page.getByTestId('build-deck')).toContainText('덱 15장', { timeout: 10_000 })
