@@ -1,5 +1,4 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
-import { BALANCE } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { type CardInst, PLAYER_ID, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
@@ -12,27 +11,27 @@ import './testFixtures'
 const S = { clause: 0, role: 'subject' } as const
 const O = { clause: 0, role: 'object' } as const
 const V = { clause: 0, role: 'verb' } as const
-const act = (s: RallyState, a: RallyAction) => reduceRally(s, a, BALANCE).state
+const act = (s: RallyState, a: RallyAction) => reduceRally(s, a).state
 const withHand = (words: WordId[]): RallyState => ({
-  ...startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE).state,
+  ...startRally('test-dummy', RALLY_STARTER_DECK, 1).state,
   deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
 })
 const texts = (lines: readonly { text: string }[]) => lines.map((l) => l.text)
 
 test('미리보기: 내 낭독과 적의 차례가 나뉜다', () => {
-  const p = previewRound(act(withHand(['bite']), { type: 'place', instanceId: 'h0', at: V }), BALANCE)
+  const p = previewRound(act(withHand(['bite']), { type: 'place', instanceId: 'h0', at: V }))
   expect(texts(p.mine)).toEqual(['탐험가 → 거미: 피해 6'])
   expect(texts(p.enemy)).toEqual(['거미 → 탐험가: 피해 7'])
 })
 
 test('미리보기: 막으면 적의 차례 피해가 줄어 보인다', () => {
-  const p = previewRound(act(withHand(['guard']), { type: 'place', instanceId: 'h0', at: V }), BALANCE)
+  const p = previewRound(act(withHand(['guard']), { type: 'place', instanceId: 'h0', at: V }))
   expect(texts(p.mine)).toEqual(['탐험가: 보호 +6'])
   expect(texts(p.enemy)).toEqual(['거미 → 탐험가: 피해 1 (막음 6)'])
 })
 
 test('미리보기: 동사가 없으면 mine은 비고 적의 차례만', () => {
-  const p = previewRound(withHand(['fiercely']), BALANCE)
+  const p = previewRound(withHand(['fiercely']))
   expect(p.mine).toEqual([])
   expect(texts(p.enemy)).toEqual(['거미 → 탐험가: 피해 7'])
 })
@@ -82,7 +81,7 @@ function randomBuild(seed: number): BuildState {
 
 /** 무작위로 몇 수 둔 상태들(거부된 수는 상태를 바꾸지 않는다). 연결어와 둘째 절 배치를 섞는다. */
 function randomStates(encounterId: string, seed: number): RallyState[] {
-  let state = startRally(encounterId, PROPERTY_DECK, seed, BALANCE, { build: randomBuild(seed) }).state
+  let state = startRally(encounterId, PROPERTY_DECK, seed, { build: randomBuild(seed) }).state
   let rng: RngState = createRng(seed)
   // 동사 칸을 절반 확률로 고른다(낭독할 수 있는 상태가 충분히 나오도록).
   const roles = ['subject', 'object', 'verb', 'verb', 'verb', 'verb'] as const
@@ -120,7 +119,7 @@ test.each(['spider', 'swarm', 'slime'])('계산식의 값은 절마다 실제 �
   let checked = 0
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
     for (const state of randomStates(encounterId, seed)) {
-      const groups = eventsByClause(previewEvents(state, BALANCE).mine)
+      const groups = eventsByClause(previewEvents(state).mine)
       const runs = runSentence(state).clauses
       for (const formula of sentenceFormula(state)) {
         const firstHit = groups[formula.clause]?.find((e) => e.type === 'damaged')
@@ -138,7 +137,7 @@ test.each(['spider', 'swarm', 'slime'])('계산식의 값은 절마다 실제 �
 })
 
 test('계산식은 강화를 반영한다: 물어뜯는다★ + 격렬하게★ → "9 × 2 = 18"', () => {
-  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE, { build: { ...EMPTY_BUILD, upgrades: { bite: 1, fiercely: 1 } } }).state
+  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, { build: { ...EMPTY_BUILD, upgrades: { bite: 1, fiercely: 1 } } }).state
   let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'bite' }, { instanceId: 'h1', wordId: 'fiercely' }] } }
   s = act(s, { type: 'place', instanceId: 'h0', at: V })
   s = act(s, { type: 'place', instanceId: 'h1', at: V })
@@ -159,7 +158,7 @@ function twoClauseState(encounterId: string, seed: number): RallyState {
   const [modifierCount, next] = nextInt(rng, 0, 3)
   rng = next
   for (let i = 0; i < modifierCount; i++) words.push(pick(modifiers))
-  const base = startRally(encounterId, PROPERTY_DECK, seed, BALANCE, { build: randomBuild(seed) }).state
+  const base = startRally(encounterId, PROPERTY_DECK, seed, { build: randomBuild(seed) }).state
   let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) } }
   s = act(s, { type: 'place', instanceId: 'h0', at: { clause: 0, role: 'verb' } })
   s = act(s, { type: 'connect', instanceId: 'h1' })
@@ -176,7 +175,7 @@ test.each(['spider', 'swarm', 'slime'])('두 절: 절마다 계산식의 값이 
   let secondChecked = 0
   for (let seed = 1; seed <= 80; seed++) {
     const state = twoClauseState(encounterId, seed)
-    const groups = eventsByClause(previewEvents(state, BALANCE).mine)
+    const groups = eventsByClause(previewEvents(state).mine)
     const runs = runSentence(state).clauses
     for (const formula of sentenceFormula(state)) {
       const firstHit = groups[formula.clause]?.find((e) => e.type === 'damaged')
@@ -212,16 +211,16 @@ test('계산식: 값이 적의 남은 HP 이상이면 처치와 남은 HP를 밝
 })
 
 test('끌어안는다: 내 쪽 피해에는 유물 보너스가 붙고(되받는 피해는 그대로), 계산식도 보인다', () => {
-  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE, { build: { ...EMPTY_BUILD, relics: ['ellipsis'] } }).state
+  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, { build: { ...EMPTY_BUILD, relics: ['ellipsis'] } }).state
   let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand: [{ instanceId: 'h0', wordId: 'embrace' }] } }
   s = act(s, { type: 'place', instanceId: 'h0', at: V })
-  const hits = previewEvents(s, BALANCE).mine.filter((e) => e.type === 'damaged')
+  const hits = previewEvents(s).mine.filter((e) => e.type === 'damaged')
   expect(hits.map((e) => (e.type === 'damaged' ? [e.entityId, e.amount] : []))).toEqual([['e0', 8], [PLAYER_ID, 4]])
   expect(sentenceFormula(s)[0]?.text).toBe('4 + 유물 4 = 8')
 })
 
 test('계산식: 무효가 될 절은 값 대신 이유를 보인다(대상이 먼저 쓰러짐, 주어 빙결)', () => {
-  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1, BALANCE).state
+  const base = startRally('test-dummy', RALLY_STARTER_DECK, 1).state
   const hand: CardInst[] = [{ instanceId: 'h0', wordId: 'bite' }, { instanceId: 'h1', wordId: 'and' }, { instanceId: 'h2', wordId: 'bite' }]
   let s: RallyState = { ...base, entities: base.entities.map((e) => (e.side === 'enemy' ? { ...e, hp: 3 } : e)), deck: { drawPile: [], discardPile: [], hand } }
   s = act(s, { type: 'place', instanceId: 'h0', at: V })
@@ -240,5 +239,5 @@ test('미리보기의 적 차례 피해에 남은 상태(눈먼)가 반영된다
   const base = withHand(['bite', 'blind'])
   let s = act(base, { type: 'place', instanceId: 'h0', at: V })
   s = act(s, { type: 'place', instanceId: 'h1', at: O })
-  expect(texts(previewRound(s, BALANCE).enemy)).toEqual(['거미 → 탐험가: 피해 3'])
+  expect(texts(previewRound(s).enemy)).toEqual(['거미 → 탐험가: 피해 3'])
 })

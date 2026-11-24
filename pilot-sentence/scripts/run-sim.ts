@@ -5,7 +5,6 @@
  *   --skip-train  저장된 학습 가중치(src/game/sim/learnedWeights.json)를 쓴다
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { BALANCE } from '@/game/content/balance'
 import type { RelicId } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import type { OfferKind } from '@/game/run/shop'
@@ -43,7 +42,7 @@ if (skipTrain) {
   if (!isShopWeights(parsed)) throw new Error(`${WEIGHTS_PATH} 형식이 맞지 않습니다.`)
   learned = parsed
 } else {
-  learned = trainShopWeights(TRAIN_SEEDS, iterations, 42, BALANCE)
+  learned = trainShopWeights(TRAIN_SEEDS, iterations, 42)
   writeFileSync(WEIGHTS_PATH, `${JSON.stringify(learned, null, 2)}\n`)
   console.log(`학습 완료 (${((Date.now() - started) / 1000).toFixed(0)}초): ${WEIGHTS_PATH}`)
 }
@@ -94,7 +93,7 @@ console.log(`\n평가 시드 ${runs}개 (${evalSeeds[0]}~${evalSeeds[evalSeeds.l
 console.log('정책          완주율 평균층  한방평균 한방상위25% 정예·보스턴 두절낭독  구매(단어/강화/구조/유물)')
 const summaries: Summary[] = []
 for (const [name, policy] of policies) {
-  const s = summarize(name, evalSeeds.map((seed) => simulateRun(seed, policy, BALANCE)))
+  const s = summarize(name, evalSeeds.map((seed) => simulateRun(seed, policy)))
   summaries.push(s)
   const purchases = s.results.flatMap((r) => r.purchases)
   const share = (kind: OfferKind) => (purchases.length === 0 ? 0 : purchases.filter((p) => p.kind === kind).length / purchases.length)

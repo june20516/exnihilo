@@ -1,4 +1,3 @@
-import { BALANCE } from '@/game/content/balance'
 import type { SlotAddress } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
@@ -16,16 +15,16 @@ const DECK: WordId[] = ['bite', 'guard', 'hide', 'rage', 'scare', 'mend', 'slash
 
 /** 유물 하나를 가진 test-dummy 전투에서, 주어진 단어를 순서대로 놓은 상태. */
 function setup(relics: RelicId[], placements: [WordId, SlotAddress, number?][]): RallyState {
-  const base = startRally('test-dummy', DECK, 1, BALANCE, { build: { ...EMPTY_BUILD, relics } }).state
+  const base = startRally('test-dummy', DECK, 1, { build: { ...EMPTY_BUILD, relics } }).state
   const hand = placements.map(([wordId], i): CardInst => ({ instanceId: `h${i}`, wordId }))
   const draw = (['guard', 'hide', 'rage', 'scare', 'mend'] as const).map((wordId, i): CardInst => ({ instanceId: `d${i}`, wordId }))
   let s: RallyState = { ...base, deck: { drawPile: draw, discardPile: [], hand } }
   placements.forEach(([, at, modifierIndex], i) => {
-    s = reduceRally(s, { type: 'place', instanceId: `h${i}`, at, modifierIndex }, BALANCE).state
+    s = reduceRally(s, { type: 'place', instanceId: `h${i}`, at, modifierIndex }).state
   })
   return s
 }
-const cast = (s: RallyState) => reduceRally(s, { type: 'cast' }, BALANCE)
+const cast = (s: RallyState) => reduceRally(s, { type: 'cast' })
 const hits = (events: readonly CombatEvent[]) =>
   events.filter((e): e is Extract<CombatEvent, { type: 'damaged' }> => e.type === 'damaged' && e.entityId === 'e0')
 
@@ -91,8 +90,8 @@ test('긴 문장: 실행되지 않는 칸(자동사의 목적어)의 카드는 �
 test('긴 문장: 연결어 카드도 문장에 놓인 단어로 센다', () => {
   let s = setup(['longSentence'], [['bite', V]])
   s = { ...s, deck: { ...s.deck, hand: [...s.deck.hand, { instanceId: 'c0', wordId: 'and' }, { instanceId: 'c1', wordId: 'bite' }] } }
-  s = reduceRally(s, { type: 'connect', instanceId: 'c0' }, BALANCE).state
-  s = reduceRally(s, { type: 'place', instanceId: 'c1', at: { clause: 1, role: 'verb' } }, BALANCE).state
+  s = reduceRally(s, { type: 'connect', instanceId: 'c0' }).state
+  s = reduceRally(s, { type: 'place', instanceId: 'c1', at: { clause: 1, role: 'verb' } }).state
   expect(clauseHooks(s, 0).damageBonus).toBe(6)
 })
 

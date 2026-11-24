@@ -1,3 +1,4 @@
+import { PLAYER_DEF_ID } from '@/game/content/characters'
 import { useState } from 'react'
 import { type EncounterTier, RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { FLOORS } from '@/game/run/floors'
@@ -18,7 +19,7 @@ export function RunTopBar({ state, busy, onNewRun }: RunTopBarProps) {
   /** 새 런은 두 번 눌러야 시작한다(진행 중인 런을 실수로 버리지 않게). */
   const [armed, setArmed] = useState(false)
   const floor = FLOORS[state.floor - 1]
-  const player = state.phase === 'combat' ? state.combat?.entities.find((e) => e.side === 'ally' && e.defId === 'player') : null
+  const player = state.phase === 'combat' ? state.combat?.entities.find((e) => e.side === 'ally' && e.defId === PLAYER_DEF_ID) : null
   const encounter = state.phase === 'combat' && state.combat ? RALLY_ENCOUNTERS[state.combat.encounterId]?.name : null
   return (
     <header className="flex h-12 items-center justify-between gap-4 bg-surface-container-low px-4 shadow-md">

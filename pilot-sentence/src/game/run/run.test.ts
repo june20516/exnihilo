@@ -1,10 +1,9 @@
-import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import type { CardInst } from '@/game/rally/combat'
-import { REWARD_GOLD } from './floors'
+import { RUN_RULES } from '@/game/content/balance'
 import { type RunAction, type RunState, reduceRun, startRun } from './run'
 
-const act = (s: RunState, a: RunAction) => reduceRun(s, a, BALANCE)
+const act = (s: RunState, a: RunAction) => reduceRun(s, a)
 
 /** 이번 층 전투를 바로 이긴다: 첫 적만 HP 1로 남기고 나머지는 쓰러뜨린 뒤 동사 한 장으로 낭독. */
 function winFloor(run: RunState): RunState {
@@ -23,20 +22,20 @@ const hurt = (run: RunState, hp: number): RunState => ({
 })
 
 test('시작: 1층 전투, HP 60, 화폐 0', () => {
-  const s = startRun(1, BALANCE).state
+  const s = startRun(1).state
   expect(s).toMatchObject({ floor: 1, phase: 'combat', hp: 60, maxHp: 60, gold: 0 })
   expect(s.combat?.encounterId).toMatch(/^(spider|swarm|slime)$/)
 })
 
 test('1층 승리 → 일반 화폐, 회복 20%(최대 HP 초과 없음), 상점', () => {
-  const r = winFloor(hurt(startRun(1, BALANCE).state, 30))
-  expect(r).toMatchObject({ phase: 'shop', gold: REWARD_GOLD.normal, hp: 42 })
+  const r = winFloor(hurt(startRun(1).state, 30))
+  expect(r).toMatchObject({ phase: 'shop', gold: RUN_RULES.rewardGold.normal, hp: 42 })
   expect(r.shop?.items).toHaveLength(3)
-  expect(winFloor(hurt(startRun(1, BALANCE).state, 55)).hp).toBe(60)
+  expect(winFloor(hurt(startRun(1).state, 55)).hp).toBe(60)
 })
 
 test('구매: 화폐 차감과 반영, 모자라면 notEnoughGold, 두 번 사면 soldOut', () => {
-  const shopState = { ...winFloor(startRun(2, BALANCE).state), gold: 100 }
+  const shopState = { ...winFloor(startRun(2).state), gold: 100 }
   const cheapest = shopState.shop?.items.reduce((best, item, i, all) => (item.price < all[best].price ? i : best), 0) ?? 0
   const bought = act(shopState, { type: 'buy', index: cheapest })
   const item = shopState.shop?.items[cheapest]
@@ -47,7 +46,7 @@ test('구매: 화폐 차감과 반영, 모자라면 notEnoughGold, 두 번 사�
 })
 
 test('구매 효과: 단어는 덱에, 강화·구조·유물은 빌드에', () => {
-  const base = { ...winFloor(startRun(3, BALANCE).state), gold: 999 }
+  const base = { ...winFloor(startRun(3).state), gold: 999 }
   const withItems = (offer: NonNullable<RunState['shop']>['items'][number]['offer']): RunState => ({ ...base, shop: { items: [{ offer, price: 1, sold: false }] } })
   expect(act(withItems({ kind: 'word', wordId: 'so' }), { type: 'buy', index: 0 }).state.deck).toContain('so')
   expect(act(withItems({ kind: 'upgrade', wordId: 'bite' }), { type: 'buy', index: 0 }).state.build.upgrades.bite).toBe(1)
@@ -56,7 +55,7 @@ test('구매 효과: 단어는 덱에, 강화·구조·유물은 빌드에', () 
 })
 
 test('leave → 2층 전투, 빌드와 HP가 이어진다', () => {
-  const shop = { ...winFloor(hurt(startRun(4, BALANCE).state, 30)), build: { ...startRun(4, BALANCE).state.build, relics: ['echo' as const] } }
+  const shop = { ...winFloor(hurt(startRun(4).state, 30)), build: { ...startRun(4).state.build, relics: ['echo' as const] } }
   const next = act(shop, { type: 'leave' }).state
   expect(next).toMatchObject({ floor: 2, phase: 'combat' })
   expect(next.combat?.entities.find((e) => e.id === 'p')?.hp).toBe(42)
@@ -64,7 +63,7 @@ test('leave → 2층 전투, 빌드와 HP가 이어진다', () => {
 })
 
 test('3층은 거미 여왕, 6층은 문지기, 7층은 필경사. 4·5층은 적 HP ×1.3', () => {
-  let s = startRun(5, BALANCE).state
+  let s = startRun(5).state
   const seen: string[] = []
   for (let floor = 1; floor <= 7; floor++) {
     seen.push(s.combat?.encounterId ?? '')
@@ -80,14 +79,14 @@ test('3층은 거미 여왕, 6층은 문지기, 7층은 필경사. 4·5층은 �
 })
 
 test('정예 승리는 정예 화폐', () => {
-  let s = startRun(6, BALANCE).state
+  let s = startRun(6).state
   for (let floor = 1; floor <= 2; floor++) s = act(winFloor(s), { type: 'leave' }).state
   const before = s.gold
-  expect(winFloor(s).gold - before).toBe(REWARD_GOLD.elite)
+  expect(winFloor(s).gold - before).toBe(RUN_RULES.rewardGold.elite)
 })
 
 test('패배 → lost, 이후 행동 거부', () => {
-  const s = hurt(startRun(7, BALANCE).state, 1)
+  const s = hurt(startRun(7).state, 1)
   const r = act(s, { type: 'combat', action: { type: 'endTurn' } })
   expect(r.state.phase).toBe('lost')
   expect(r.events).toContainEqual({ type: 'runEnded', outcome: 'lost' })
@@ -95,6 +94,6 @@ test('패배 → lost, 이후 행동 거부', () => {
 })
 
 test('같은 시드는 같은 런(결정적)', () => {
-  const play = (seed: number) => act(winFloor(startRun(seed, BALANCE).state), { type: 'leave' }).state
+  const play = (seed: number) => act(winFloor(startRun(seed).state), { type: 'leave' }).state
   expect(play(11)).toEqual(play(11))
 })

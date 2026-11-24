@@ -1,4 +1,3 @@
-import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
 import { type CardInst, PLAYER_ID, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
@@ -13,18 +12,18 @@ type Placement = [WordId, { clause: number; role: 'subject' | 'object' | 'verb' 
 
 /** 손패를 정해 놓고 순서대로 놓는다. 대상 지정이 필요하면 세 번째 값에 적 id. */
 function setup(encounterId: string, placements: Placement[], edit: (s: RallyState) => RallyState = (s) => s): RallyState {
-  const base = edit(startRally(encounterId, DECK, 1, BALANCE).state)
+  const base = edit(startRally(encounterId, DECK, 1).state)
   const hand = placements.map(([wordId], i): CardInst => ({ instanceId: `h${i}`, wordId }))
   let s: RallyState = { ...base, deck: { drawPile: [], discardPile: [], hand } }
   placements.forEach(([, at, targetEntityId], i) => {
     const action: RallyAction = at === 'connect'
       ? { type: 'connect', instanceId: `h${i}` }
       : { type: 'place', instanceId: `h${i}`, at, targetEntityId }
-    s = reduceRally(s, action, BALANCE).state
+    s = reduceRally(s, action).state
   })
   return s
 }
-const cast = (s: RallyState) => reduceRally(s, { type: 'cast' }, BALANCE)
+const cast = (s: RallyState) => reduceRally(s, { type: 'cast' })
 const runSentenceLingering = (s: RallyState) => runSentence(s).lingering
 /** 적 차례에 각 적이 내게 준 피해(보호에 막힌 양 포함). */
 const enemyHits = (events: readonly CombatEvent[]) => {

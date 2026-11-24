@@ -1,12 +1,11 @@
 import { createRng } from '@/kit/core/rng'
-import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import type { CardInst, RallyState } from '@/game/rally/combat'
 import { greedyBot, passiveBot, randomBot, scoreState } from './bots'
 import { combatGame, type SimCombatAction } from './combatGame'
 import { combatMetrics, combatTurnMetrics } from './metrics'
 
-const game = combatGame('spider', BALANCE)
+const game = combatGame('spider')
 const withHand = (s: RallyState, words: WordId[]): RallyState => ({
   ...s,
   deck: { ...s.deck, hand: words.map((wordId, i): CardInst => ({ instanceId: `h${i}`, wordId })) },
@@ -68,7 +67,7 @@ test('combatMetrics: 비율과 0으로 나누기', () => {
 })
 
 test('턴 지표: 선택지 다양성과 뻔한 최선 여부', () => {
-  const m = combatTurnMetrics(game, BALANCE)(game.start(1))
+  const m = combatTurnMetrics(game)(game.start(1))
   expect(m.choiceDiversity).toBeGreaterThanOrEqual(1)
   expect([0, 1]).toContain(m.obviousBest)
 })

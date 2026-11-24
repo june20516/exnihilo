@@ -4,7 +4,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BALANCE } from '@/game/content/balance'
 import { migrateRunState, parseCommand, runCommand } from '@/game/play/textPlay'
 import type { RunState } from '@/game/run/run'
 
@@ -22,7 +21,7 @@ if ('error' in command) {
   console.log(command.error)
   process.exitCode = 1
 } else {
-  const result = runCommand(command.type === 'new' ? null : load(), command, BALANCE)
+  const result = runCommand(command.type === 'new' ? null : load(), command)
   if (result.state) {
     mkdirSync(dirname(STATE_PATH), { recursive: true })
     writeFileSync(STATE_PATH, JSON.stringify(result.state))

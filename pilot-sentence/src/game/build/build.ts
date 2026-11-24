@@ -1,4 +1,4 @@
-import { UPGRADE_RULES } from '@/game/content/balance'
+import { RALLY_RULES, UPGRADE_RULES } from '@/game/content/balance'
 import { type AdjectiveMod, type AdverbMod, getWord, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
 
@@ -27,13 +27,12 @@ export const EMPTY_BUILD: BuildState = {
   relics: [],
 }
 
-export const MAX_SLOTS = 4
 
 const SLOT_OF: Partial<Record<StructureId, SlotRole>> = { subjectSlot: 'subject', objectSlot: 'object', verbSlot: 'verb' }
 
 export function applyStructure(build: BuildState, id: StructureId): BuildState {
   const role = SLOT_OF[id]
-  if (role) return { ...build, slots: { ...build.slots, [role]: Math.min(MAX_SLOTS, build.slots[role] + 1) } }
+  if (role) return { ...build, slots: { ...build.slots, [role]: Math.min(RALLY_RULES.maxSlots, build.slots[role] + 1) } }
   if (id === 'handSize') return { ...build, handMax: build.handMax + 1 }
   return { ...build, discardsPerTurn: build.discardsPerTurn + 1 }
 }

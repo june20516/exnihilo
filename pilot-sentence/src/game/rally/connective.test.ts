@@ -1,5 +1,4 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
-import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import { playerWordsOnBoard } from '@/game/sentence/board'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
@@ -9,10 +8,10 @@ import './testFixtures'
 const V0 = { clause: 0, role: 'verb' } as const
 const V1 = { clause: 1, role: 'verb' } as const
 const DECK: WordId[] = ['bite', 'bite', 'bite', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend', 'fiercely', 'hungry', 'cracked', 'and', 'so', 'while']
-const act = (s: RallyState, a: RallyAction) => reduceRally(s, a, BALANCE)
+const act = (s: RallyState, a: RallyAction) => reduceRally(s, a)
 const hp = (s: RallyState, id: string) => s.entities.find((e) => e.id === id)?.hp
 const withHand = (words: WordId[]): RallyState => ({
-  ...startRally('test-dummy', DECK, 1, BALANCE).state,
+  ...startRally('test-dummy', DECK, 1).state,
   deck: {
     drawPile: (['guard', 'hide', 'rage', 'scare', 'mend'] as const).map((wordId, i): CardInst => ({ instanceId: `d${i}`, wordId })),
     discardPile: [],
@@ -90,7 +89,7 @@ test('카드 보존: connect/disconnect를 섞은 무작위 200회', () => {
       .concat(playerWordsOnBoard(s.board).flatMap((w) => (w.instanceId ? [w.instanceId] : [])))
       .concat(s.connective?.instanceId ? [s.connective.instanceId] : [])
       .sort()
-  let s = startRally('test-dummy', DECK, 9, BALANCE).state
+  let s = startRally('test-dummy', DECK, 9).state
   s = { ...s, entities: s.entities.map((e) => ({ ...e, hp: 9999, maxHp: 9999 })) }
   const expected = ids(s)
   let rng: RngState = createRng(11)

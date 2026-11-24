@@ -1,5 +1,6 @@
+import { RALLY_RULES, SHOP_RULES } from '@/game/content/balance'
 import { nextFloat, nextInt, type RngState, shuffle } from '@/kit/core/rng'
-import { type BuildState, canUpgradeFurther, isUpgradable, MAX_SLOTS, type RelicId, type StructureId } from '@/game/build/build'
+import { type BuildState, canUpgradeFurther, isUpgradable, type RelicId, type StructureId } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import { getWord, type Rarity, WORDS, type WordId } from '@/game/content/words'
 import type { SlotRole, WordKind } from '@/game/grammar/frames'
@@ -22,15 +23,8 @@ export interface ShopState {
   readonly items: readonly ShopItem[]
 }
 
-/** 런 spec §3: 종류별 기본값, 희귀도 보정, 구매 후 가격 상승. */
-export const BASE_PRICE: Readonly<Record<OfferKind, number>> = { word: 6, upgrade: 8, structure: 12, relic: 15 }
-const RARITY_ADJUST: Readonly<Record<Rarity, number>> = { starter: -3, common: -3, uncommon: 0, rare: 3 }
-const RARITY_WEIGHT: Readonly<Record<Rarity, number>> = { starter: 60, common: 60, uncommon: 30, rare: 10 }
-/** 조합 재료(형용사·부사·연결어)는 단어 보상으로 뽑힐 가중치가 이만큼 크다. 빌드 레이어를 런마다 겪게 하려는 보정. */
-export const MATERIAL_WEIGHT = 3
+/** 조합 재료: 단어 보상 가중치에 SHOP_RULES.materialWeight를 곱하는 품사. */
 const MATERIAL_KINDS: readonly WordKind[] = ['adjective', 'adverb', 'connective']
-export const PRICE_GROWTH = 1.5
-const SHOP_SIZE = 3
 
 export const STRUCTURES: readonly StructureId[] = ['subjectSlot', 'objectSlot', 'verbSlot', 'handSize', 'discard']
 const SLOT_ROLE: Partial<Record<StructureId, SlotRole>> = { subjectSlot: 'subject', objectSlot: 'object', verbSlot: 'verb' }
@@ -54,7 +48,7 @@ function rarityOf(offer: Offer): Rarity | null {
 
 export function priceOf(offer: Offer): number {
   const rarity = rarityOf(offer)
-  return BASE_PRICE[offer.kind] + (rarity ? RARITY_ADJUST[rarity] : 0)
+  return SHOP_RULES.basePrice[offer.kind] + (rarity ? SHOP_RULES.rarityAdjust[rarity] : 0)
 }
 
 
@@ -65,7 +59,7 @@ function upgradeCandidates(deck: readonly WordId[], build: BuildState): WordId[]
 function structureCandidates(build: BuildState): StructureId[] {
   return STRUCTURES.filter((id) => {
     const role = SLOT_ROLE[id]
-    return role === undefined || build.slots[role] < MAX_SLOTS
+    return role === undefined || build.slots[role] < RALLY_RULES.maxSlots
   })
 }
 
@@ -80,7 +74,7 @@ function pickUniform<T>(rng: RngState, items: readonly T[]): [T, RngState] {
 
 function wordWeight(id: WordId): number {
   const word = getWord(id)
-  return RARITY_WEIGHT[word.rarity] * (MATERIAL_KINDS.includes(word.kind) ? MATERIAL_WEIGHT : 1)
+  return SHOP_RULES.rarityWeight[word.rarity] * (MATERIAL_KINDS.includes(word.kind) ? SHOP_RULES.materialWeight : 1)
 }
 
 function pickWord(rng: RngState): [WordId, RngState] {
@@ -106,7 +100,7 @@ export function rollShop(rng: RngState, deck: readonly WordId[], build: BuildSta
   const [kinds, shuffled] = shuffle(rng, available)
   let current = shuffled
   const items: ShopItem[] = []
-  for (const kind of kinds.slice(0, SHOP_SIZE)) {
+  for (const kind of kinds.slice(0, SHOP_RULES.size)) {
     let offer: Offer
     if (kind === 'word') {
       const [wordId, next] = pickWord(current)
@@ -134,7 +128,7 @@ export function rollShop(rng: RngState, deck: readonly WordId[], build: BuildSta
 export function buyFrom(shop: ShopState, index: number): ShopState {
   return {
     items: shop.items.map((item, i) =>
-      i === index ? { ...item, sold: true } : item.sold ? item : { ...item, price: Math.ceil(item.price * PRICE_GROWTH) },
+      i === index ? { ...item, sold: true } : item.sold ? item : { ...item, price: Math.ceil(item.price * SHOP_RULES.priceGrowth) },
     ),
   }
 }

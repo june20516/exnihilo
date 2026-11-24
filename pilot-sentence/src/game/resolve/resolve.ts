@@ -1,3 +1,4 @@
+import { PLAYER_DEF_ID } from '@/game/content/characters'
 import {
   addStatus, applyDamage, createEntity, type Entity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing,
 } from '@/kit/core/entity'
@@ -20,7 +21,7 @@ export function resolveTargets(
   const alive = entities.filter(isAlive)
   switch (ref.kind) {
     case 'player':
-      return { ids: entities.filter((e) => e.side === 'ally' && e.defId === 'player').map((e) => e.id), summon: null }
+      return { ids: entities.filter((e) => e.side === 'ally' && e.defId === PLAYER_DEF_ID).map((e) => e.id), summon: null }
     case 'chosenEnemy':
       return { ids: word.targetEntityId ? [word.targetEntityId] : [], summon: null }
     case 'enemyDef':

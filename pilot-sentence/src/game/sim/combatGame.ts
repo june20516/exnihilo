@@ -1,5 +1,4 @@
 import type { SimGame } from '@/kit/sim/simulate'
-import type { Balance } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import { type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
@@ -17,13 +16,13 @@ export function isFinisher(a: SimCombatAction): boolean {
   return a.action.type === 'endTurn' || a.action.type === 'cast'
 }
 
-function isAccepted(state: RallyState, action: RallyAction, balance: Balance): boolean {
-  const first = reduceRally(state, action, balance).events[0]
+function isAccepted(state: RallyState, action: RallyAction): boolean {
+  const first = reduceRally(state, action).events[0]
   return first !== undefined && first.type !== 'rejected'
 }
 
 /** 손패 카드 한 장을 놓을 수 있는 모든 방법. 같은 단어 카드는 결과가 같으므로 호출자가 단어당 한 장만 넘긴다. */
-export function placementsFor(state: RallyState, instanceId: string, wordId: WordId, balance: Balance): SimCombatAction[] {
+export function placementsFor(state: RallyState, instanceId: string, wordId: WordId): SimCombatAction[] {
   const def = getWord(wordId)
   const isModifier = def.kind === 'adjective' || def.kind === 'adverb'
   const actions: SimCombatAction[] = []
@@ -33,7 +32,7 @@ export function placementsFor(state: RallyState, instanceId: string, wordId: Wor
       const positions: (number | undefined)[] = isModifier ? slot.modifiers.map((_, i) => i) : [undefined]
       for (const modifierIndex of positions) {
         const action: RallyAction = { type: 'place', instanceId, at, modifierIndex }
-        if (!isAccepted(state, action, balance)) continue
+        if (!isAccepted(state, action)) continue
         const where = `${clauseIndex}:${slot.role}${modifierIndex === undefined ? '' : `:m${modifierIndex}`}`
         actions.push({ action, key: `place:${wordId}@${where}` })
       }
@@ -43,7 +42,7 @@ export function placementsFor(state: RallyState, instanceId: string, wordId: Wor
 }
 
 /** 지금 상태의 합법 행동(같은 단어는 한 장만). 연결어 카드는 connect로 나온다. */
-export function legalCombatActions(state: RallyState, balance: Balance): SimCombatAction[] {
+export function legalCombatActions(state: RallyState): SimCombatAction[] {
   if (state.phase !== 'player') return [END_TURN]
   const actions: SimCombatAction[] = []
   const seenWords = new Set<WordId>()
@@ -53,7 +52,7 @@ export function legalCombatActions(state: RallyState, balance: Balance): SimComb
     if (getWord(card.wordId).kind === 'connective') {
       actions.push({ action: { type: 'connect', instanceId: card.instanceId }, key: `connect:${card.wordId}` })
     } else {
-      actions.push(...placementsFor(state, card.instanceId, card.wordId, balance))
+      actions.push(...placementsFor(state, card.instanceId, card.wordId))
     }
     if (state.discardsLeft > 0) actions.push({ action: { type: 'discard', instanceIds: [card.instanceId] }, key: `discard:${card.wordId}` })
   }
@@ -67,13 +66,12 @@ export function legalCombatActions(state: RallyState, balance: Balance): SimComb
 
 export function combatGame(
   encounterId: string,
-  balance: Balance,
   deck: readonly WordId[] = RALLY_STARTER_DECK,
 ): SimGame<RallyState, SimCombatAction> {
   return {
-    start: (seed) => startRally(encounterId, deck, seed, balance).state,
-    apply: (state, a) => reduceRally(state, a.action, balance).state,
-    legalActions: (state) => legalCombatActions(state, balance),
+    start: (seed) => startRally(encounterId, deck, seed).state,
+    apply: (state, a) => reduceRally(state, a.action).state,
+    legalActions: (state) => legalCombatActions(state),
     outcome: (state) => (state.phase === 'player' ? null : state.phase),
     turn: (state) => state.turn,
     actionKey: (a) => a.key,

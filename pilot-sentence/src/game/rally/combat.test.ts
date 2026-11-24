@@ -1,5 +1,4 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
-import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import { getSlot, playerWordsOnBoard } from '@/game/sentence/board'
 import { applyStructure, type BuildState, EMPTY_BUILD } from '@/game/build/build'
@@ -9,8 +8,8 @@ import './testFixtures'
 
 const DECK: WordId[] = ['bite', 'bite', 'bite', 'slash', 'guard', 'guard', 'hide', 'rage', 'scare', 'mend', 'fiercely', 'fiercely', 'hungry', 'cracked', 'venomous']
 const V = { clause: 0, role: 'verb' } as const
-const start = (encounterId = 'test-dummy') => startRally(encounterId, DECK, 123, BALANCE).state
-const act = (s: RallyState, a: RallyAction) => reduceRally(s, a, BALANCE)
+const start = (encounterId = 'test-dummy') => startRally(encounterId, DECK, 123).state
+const act = (s: RallyState, a: RallyAction) => reduceRally(s, a)
 const hp = (s: RallyState, id: string) => s.entities.find((e) => e.id === id)?.hp
 const block = (s: RallyState, id: string) => s.entities.find((e) => e.id === id)?.statuses.block
 const cards = (words: WordId[], prefix = 'h'): CardInst[] => words.map((wordId, i) => ({ instanceId: `${prefix}${i}`, wordId }))
@@ -163,7 +162,7 @@ test('최대 한 방은 적의 남은 HP에 잘리지 않은 문장의 위력이
   expect(killed.log.bestBurst).toBe(6)
 
   const echoBuild: BuildState = { ...EMPTY_BUILD, relics: ['echo'] }
-  const echoed = castVerb(weak(startRally('test-dummy', DECK, 123, BALANCE, { build: echoBuild }).state), 'bite').state
+  const echoed = castVerb(weak(startRally('test-dummy', DECK, 123, { build: echoBuild }).state), 'bite').state
   expect(echoed.log.bestBurst).toBe(12)
 })
 
@@ -173,7 +172,7 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
       .concat(playerWordsOnBoard(s.board).flatMap((w) => (w.instanceId ? [w.instanceId] : [])))
       .concat(s.connective?.instanceId ? [s.connective.instanceId] : [])
       .sort()
-  let s = startRally(encounterId, [...DECK, 'and', 'so'], 123, BALANCE).state
+  let s = startRally(encounterId, [...DECK, 'and', 'so'], 123).state
   s = { ...s, entities: s.entities.map((e) => (e.side === 'ally' ? { ...e, hp: 9999, maxHp: 9999 } : { ...e, hp: 9999, maxHp: 9999 })) }
   const expected = ids(s)
   let rng: RngState = createRng(7)
@@ -213,7 +212,7 @@ test.each(['test-pair', 'test-seal'])('카드 보존: 무작위 행동 200회 �
 
 describe('빌드와 전투 옵션', () => {
   const withBuild = (build: BuildState, options: Omit<RallyOptions, 'build'> = {}) =>
-    startRally('test-dummy', DECK, 123, BALANCE, { ...options, build })
+    startRally('test-dummy', DECK, 123, { ...options, build })
 
   test('동사 칸 +1이면 동사 수식어 칸이 3개', () => {
     const s = withBuild(applyStructure(EMPTY_BUILD, 'verbSlot')).state

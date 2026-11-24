@@ -13,14 +13,14 @@
  * 사용: npm run ceiling [-- --runs 200]
  */
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
-import { applyStructure, type BuildState, canUpgradeFurther, EMPTY_BUILD, effectiveWord, isUpgradable, MAX_SLOTS, type RelicId, withUpgrade } from '@/game/build/build'
+import { applyStructure, type BuildState, canUpgradeFurther, EMPTY_BUILD, effectiveWord, isUpgradable, type RelicId, withUpgrade } from '@/game/build/build'
 import { RELICS, relicEffects } from '@/game/build/relics'
 import { hooksFromEffects } from '@/game/rally/hooks'
 import { VULNERABLE_MULTIPLIER } from '@/kit/core/entity'
-import { BALANCE, UPGRADE_RULES } from '@/game/content/balance'
+import { RALLY_RULES, RUN_RULES, UPGRADE_RULES } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { type AdjectiveMod, type AdverbMod, getWord, type WordId } from '@/game/content/words'
-import { FLOORS, REWARD_GOLD } from '@/game/run/floors'
+import { FLOORS } from '@/game/run/floors'
 import { buyFrom, type Offer, priceOf, rollShop, type ShopState, STRUCTURES, WORD_POOL } from '@/game/run/shop'
 import { PLAYER_ID, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from '@/game/rally/combat'
 import { readFileSync } from 'node:fs'
@@ -185,7 +185,7 @@ function clauseBurst(cfg: ClauseCfg, ctx: ClauseContext, build: BuildState): num
   const object = slotStats(borrowed ? [...cfg.object, ...borrowed.object] : cfg.object, build)
   const adverbs = adverbStats(borrowed ? [...cfg.adverbs, ...borrowed.adverbs] : cfg.adverbs, build)
   const { damage, selfLoss } = verbDamage(cfg.verb, build)
-  if (Math.floor(selfLoss * adverbs.power) >= BALANCE.playerMaxHp) return -1
+  if (Math.floor(selfLoss * adverbs.power) >= RALLY_RULES.playerMaxHp) return -1
   if (damage === 0) return 0
   const base = damage + ctx.damageBonus
   const outgoing = (base * adverbs.power + ctx.strength + subject.outFlat) * subject.outMul
@@ -283,7 +283,7 @@ function engineBurst(s: Sentence, build: BuildState): number {
   const ids = [...usage(s.clauses, s.mode === 'single' ? null : CONNECTIVE_OF[s.mode])].flatMap(([id, n]) =>
     Array.from({ length: n }, () => id),
   )
-  const started = startRally('spider', ids, 1, BALANCE, { build: { ...build, handMax: 99 } }).state
+  const started = startRally('spider', ids, 1, { build: { ...build, handMax: 99 } }).state
   const cards = ids.map((wordId, i) => ({ instanceId: `x${i}`, wordId }))
   let state: RallyState = {
     ...started,
@@ -296,7 +296,7 @@ function engineBurst(s: Sentence, build: BuildState): number {
     return card.instanceId
   }
   const act = (action: RallyAction) => {
-    const r = reduceRally(state, action, BALANCE)
+    const r = reduceRally(state, action)
     const rejected = r.events.find((e) => e.type === 'rejected')
     if (rejected) throw new Error(`엔진이 거부함: ${JSON.stringify(rejected)} ${JSON.stringify(action)}`)
     state = r.state
@@ -362,7 +362,7 @@ function everyOffer(deck: readonly WordId[], build: BuildState): Offer[] {
   return [
     ...WORD_POOL.map((wordId): Offer => ({ kind: 'word', wordId })),
     ...upgradable.map((wordId): Offer => ({ kind: 'upgrade', wordId })),
-    ...STRUCTURES.filter((id) => !(id in slotOf) || build.slots[slotOf[id as keyof typeof slotOf]] < MAX_SLOTS).map(
+    ...STRUCTURES.filter((id) => !(id in slotOf) || build.slots[slotOf[id as keyof typeof slotOf]] < RALLY_RULES.maxSlots).map(
       (id): Offer => ({ kind: 'structure', id }),
     ),
     ...(Object.keys(RELICS) as RelicId[]).filter((id) => !build.relics.includes(id)).map((id): Offer => ({ kind: 'relic', id })),
@@ -422,7 +422,7 @@ console.log(`손패 8장 한 번: 중앙 ${quantile(starterHands, 0.5)} · 상�
 section('3. 이론 천장 (모든 단어 4장 · 모두 2단계 강화 · 유물 8종 · 칸 4/4/4)')
 const everything = WORD_POOL.flatMap((id) => [id, id, id, id])
 const maxBuild: BuildState = {
-  slots: { subject: MAX_SLOTS, object: MAX_SLOTS, verb: MAX_SLOTS },
+  slots: { subject: RALLY_RULES.maxSlots, object: RALLY_RULES.maxSlots, verb: RALLY_RULES.maxSlots },
   handMax: 8,
   discardsPerTurn: 1,
   upgrades: Object.fromEntries(WORD_POOL.map((id) => [id, 2 as const])),
@@ -461,7 +461,7 @@ let greedyFinal: { deck: WordId[]; build: BuildState } = { deck: [...RALLY_START
   }
   greedyFinal = { deck, build }
 }
-const totalGold = FLOORS.slice(0, -1).reduce((s, f) => s + REWARD_GOLD[f.tier], 0)
+const totalGold = FLOORS.slice(0, -1).reduce((s, f) => s + RUN_RULES.rewardGold[f.tier], 0)
 console.log(`런 전체 화폐: ${totalGold} (같은 상점에서 둘째 구매는 ×1.5, 셋째는 ×2.25)`)
 
 // 5. 실제 상점 운 + 천장을 아는 구매자
@@ -500,7 +500,7 @@ for (let seed = 1001; seed < 1001 + RUNS; seed++) {
   let rng = createRng(seed)
   let state: Purchase = { deck: [...RALLY_STARTER_DECK], build: EMPTY_BUILD, gold: 0, bought: [] }
   for (const floor of FLOORS.slice(0, -1)) {
-    state = { ...state, gold: state.gold + REWARD_GOLD[floor.tier] }
+    state = { ...state, gold: state.gold + RUN_RULES.rewardGold[floor.tier] }
     const [shop, next] = rollShop(rng, state.deck, state.build)
     rng = next
     state = bestShopping(shop, state)
@@ -555,14 +555,14 @@ if (SIM_RUNS > 0) {
     const index = first ? run.shop.items.findIndex((item) => !item.sold && sameOffer(item.offer, first)) : -1
     return index >= 0 ? [{ type: 'buy', index }, rng] : [{ type: 'leave' }, rng]
   }
-  const results = Array.from({ length: SIM_RUNS }, (_, i) => simulateRun(1001 + i, ceilingShopBot, BALANCE))
+  const results = Array.from({ length: SIM_RUNS }, (_, i) => simulateRun(1001 + i, ceilingShopBot))
   const bursts = results.map((r) => r.bestBurst)
   const won = results.filter((r) => r.outcome === 'won').length
   console.log(`완주 ${((won / SIM_RUNS) * 100).toFixed(0)}% · 평균 도달 층 ${(results.reduce((a, r) => a + r.floorReached, 0) / SIM_RUNS).toFixed(1)}`)
   row('런 최고 한 방', bursts)
   const parsed: unknown = JSON.parse(readFileSync(new URL('../src/game/sim/learnedWeights.json', import.meta.url), 'utf8'))
   if (!isShopWeights(parsed)) throw new Error('learnedWeights.json 형식이 맞지 않습니다.')
-  const learned = Array.from({ length: SIM_RUNS }, (_, i) => simulateRun(1001 + i, weightedShopBot(parsed), BALANCE))
+  const learned = Array.from({ length: SIM_RUNS }, (_, i) => simulateRun(1001 + i, weightedShopBot(parsed)))
   const learnedWon = learned.filter((r) => r.outcome === 'won').length
   console.log(`비교(같은 시드, 학습 봇): 완주 ${((learnedWon / SIM_RUNS) * 100).toFixed(0)}%`)
   row('  학습 봇 런 최고 한 방', learned.map((r) => r.bestBurst))

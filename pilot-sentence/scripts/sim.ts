@@ -3,7 +3,6 @@
  * 사용법: npm run sim -- [encounterId|all] [runs]
  */
 import { simulate } from '@/kit/sim/simulate'
-import { BALANCE } from '@/game/content/balance'
 import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import { greedyBot, passiveBot, randomBot } from '@/game/sim/bots'
 import { combatGame } from '@/game/sim/combatGame'
@@ -30,8 +29,8 @@ const num = (x: number | undefined, width = 6) => (x === undefined ? '-' : x.toF
 console.log(`시드 ${runs}개, 최대 ${MAX_SIM_TURNS}턴. 탐욕 봇 기준 지표 + 무작위/무행동 승률\n`)
 console.log('조우       승률 HP손실(승) 평균턴 시간초과 동사없는턴 방어율 최대한방 선택지수 뻔한최선 무작위 무행동')
 for (const encounterId of encounterIds) {
-  const game = combatGame(encounterId, BALANCE)
-  const greedy = simulate(game, greedyBot, { seeds, maxTurns: MAX_SIM_TURNS, metrics: combatMetrics, turnMetrics: combatTurnMetrics(game, BALANCE) }).report
+  const game = combatGame(encounterId)
+  const greedy = simulate(game, greedyBot, { seeds, maxTurns: MAX_SIM_TURNS, metrics: combatMetrics, turnMetrics: combatTurnMetrics(game) }).report
   const random = simulate(game, randomBot, { seeds, maxTurns: MAX_SIM_TURNS, metrics: combatMetrics }).report
   const passive = simulate(game, passiveBot, { seeds, maxTurns: MAX_SIM_TURNS, metrics: combatMetrics }).report
   const m = greedy.avgMetrics

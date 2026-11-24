@@ -1,4 +1,3 @@
-import type { Balance } from '@/game/content/balance'
 import type { CombatEvent } from '@/game/combat/events'
 import { type RallyState, reduceRally } from './combat'
 import { linesFromEvents, type PreviewLine } from './lines'
@@ -16,8 +15,8 @@ function segment(events: readonly CombatEvent[], startAfter: CombatEvent['type']
  * 이번 라운드에 일어날 일을 실제 reducer를 상태 사본에 돌려 얻는다.
  * 동사가 있으면 낭독, 없으면 낭독 없이 턴 종료. mine은 내 낭독, enemy는 이어지는 적의 차례.
  */
-export function previewEvents(state: RallyState, balance: Balance): { mine: CombatEvent[]; enemy: CombatEvent[]; after: RallyState } {
-  const r = reduceRally(state, { type: hasVerb(state.board) ? 'cast' : 'endTurn' }, balance)
+export function previewEvents(state: RallyState): { mine: CombatEvent[]; enemy: CombatEvent[]; after: RallyState } {
+  const r = reduceRally(state, { type: hasVerb(state.board) ? 'cast' : 'endTurn' })
   return {
     mine: segment(r.events, 'cast', ['enemyTurn', 'combatEnded']),
     enemy: segment(r.events, 'enemyTurn', ['drawn', 'combatEnded']),
@@ -25,7 +24,7 @@ export function previewEvents(state: RallyState, balance: Balance): { mine: Comb
   }
 }
 
-export function previewRound(state: RallyState, balance: Balance): { mine: PreviewLine[]; enemy: PreviewLine[] } {
-  const { mine, enemy, after } = previewEvents(state, balance)
+export function previewRound(state: RallyState): { mine: PreviewLine[]; enemy: PreviewLine[] } {
+  const { mine, enemy, after } = previewEvents(state)
   return { mine: linesFromEvents(mine, after.entities), enemy: linesFromEvents(enemy, after.entities) }
 }

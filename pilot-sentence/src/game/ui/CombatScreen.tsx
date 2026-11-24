@@ -1,7 +1,6 @@
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useMemo, useState } from 'react'
 import { RALLY_ENCOUNTERS, type SlotAddress } from '@/game/content/enemies'
-import { BALANCE } from '@/game/content/balance'
 import type { CombatEvent } from '@/game/combat/events'
 import type { RallyAction, RallyState } from '@/game/rally/combat'
 import { sentenceFormula } from '@/game/rally/formulaText'
@@ -44,7 +43,7 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
 
   const selectedCard = state.deck.hand.find((c) => c.instanceId === selectedId) ?? null
   const rejected = lastEvents.find((e) => e.type === 'rejected')
-  const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state, BALANCE) : null), [state])
+  const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
   const formulas = useMemo(() => (state.phase === 'player' ? sentenceFormula(state) : []), [state])
   const intents = state.phase === 'player' && preview ? intentTexts(state, preview.enemy, nameOf) : {}
   const states = useMemo(() => (state.phase === 'player' ? lingeringTexts(state) : {}), [state])

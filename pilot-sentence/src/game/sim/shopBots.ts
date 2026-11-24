@@ -1,6 +1,5 @@
 import { createRng, nextFloat, nextInt } from '@/kit/core/rng'
 import type { RelicId, StructureId } from '@/game/build/build'
-import type { Balance } from '@/game/content/balance'
 import { getWord, type WordId } from '@/game/content/words'
 import type { RunState } from '@/game/run/run'
 import type { OfferKind, ShopItem } from '@/game/run/shop'
@@ -137,10 +136,10 @@ function setWeight(w: ShopWeights, key: WeightKey, value: number): ShopWeights {
 }
 
 /** 적합도: 완주 수가 우선, 같으면 도달 층 합. */
-function fitness(w: ShopWeights, seeds: readonly number[], balance: Balance): number {
+function fitness(w: ShopWeights, seeds: readonly number[]): number {
   const policy = weightedShopBot(w)
   return seeds.reduce((sum, seed) => {
-    const r = simulateRun(seed, policy, balance)
+    const r = simulateRun(seed, policy)
     return sum + (r.outcome === 'won' ? 100 : 0) + r.floorReached
   }, 0)
 }
@@ -149,7 +148,7 @@ const MUTATION_FACTORS = [0.5, 0.7, 1.4, 2] as const
 const RANDOM_STARTS = 5
 
 /** 무작위 시작점 5개 중 가장 나은 것에서 출발해, 한 번에 가중치 하나를 바꿔 나아지면 받아들인다. */
-export function trainShopWeights(trainSeeds: readonly number[], iterations: number, rngSeed: number, balance: Balance): ShopWeights {
+export function trainShopWeights(trainSeeds: readonly number[], iterations: number, rngSeed: number): ShopWeights {
   let rng = createRng(rngSeed)
   const randomWeights = (): ShopWeights => {
     let w = BASE_WEIGHTS
@@ -161,10 +160,10 @@ export function trainShopWeights(trainSeeds: readonly number[], iterations: numb
     return w
   }
   let best = BASE_WEIGHTS
-  let bestFitness = fitness(best, trainSeeds, balance)
+  let bestFitness = fitness(best, trainSeeds)
   for (let i = 0; i < RANDOM_STARTS; i++) {
     const candidate = randomWeights()
-    const f = fitness(candidate, trainSeeds, balance)
+    const f = fitness(candidate, trainSeeds)
     if (f > bestFitness) [best, bestFitness] = [candidate, f]
   }
   for (let i = 0; i < iterations; i++) {
@@ -173,7 +172,7 @@ export function trainShopWeights(trainSeeds: readonly number[], iterations: numb
     rng = r2
     const key = WEIGHT_KEYS[keyIndex]
     const candidate = setWeight(best, key, getWeight(best, key) * MUTATION_FACTORS[factorIndex])
-    const f = fitness(candidate, trainSeeds, balance)
+    const f = fitness(candidate, trainSeeds)
     if (f > bestFitness) [best, bestFitness] = [candidate, f]
   }
   return best

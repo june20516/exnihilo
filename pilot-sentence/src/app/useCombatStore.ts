@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from 'react'
-import { BALANCE } from '@/game/content/balance'
 import type { WordId } from '@/game/content/words'
 import { type CombatEvent, resolvesTurn } from '@/game/combat/events'
 import { type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
@@ -20,7 +19,7 @@ export interface CombatStore {
  */
 export function useCombatStore(encounterId: string, seed: number, deck: readonly WordId[]): CombatStore {
   const { busy, isBusy, play } = usePlaybackLock()
-  const [state, setState] = useState(() => startRally(encounterId, deck, seed, BALANCE).state)
+  const [state, setState] = useState(() => startRally(encounterId, deck, seed).state)
   const stateRef = useRef(state)
   const [shown, setShown] = useState(state)
   const [lastEvents, setLastEvents] = useState<readonly CombatEvent[]>([])
@@ -29,7 +28,7 @@ export function useCombatStore(encounterId: string, seed: number, deck: readonly
     (action: RallyAction) => {
       if (isBusy()) return
       const before = stateRef.current
-      const result = reduceRally(before, action, BALANCE)
+      const result = reduceRally(before, action)
       stateRef.current = result.state
       setState(result.state)
       setLastEvents(result.events)

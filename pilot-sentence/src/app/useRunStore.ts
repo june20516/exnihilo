@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from 'react'
-import { BALANCE } from '@/game/content/balance'
 import { weakenNewCombat } from '@/game/run/debug'
 import { resolvesTurn } from '@/game/combat/events'
 import { usePlaybackLock } from './usePlaybackLock'
@@ -26,7 +25,7 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
     (before: RunState | null, after: RunState) => (debugEnemyHp === null ? after : weakenNewCombat(before, after, debugEnemyHp)),
     [debugEnemyHp],
   )
-  const [state, setState] = useState(() => applyDebugOverrides(null, startRun(seed, BALANCE).state))
+  const [state, setState] = useState(() => applyDebugOverrides(null, startRun(seed).state))
   const stateRef = useRef(state)
   const [shown, setShown] = useState(state)
   const [lastEvents, setLastEvents] = useState<readonly RunEvent[]>([])
@@ -35,7 +34,7 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
     (action: RunAction) => {
       if (isBusy()) return
       const before = stateRef.current
-      const result = reduceRun(before, action, BALANCE)
+      const result = reduceRun(before, action)
       const next = applyDebugOverrides(before, result.state)
       stateRef.current = next
       setState(next)
@@ -54,7 +53,7 @@ export function useRunStore(seed: number, debugEnemyHp: number | null): RunStore
 
   const restart = useCallback(
     (nextSeed: number) => {
-      const next = applyDebugOverrides(null, startRun(nextSeed, BALANCE).state)
+      const next = applyDebugOverrides(null, startRun(nextSeed).state)
       stateRef.current = next
       setState(next)
       setShown(next)

@@ -1,12 +1,12 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import type { Reduced } from '@/kit/core/reduced'
 import { applyStructure, type BuildState, EMPTY_BUILD, withUpgrade } from '@/game/build/build'
-import type { Balance } from '@/game/content/balance'
+import { RALLY_RULES, RUN_RULES } from '@/game/content/balance'
 import { type EncounterTier, RALLY_STARTER_DECK } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import { PLAYER_ID, type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
-import { FIXED_ENCOUNTERS, FLOORS, goldFor, HEAL_RATIO, NORMAL_ENCOUNTERS } from './floors'
+import { FIXED_ENCOUNTERS, FLOORS, goldFor, NORMAL_ENCOUNTERS } from './floors'
 import { buyFrom, type Offer, rollShop, type ShopState } from './shop'
 
 export interface FloorRecord {
@@ -72,7 +72,7 @@ function floorDef(floor: number) {
 }
 
 /** 이번 층의 전투를 시작한다. 일반 층의 조우와 전투 시드는 런 rng에서 뽑는다. */
-function startFloor(state: RunState, balance: Balance): Result {
+function startFloor(state: RunState): Result {
   const def = floorDef(state.floor)
   let rng = state.rng
   let encounterId = FIXED_ENCOUNTERS[state.floor]
@@ -82,7 +82,7 @@ function startFloor(state: RunState, balance: Balance): Result {
     rng = next
   }
   const [combatSeed, afterSeed] = nextInt(rng, 1, SEED_MAX)
-  const started = startRally(encounterId, state.deck, combatSeed, balance, {
+  const started = startRally(encounterId, state.deck, combatSeed, {
     build: state.build,
     playerHp: state.hp,
     playerMaxHp: state.maxHp,
@@ -94,13 +94,13 @@ function startFloor(state: RunState, balance: Balance): Result {
   }
 }
 
-export function startRun(seed: number, balance: Balance, deck: readonly WordId[] = RALLY_STARTER_DECK): Result {
+export function startRun(seed: number, deck: readonly WordId[] = RALLY_STARTER_DECK): Result {
   const initial: RunState = {
     seed,
     floor: 1,
     phase: 'combat',
-    hp: balance.playerMaxHp,
-    maxHp: balance.playerMaxHp,
+    hp: RALLY_RULES.playerMaxHp,
+    maxHp: RALLY_RULES.playerMaxHp,
     gold: 0,
     deck,
     build: EMPTY_BUILD,
@@ -109,7 +109,7 @@ export function startRun(seed: number, balance: Balance, deck: readonly WordId[]
     rng: createRng(seed),
     log: { bestBurst: 0, purchases: [], floorTurns: [] },
   }
-  return startFloor(initial, balance)
+  return startFloor(initial)
 }
 
 /** 전투 진행을 반영한다. 끝났으면 승리는 회복·화폐·상점(마지막 층이면 완주), 패배는 런 종료. */
@@ -128,7 +128,7 @@ function settleCombat(state: RunState, combat: RallyState, events: RunEvent[]): 
   }
 
   const player = combat.entities.find((e) => e.id === PLAYER_ID)
-  const hp = Math.min(state.maxHp, (player?.hp ?? 0) + Math.floor(state.maxHp * HEAL_RATIO))
+  const hp = Math.min(state.maxHp, (player?.hp ?? 0) + Math.floor(state.maxHp * RUN_RULES.healRatio))
   const gold = goldFor(floorDef(state.floor).tier, [])
   events.push({ type: 'floorCleared', floor: state.floor, gold })
   const cleared: RunState = { ...state, combat, log, hp, gold: state.gold + gold }
@@ -169,11 +169,11 @@ function buy(state: RunState, index: number): Result {
   }
 }
 
-export function reduceRun(state: RunState, action: RunAction, balance: Balance): Result {
+export function reduceRun(state: RunState, action: RunAction): Result {
   switch (action.type) {
     case 'combat': {
       if (state.phase !== 'combat' || !state.combat) return reject(state, 'notPlayerTurn')
-      const r = reduceRally(state.combat, action.action, balance)
+      const r = reduceRally(state.combat, action.action)
       return settleCombat(state, r.state, [...r.events])
     }
     case 'buy':
@@ -181,6 +181,6 @@ export function reduceRun(state: RunState, action: RunAction, balance: Balance):
       return buy(state, action.index)
     case 'leave':
       if (state.phase !== 'shop') return reject(state, 'notPlayerTurn')
-      return startFloor({ ...state, floor: state.floor + 1 }, balance)
+      return startFloor({ ...state, floor: state.floor + 1 })
   }
 }

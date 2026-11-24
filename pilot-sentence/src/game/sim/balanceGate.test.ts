@@ -1,5 +1,4 @@
 import { simulate } from '@/kit/sim/simulate'
-import { BALANCE } from '@/game/content/balance'
 import { greedyBot, passiveBot, randomBot } from './bots'
 import { combatGame } from './combatGame'
 import { combatMetrics, MAX_SIM_TURNS } from './metrics'
@@ -12,7 +11,7 @@ const seeds = Array.from({ length: 60 }, (_, i) => i + 1)
 const within = (value: number, [min, max]: readonly [number, number]) => value >= min && value <= max
 
 describe('기본 규칙 게이트: 거미', () => {
-  const game = combatGame('spider', BALANCE)
+  const game = combatGame('spider')
   const options = { seeds, maxTurns: MAX_SIM_TURNS, metrics: combatMetrics }
   const greedy = simulate(game, greedyBot, options).report
   const summary = {

@@ -1,6 +1,5 @@
 import { FLOORS } from '@/game/run/floors'
 import { createRng, type RngState } from '@/kit/core/rng'
-import type { Balance } from '@/game/content/balance'
 import { type FloorRecord, reduceRun, type RunAction, type RunState, startRun } from '@/game/run/run'
 import type { Offer } from '@/game/run/shop'
 import { twoPlyBot } from './combatBot'
@@ -26,8 +25,8 @@ export const MAX_FIGHT_TURNS = 40
 const MAX_STEPS = 20_000
 
 /** 런 하나를 끝까지 돌린다. 전투는 두 수 앞 봇, 상점은 주어진 정책. */
-export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance, maxFightTurns = MAX_FIGHT_TURNS): RunResult {
-  let state = startRun(seed, balance).state
+export function simulateRun(seed: number, shop: ShopPolicy, maxFightTurns = MAX_FIGHT_TURNS): RunResult {
+  let state = startRun(seed).state
   let rng = createRng(seed ^ 0x5eed)
   let casts = 0
   let twoClauseCasts = 0
@@ -38,7 +37,7 @@ export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance, ma
     if (state.phase === 'shop') {
       const [action, next] = shop(state, rng)
       rng = next
-      state = reduceRun(state, action, balance).state
+      state = reduceRun(state, action).state
       continue
     }
     const combat = state.combat
@@ -48,12 +47,12 @@ export function simulateRun(seed: number, shop: ShopPolicy, balance: Balance, ma
       timedOut = true
       break
     }
-    const action = twoPlyBot(combat, balance)
+    const action = twoPlyBot(combat)
     if (action.type === 'cast') {
       casts++
       if (combat.connective) twoClauseCasts++
     }
-    state = reduceRun(state, { type: 'combat', action }, balance).state
+    state = reduceRun(state, { type: 'combat', action }).state
   }
   if (step >= MAX_STEPS) timedOut = true
   if (!timedOut) floorTurns = [...state.log.floorTurns]

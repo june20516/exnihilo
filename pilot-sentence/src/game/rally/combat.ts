@@ -1,9 +1,10 @@
+import { PLAYER_DEF_ID } from '@/game/content/characters'
 import { type BuildState, EMPTY_BUILD, wordLookup } from '@/game/build/build'
 import { addStatus, clearBlock, createEntity, type Entity, isAlive, tickEndOfTurn } from '@/kit/core/entity'
 import type { Reduced } from '@/kit/core/reduced'
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
-import { type Balance, RALLY_RULES } from '@/game/content/balance'
+import { RALLY_RULES } from '@/game/content/balance'
 import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent, type SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
@@ -276,14 +277,13 @@ export function startRally(
   encounterId: string,
   deckWordIds: readonly WordId[],
   seed: number,
-  balance: Balance,
   options: RallyOptions = {},
 ): Result {
   const encounter = getEncounter(encounterId)
   const build = options.build ?? EMPTY_BUILD
   const enemyScale = options.enemyScale ?? { hp: 1, damage: 1 }
-  const maxHp = options.playerMaxHp ?? balance.playerMaxHp
-  const player = { ...createEntity({ id: PLAYER_ID, defId: 'player', name: '탐험가', side: 'ally', hp: maxHp }), hp: options.playerHp ?? maxHp }
+  const maxHp = options.playerMaxHp ?? RALLY_RULES.playerMaxHp
+  const player = { ...createEntity({ id: PLAYER_ID, defId: PLAYER_DEF_ID, name: '탐험가', side: 'ally', hp: maxHp }), hp: options.playerHp ?? maxHp }
   const enemies = encounter.enemies.map((spec, index) =>
     createEntity({
       id: `e${index}`, defId: spec.defId, name: spec.name, side: 'enemy', hp: Math.round(spec.hp * enemyScale.hp), row: spec.row,
@@ -535,7 +535,7 @@ function cast(state: RallyState): Result {
   return enemyPhase(current, events)
 }
 
-export function reduceRally(state: RallyState, action: RallyAction, _balance: Balance): Result {
+export function reduceRally(state: RallyState, action: RallyAction): Result {
   if (state.phase !== 'player') return reject(state, 'notPlayerTurn')
   switch (action.type) {
     case 'place':
