@@ -25,8 +25,10 @@ export type FizzleCause = 'noObject' | 'frozen'
 
 export interface ClauseCalc {
   readonly clause: number
-  /** 카드의 기본 수치(식의 첫 항). */
+  /** 카드의 기본 수치(식의 첫 항). 되받아친다는 주어의 보호 합. */
   readonly base: number
+  /** 기본 수치가 카드 수치가 아니라 다른 값일 때 그 이름. 'block'이면 보호 합. */
+  readonly baseLabel: 'block' | null
   readonly terms: readonly FormulaTerm[]
   /** 1회분 값. 무효면 0. */
   readonly value: number
@@ -36,11 +38,12 @@ export interface ClauseCalc {
   readonly fizzle: FizzleCause | null
 }
 
-type AmountAction = Extract<VerbAction, { kind: 'damage' | 'mutualDamage' | 'block' | 'heal' | 'grow' | 'loseHp' }>
+type DamageAction = Extract<VerbAction, { kind: 'damage' | 'mutualDamage' | 'counter' }>
+type AmountAction = DamageAction | Extract<VerbAction, { kind: 'block' | 'heal' | 'grow' | 'loseHp' }>
 
 /** 보여 줄 동작: 첫 피해 동작(끌어안는다의 내 쪽 피해 포함), 없으면 첫 수치 동작. */
 function pickAction(actions: readonly VerbAction[]): AmountAction | null {
-  const damage = actions.find((a): a is Extract<VerbAction, { kind: 'damage' | 'mutualDamage' }> => a.kind === 'damage' || a.kind === 'mutualDamage')
+  const damage = actions.find((a): a is DamageAction => a.kind === 'damage' || a.kind === 'mutualDamage' || a.kind === 'counter')
   if (damage) return damage
   return actions.find((a): a is AmountAction => a.kind === 'block' || a.kind === 'heal' || a.kind === 'grow' || a.kind === 'loseHp') ?? null
 }
@@ -66,17 +69,20 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
     entities.find((e) => e.id === resolveTargets(slot.head, entities, lookup).ids[0])
   const source = firstEntity(subjectSlot)
   const target = firstEntity(objectSlot)
-  const fizzled = (fizzle: FizzleCause): ClauseCalc => ({ clause, base: action.amount, terms: [], value: 0, repeat: adverbs.repeat, lethalHp: null, fizzle })
+  // 되받아친다의 위력은 카드 수치가 아니라 주어의 보호 합이다(해석기와 같은 시점의 값).
+  const baseLabel = action.kind === 'counter' ? 'block' : null
+  const baseAmount = action.kind === 'counter' ? (source?.statuses.block ?? 0) : action.amount
+  const fizzled = (fizzle: FizzleCause): ClauseCalc => ({ clause, base: baseAmount, baseLabel, terms: [], value: 0, repeat: adverbs.repeat, lethalHp: null, fizzle })
   if (source && source.statuses.freeze > 0 && !adverbs.ignoreFreeze) return fizzled('frozen')
 
-  if (action.kind !== 'damage' && action.kind !== 'mutualDamage') {
+  if (action.kind !== 'damage' && action.kind !== 'mutualDamage' && action.kind !== 'counter') {
     const bonus = action.kind === 'block' || action.kind === 'heal' ? (hooks.supportBonus ?? 0) : 0
     const value = Math.floor((action.amount + bonus) * adverbs.power)
     const terms: FormulaTerm[] = [
       { kind: 'plus', amount: bonus, label: 'relic' },
       { kind: 'times', factor: adverbs.power, label: null },
     ]
-    return { clause, base: action.amount, terms, value, repeat: adverbs.repeat, lethalHp: null, fizzle: null }
+    return { clause, base: action.amount, baseLabel, terms, value, repeat: adverbs.repeat, lethalHp: null, fizzle: null }
   }
 
   if (!target || target.hp <= 0) return fizzled('noObject')
@@ -86,7 +92,7 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   const chainOf = (slot: typeof subjectSlot) => chainFactorOf(slot, lookup, hooks.chainBoost)
   const sourceChain = chainOf(subjectSlot)
   const targetChain = chainOf(objectSlot)
-  const base = action.amount + (hooks.damageBonus ?? 0)
+  const base = baseAmount + (hooks.damageBonus ?? 0)
   const executionBonus = adverbs.executionBonus ? run.executionsBefore : 0
   const strength = source?.statuses.strength ?? 0
   const weak = (source?.statuses.weak ?? 0) > 0 ? WEAK_MULTIPLIER : 1
@@ -114,7 +120,7 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
   ]
   // 미리보기의 피해는 적의 남은 HP에서 잘린다. 값이 그 이상이면 처치임을 밝혀 두 숫자가 왜 다른지 보인다.
   const lethalHp = target.side === 'enemy' && value * adverbs.repeat >= target.hp + target.statuses.block ? target.hp : null
-  return { clause, base: action.amount, terms, value, repeat: adverbs.repeat, lethalHp, fizzle: null }
+  return { clause, base: baseAmount, baseLabel, terms, value, repeat: adverbs.repeat, lethalHp, fizzle: null }
 }
 
 /** 내 문장의 계산: 동사가 놓인 절마다 하나(spec §2.3, 런 spec §4.1). */

@@ -53,3 +53,9 @@ test('강화할 수 있는 단어는 강화하면 정의가 실제로 바뀐다(
   expect(isUpgradable('twice')).toBe(false)
   expect(isUpgradable('fiercely')).toBe(true)
 })
+
+test('떠올린다는 강화하면 장수가 오른다(4 → 6), 되받아친다는 강화할 것이 없다', () => {
+  const effect = effectiveWord('recall', { ...EMPTY_BUILD, upgrades: { recall: 1 } }).effect
+  expect(effect).toMatchObject({ actions: [{ kind: 'recall', amount: 6 }] })
+  expect(isUpgradable('counter')).toBe(false)
+})

@@ -9,10 +9,10 @@ const testVerb = (id: WordId, text: string, kind: WordDef['kind'], effect: WordD
   id, text, kind, effect, enemyOnly: true, rarity: 'common', inShop: false,
 })
 
-WORDS['testBite'] = testVerb('testBite', '물어뜯는다', 'verbTransitive', { type: 'verb', range: 'melee', actions: [{ kind: 'damage', amount: 7 }] })
-WORDS['testNibble'] = testVerb('testNibble', '깨문다', 'verbTransitive', { type: 'verb', range: 'melee', actions: [{ kind: 'damage', amount: 3 }] })
+WORDS['testBite'] = testVerb('testBite', '물어뜯는다', 'verbTransitive', { type: 'verb', range: 'attack', actions: [{ kind: 'damage', amount: 7 }] })
+WORDS['testNibble'] = testVerb('testNibble', '깨문다', 'verbTransitive', { type: 'verb', range: 'attack', actions: [{ kind: 'damage', amount: 3 }] })
 WORDS['testCurl'] = testVerb('testCurl', '웅크린다', 'verbIntransitive', {
-  type: 'verb', range: 'support', actions: [{ kind: 'block', amount: 8, to: 'subject' }],
+  type: 'verb', range: 'support', actions: [{ kind: 'block', amount: 8, to: 'subject', holds: 0 }],
 })
 
 export function intentClause(subject: WordId, verb: WordId): RallyIntent {

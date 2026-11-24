@@ -183,3 +183,29 @@ describe('대가형 동사', () => {
     expect(find(c.entities, 'e1').statuses).toMatchObject({ poison: 0, weak: 0 })
   })
 })
+
+describe('v3: 보호 이월, 되받아친다, 떠올린다', () => {
+  test('막는다는 holds 1 덩어리를 만든다', () => {
+    const board = put(put(board0(), S, 'you'), V, 'guard')
+    expect(find(run(board, [player(), spider()]).entities, 'p').blockChunks).toEqual([{ amount: 6, turnsLeft: 1 }])
+  })
+
+  test('되받아친다는 주어의 보호 합을 위력으로 쓰고 보호를 비운다', () => {
+    const board = put(put(youAttackSpider(), V, 'counter'), V, 'fiercely', { index: 0 })
+    const r = run(board, [addBlock(player(), 8, 1), spider()])
+    expect(find(r.entities, 'e1').hp).toBe(30 - 12)
+    expect(find(r.entities, 'p').statuses.block).toBe(0)
+  })
+
+  test('되받아친다는 보호가 0이면 실행되고 피해 0', () => {
+    const r = run(put(youAttackSpider(), V, 'counter'), [player(), spider()])
+    expect(r.events.some((e) => e.type === 'fizzled')).toBe(false)
+    expect(find(r.entities, 'e1').hp).toBe(30)
+  })
+
+  test('떠올린다는 recalls 4를 돌려주고, 두 번이면 8', () => {
+    const once = put(put(board0(), S, 'you'), V, 'recall')
+    expect(run(once, [player(), spider()]).recalls).toBe(4)
+    expect(run(put(once, V, 'twice', { index: 0 }), [player(), spider()]).recalls).toBe(8)
+  })
+})

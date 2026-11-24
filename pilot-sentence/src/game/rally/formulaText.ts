@@ -13,7 +13,8 @@ const FIZZLE_TEXT: Record<FizzleCause, string> = { noObject: '무효(대상 없�
 
 /** 식 문자열을 쌓는다. 곱하기 앞에 더하기가 있으면 괄호로 묶는다. 1이나 0인 항은 생략한다. */
 function expression(calc: ClauseCalc): string {
-  let text = String(calc.base)
+  // 기본 수치가 카드 수치가 아니면(되받아친다) 무엇인지 밝힌다.
+  let text = calc.baseLabel === 'block' ? `보호 ${calc.base}` : String(calc.base)
   let pendingSum = false
   for (const term of calc.terms) {
     if (term.kind === 'plus') {

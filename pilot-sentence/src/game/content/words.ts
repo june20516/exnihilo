@@ -4,7 +4,8 @@ import type { WordKind } from '@/game/grammar/frames'
 export type WordId = string
 export type TokenId = 'scarecrow' | 'golem'
 export type Rarity = 'starter' | 'common' | 'uncommon' | 'rare'
-export type VerbRange = 'melee' | 'ranged' | 'support'
+/** 동사 분류: 공격(빈 목적어는 지정한 적) / 지원(빈 목적어는 당신). */
+export type VerbRange = 'attack' | 'support'
 export type ActionTarget = 'subject' | 'object'
 /** 단어로 거는 상태(보호·빙결은 전용 동작이 있다). */
 export type AppliedStatus = Extract<StatusKind, 'poison' | 'weak' | 'vulnerable' | 'strength'>
@@ -13,7 +14,12 @@ export type VerbAction =
   | { readonly kind: 'damage'; readonly amount: number; readonly lifesteal?: boolean }
   | { readonly kind: 'mutualDamage'; readonly amount: number }
   | { readonly kind: 'loseHp'; readonly amount: number; readonly to: ActionTarget }
-  | { readonly kind: 'block'; readonly amount: number; readonly to: ActionTarget }
+  /** 보호. holds는 이월하는 턴 수(카드 속성): 0이면 주인의 다음 차례 시작에 사라진다. */
+  | { readonly kind: 'block'; readonly amount: number; readonly to: ActionTarget; readonly holds: number }
+  /** 되받아친다: 주어의 보호 합을 피해 위력으로 쓰고, 주어의 보호를 모두 없앤다. */
+  | { readonly kind: 'counter' }
+  /** 떠올린다: 망각에서 amount장을 서고로 되돌린다(덱 이동은 전투 흐름이 맡는다). */
+  | { readonly kind: 'recall'; readonly amount: number }
   | { readonly kind: 'heal'; readonly amount: number; readonly to: ActionTarget }
   | { readonly kind: 'freeze'; readonly to: ActionTarget }
   | { readonly kind: 'status'; readonly status: AppliedStatus; readonly amount: number; readonly to: ActionTarget }
@@ -100,27 +106,33 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'allies', text: '우리', kind: 'target', rarity: 'uncommon', effect: target({ kind: 'allies' }) },
   { id: 'everyone', text: '모두', kind: 'target', rarity: 'rare', effect: target({ kind: 'everyone' }) },
   // 타동사: 공격
-  { id: 'bite', text: '물어뜯는다', kind: 'verbTransitive', rarity: 'starter', effect: verb('melee', { kind: 'damage', amount: 6 }) },
-  { id: 'slash', text: '벤다', kind: 'verbTransitive', effect: verb('melee', { kind: 'damage', amount: 10 }) },
-  { id: 'devour', text: '삼킨다', kind: 'verbTransitive', rarity: 'uncommon', effect: verb('melee', { kind: 'damage', amount: 5, lifesteal: true }) },
+  { id: 'bite', text: '물어뜯는다', kind: 'verbTransitive', rarity: 'starter', effect: verb('attack', { kind: 'damage', amount: 6 }) },
+  { id: 'slash', text: '벤다', kind: 'verbTransitive', effect: verb('attack', { kind: 'damage', amount: 10 }) },
+  { id: 'devour', text: '삼킨다', kind: 'verbTransitive', rarity: 'uncommon', effect: verb('attack', { kind: 'damage', amount: 5, lifesteal: true }) },
   {
     id: 'sacrifice', text: '희생한다', kind: 'verbTransitive', rarity: 'uncommon',
-    effect: verb('ranged', { kind: 'loseHp', amount: 6, to: 'subject' }, { kind: 'damage', amount: 15 }),
+    effect: verb('attack', { kind: 'loseHp', amount: 6, to: 'subject' }, { kind: 'damage', amount: 15 }),
   },
   {
     id: 'embrace', text: '끌어안는다', kind: 'verbTransitive', rarity: 'uncommon',
-    effect: verb('melee', { kind: 'mutualDamage', amount: 4 }, { kind: 'freeze', to: 'subject' }, { kind: 'freeze', to: 'object' }),
+    effect: verb('attack', { kind: 'mutualDamage', amount: 4 }, { kind: 'freeze', to: 'subject' }, { kind: 'freeze', to: 'object' }),
   },
+  { id: 'counter', text: '되받아친다', kind: 'verbTransitive', rarity: 'uncommon', effect: verb('attack', { kind: 'counter' }) },
   // 타동사: 지원·방해
-  { id: 'guard', text: '막는다', kind: 'verbTransitive', rarity: 'starter', effect: verb('support', { kind: 'block', amount: 6, to: 'subject' }) },
+  { id: 'guard', text: '막는다', kind: 'verbTransitive', rarity: 'starter', effect: verb('support', { kind: 'block', amount: 6, to: 'subject', holds: 1 }) },
   { id: 'mend', text: '치유한다', kind: 'verbTransitive', rarity: 'starter', effect: verb('support', { kind: 'heal', amount: 6, to: 'object' }) },
-  { id: 'scare', text: '겁준다', kind: 'verbTransitive', rarity: 'starter', effect: verb('ranged', { kind: 'status', status: 'weak', amount: 2, to: 'object' }) },
-  { id: 'curse', text: '저주한다', kind: 'verbTransitive', effect: verb('ranged', { kind: 'status', status: 'vulnerable', amount: 2, to: 'object' }) },
-  { id: 'poisonFeed', text: '독을 먹인다', kind: 'verbTransitive', effect: verb('melee', { kind: 'status', status: 'poison', amount: 4, to: 'object' }) },
+  { id: 'scare', text: '겁준다', kind: 'verbTransitive', rarity: 'starter', effect: verb('attack', { kind: 'status', status: 'weak', amount: 2, to: 'object' }) },
+  { id: 'curse', text: '저주한다', kind: 'verbTransitive', effect: verb('attack', { kind: 'status', status: 'vulnerable', amount: 2, to: 'object' }) },
+  { id: 'poisonFeed', text: '독을 먹인다', kind: 'verbTransitive', effect: verb('attack', { kind: 'status', status: 'poison', amount: 4, to: 'object' }) },
   // 자동사
   { id: 'sleep', text: '잠든다', kind: 'verbIntransitive', effect: verb('support', { kind: 'freeze', to: 'subject' }) },
   { id: 'rage', text: '분노한다', kind: 'verbIntransitive', rarity: 'starter', effect: verb('support', { kind: 'status', status: 'strength', amount: 2, to: 'subject' }) },
-  { id: 'hide', text: '숨는다', kind: 'verbIntransitive', rarity: 'starter', effect: verb('support', { kind: 'block', amount: 10, to: 'subject' }) },
+  { id: 'hide', text: '숨는다', kind: 'verbIntransitive', rarity: 'starter', effect: verb('support', { kind: 'block', amount: 10, to: 'subject', holds: 0 }) },
+  {
+    id: 'endure', text: '버틴다', kind: 'verbIntransitive',
+    effect: verb('support', { kind: 'block', amount: 4, to: 'subject', holds: 3 }),
+  },
+  { id: 'recall', text: '떠올린다', kind: 'verbIntransitive', effect: verb('support', { kind: 'recall', amount: 4 }) },
   { id: 'collapse', text: '무너진다', kind: 'verbIntransitive', effect: verb('support', { kind: 'loseHp', amount: 10, to: 'subject' }) },
   { id: 'swell', text: '부풀어 오른다', kind: 'verbIntransitive', effect: verb('support', { kind: 'grow', amount: 6, to: 'subject' }) },
   { id: 'recover', text: '정신 차린다', kind: 'verbIntransitive', effect: verb('support', { kind: 'cleanse', to: 'subject' }) },
@@ -140,29 +152,31 @@ export const WORDS: Record<WordId, WordDef> = defineWords([
   { id: 'slowly', text: '천천히', kind: 'adverb', inShop: false, effect: adverb({ kind: 'powerMul', value: 0.5 }) },
   { id: 'again', text: '거듭', kind: 'adverb', rarity: 'uncommon', effect: adverb({ kind: 'executionBonus' }) },
   { id: 'persist', text: '기어이', kind: 'adverb', effect: adverb({ kind: 'ignoreFreeze' }) },
+  // 기본 동사(캐릭터 정의가 고른다). 손패 밖 고정 타일이라 덱·상점에 들어가지 않도록 enemyOnly로 둔다.
+  { id: 'strike', text: '때린다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 3 }) },
   // 적 전용
   { id: 'spider', text: '거미', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'spider' }) },
   { id: 'spiderling', text: '새끼 거미', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'spiderling' }) },
   { id: 'slime', text: '슬라임', kind: 'target', enemyOnly: true, effect: target({ kind: 'enemyDef', defId: 'slime' }) },
-  { id: 'nibble', text: '깨문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 3 }) },
-  { id: 'crush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 10 }) },
-  { id: 'spiderBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 14 }) },
-  { id: 'spiderNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 9 }) },
+  { id: 'nibble', text: '깨문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 3 }) },
+  { id: 'crush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 10 }) },
+  { id: 'spiderBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 14 }) },
+  { id: 'spiderNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 9 }) },
   {
     id: 'curl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true,
-    effect: verb('support', { kind: 'block', amount: 8, to: 'subject' }),
+    effect: verb('support', { kind: 'block', amount: 8, to: 'subject', holds: 0 }),
   },
 
   // 정예·보스 전용 (런 spec §5)
-  { id: 'queenBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 10 }) },
-  { id: 'queenNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 7 }) },
-  { id: 'queenCurl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true, effect: verb('support', { kind: 'block', amount: 10, to: 'subject' }) },
-  { id: 'gateCurl', text: '버틴다', kind: 'verbIntransitive', enemyOnly: true, effect: verb('support', { kind: 'block', amount: 20, to: 'subject' }) },
-  { id: 'gateCrush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 16 }) },
-  { id: 'scribeSlash', text: '벤다', kind: 'verbTransitive', enemyOnly: true, effect: verb('melee', { kind: 'damage', amount: 15 }) },
+  { id: 'queenBite', text: '물어뜯는다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 10 }) },
+  { id: 'queenNip', text: '문다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 7 }) },
+  { id: 'queenCurl', text: '웅크린다', kind: 'verbIntransitive', enemyOnly: true, effect: verb('support', { kind: 'block', amount: 10, to: 'subject', holds: 1 }) },
+  { id: 'gateCurl', text: '버틴다', kind: 'verbIntransitive', enemyOnly: true, effect: verb('support', { kind: 'block', amount: 20, to: 'subject', holds: 0 }) },
+  { id: 'gateCrush', text: '짓누른다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 16 }) },
+  { id: 'scribeSlash', text: '벤다', kind: 'verbTransitive', enemyOnly: true, effect: verb('attack', { kind: 'damage', amount: 15 }) },
   {
     id: 'scribeScold', text: '꾸짖는다', kind: 'verbTransitive', enemyOnly: true,
-    effect: verb('ranged', { kind: 'damage', amount: 9 }, { kind: 'status', status: 'weak', amount: 2, to: 'object' }),
+    effect: verb('attack', { kind: 'damage', amount: 9 }, { kind: 'status', status: 'weak', amount: 2, to: 'object' }),
   },
 
   // 연결어(런 보상). 연결어 칸에 놓으면 둘째 절이 열린다.

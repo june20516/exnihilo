@@ -83,6 +83,7 @@ test('가격: 기본값 + 희귀도 보정(보통 −3, 비범 0, 희귀 +3), �
 
 test('상점 단어 풀: 천천히는 빠지고, 눈먼·단단한은 있다', () => {
   expect(WORD_POOL).not.toContain('slowly')
+  expect(WORD_POOL).not.toContain('strike')
   expect(WORD_POOL).toContain('blind')
   expect(WORD_POOL).toContain('sturdy')
 })

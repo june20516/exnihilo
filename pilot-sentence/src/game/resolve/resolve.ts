@@ -1,6 +1,6 @@
 import { PLAYER_DEF_ID } from '@/game/content/characters'
 import {
-  addBlock, addStatus, applyDamage, createEntity, type Entity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing,
+  addBlock, addStatus, applyDamage, removeAllBlock, createEntity, type Entity, growMaxHp, heal, isAlive, loseHp, scaleIncoming, scaleOutgoing,
 } from '@/kit/core/entity'
 import { TOKENS } from '@/game/content/tokens'
 import { type ActionTarget, type AdjectiveMod, getWord, type TokenId, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
@@ -103,7 +103,7 @@ export function collectAdverbs(verbSlot: SlotState, lookup: WordLookup = getWord
 }
 
 function needsObject(actions: readonly VerbAction[]): boolean {
-  return actions.some((a) => a.kind === 'damage' || a.kind === 'mutualDamage' || ('to' in a && a.to === 'object'))
+  return actions.some((a) => a.kind === 'damage' || a.kind === 'mutualDamage' || a.kind === 'counter' || ('to' in a && a.to === 'object'))
 }
 
 /** 개체 목록을 다루는 작업 공간. 개체가 죽는 순간 사망 이벤트를 공유 이벤트 목록에 바로 기록한다. */
@@ -205,6 +205,8 @@ export interface ResolvedClause {
   readonly entities: Entity[]
   readonly events: CombatEvent[]
   readonly targets: { readonly subject: readonly string[]; readonly object: readonly string[] }
+  /** 이 절에서 실행된 떠올리기 장수의 합(반복 포함). 덱 이동은 전투 흐름이 한다. */
+  readonly recalls: number
 }
 
 export function resolveClause(
@@ -227,7 +229,8 @@ export function resolveClause(
   const table = new EntityTable(entities, events)
   /** 칸별로 실제 해석한 대상(이번 절에서 불러낸 토큰 포함). 형용사 상태가 이 개체들에 남는다. */
   const targets = { subject: [] as string[], object: [] as string[] }
-  const finish = (): ResolvedClause => ({ entities: table.all(), events, targets })
+  let recalls = 0
+  const finish = (): ResolvedClause => ({ entities: table.all(), events, targets, recalls })
 
   const resolveSlot = (slot: SlotState): string[] => {
     const { ids, summon } = resolveTargets(slot.head, table.all(), lookup)
@@ -298,6 +301,17 @@ export function resolveClause(
           }
         }
         return
+      case 'counter': {
+        // 보호 합은 동작을 시작할 때 한 번 읽는다(목적어가 여럿이어도 같은 위력).
+        const power = table.get(subjectId)?.statuses.block ?? 0
+        for (const objectId of table.alive(objects)) dealDamage(subjectId, subjectMods, objectId, objectMods, damageBase(power))
+        const subject = table.get(subjectId)
+        if (subject) table.update(subjectId, () => removeAllBlock(subject).entity)
+        return
+      }
+      case 'recall':
+        recalls += action.amount
+        return
       case 'mutualDamage':
         for (const objectId of table.alive(objects)) {
           // 내가 주는 피해에는 층 배율·유물 보너스가 붙고, 되받는 피해는 카드 수치 그대로다.
@@ -317,7 +331,7 @@ export function resolveClause(
       case 'block':
         for (const id of targetsOf(action.to)) {
           const amount = scaled(action.amount + supportBonus)
-          table.update(id, (e) => addBlock(e, amount, 0))
+          table.update(id, (e) => addBlock(e, amount, action.holds))
           events.push({ type: 'statusApplied', entityId: id, status: 'block', amount })
         }
         return

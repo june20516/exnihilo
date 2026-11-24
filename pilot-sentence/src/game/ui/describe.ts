@@ -5,7 +5,6 @@ import { attachParticle } from '@/game/grammar/josa'
 
 export const ROLE_NAMES: Record<SlotRole, string> = { subject: '주어', object: '목적어', verb: '동사' }
 
-const RANGE_NAMES = { melee: '근접', ranged: '원거리', support: '지원' } as const
 const STATUS_NAMES: Record<AppliedStatus, string> = { poison: '독', weak: '약화', vulnerable: '취약', strength: '힘' }
 
 /** 조사 부분만(예: '거미' + object → '를'). */
@@ -21,7 +20,11 @@ function describeAction(action: VerbAction): string {
     case 'loseHp':
       return `${role(action.to)} HP −${action.amount}`
     case 'block':
-      return `${role(action.to)}에게 보호 ${action.amount}`
+      return action.holds > 0 ? `${role(action.to)}에게 보호 ${action.amount} · ${action.holds}턴 유지` : `${role(action.to)}에게 보호 ${action.amount}`
+    case 'counter':
+      return '주어의 보호만큼 피해, 보호를 모두 씀'
+    case 'recall':
+      return `망각에서 ${action.amount}장을 서고로`
     case 'heal':
       return `${role(action.to)} 회복 ${action.amount}`
     case 'freeze':
@@ -103,8 +106,7 @@ export function describeWord(def: WordDef): string {
     }
     case 'verb': {
       const text = effect.actions.map(describeAction).join(', ')
-      if (def.kind === 'verbIntransitive') return `${text} (자동사)`
-      return effect.range === 'support' ? text : `${text} (${RANGE_NAMES[effect.range]})`
+      return def.kind === 'verbIntransitive' ? `${text} (자동사)` : text
     }
     case 'adjective':
       return `${effect.mods.map(describeAdjective).join(', ')} · ${LASTS_TEXT[effect.lasts]}`
