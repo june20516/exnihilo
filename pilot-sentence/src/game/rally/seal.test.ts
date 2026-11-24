@@ -1,7 +1,8 @@
 import { RALLY_ENCOUNTERS } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
 import { getSlot } from '@/game/sentence/board'
-import { type CardInst, nextSealRole, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
+import { type CardInst, type RallyAction, type RallyState, reduceRally, startRally } from './combat'
+import { nextSealRole } from './enemyTurn'
 import './testFixtures'
 
 RALLY_ENCOUNTERS['test-seal-only'] = {

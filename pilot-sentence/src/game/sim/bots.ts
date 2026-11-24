@@ -1,6 +1,7 @@
 import { nextInt } from '@/kit/core/rng'
 import type { Policy, SimGame } from '@/kit/sim/simulate'
-import { PLAYER_ID, type RallyState } from '@/game/rally/combat'
+import { type RallyState } from '@/game/rally/combat'
+import { PLAYER_ID } from '@/game/content/characters'
 import { isFinisher, type SimCombatAction } from './combatGame'
 
 type CombatPolicy = Policy<RallyState, SimCombatAction>

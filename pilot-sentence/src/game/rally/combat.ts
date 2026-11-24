@@ -1,18 +1,20 @@
-import { PLAYER_DEF_ID } from '@/game/content/characters'
+import { PLAYER_DEF_ID, PLAYER_ID } from '@/game/content/characters'
 import { type BuildState, EMPTY_BUILD, wordLookup } from '@/game/build/build'
-import { addStatus, clearBlock, createEntity, type Entity, isAlive, tickEndOfTurn } from '@/kit/core/entity'
+import { createEntity, type Entity } from '@/kit/core/entity'
 import type { Reduced } from '@/kit/core/reduced'
-import { createRng, type RngState, shuffle } from '@/kit/core/rng'
+import { createRng, type RngState } from '@/kit/core/rng'
 import { addToDiscard, type CardInstance, createDeck, type DeckState, takeFromHand } from '@/kit/deck/deck'
 import { RALLY_RULES } from '@/game/content/balance'
-import { RALLY_ENCOUNTERS, type RallyEncounterDef, type RallyIntent, type SlotAddress } from '@/game/content/enemies'
+import type { SlotAddress } from '@/game/content/enemies'
 import { getWord, type WordId } from '@/game/content/words'
 import type { CombatEvent, RejectReason } from '@/game/combat/events'
-import type { SlotRole } from '@/game/grammar/frames'
-import { type ClauseHooks, lingeringMods, resolveClause, type ResolvedClause } from '@/game/resolve/resolve'
+import type { ClauseHooks, ResolvedClause } from '@/game/resolve/resolve'
 import { type Board, getSlot, isSlotActive, placeWord, type PlacedWord, playerWordsOnBoard, revertAll } from '@/game/sentence/board'
+import { enemyDamageTaken, isAliveEnemy, outcomeOf, runClause } from './clauseRun'
+import { cardsFrom, drawCards } from './deckFlow'
+import { enemyPhase, getEncounter, startPlayerTurn } from './enemyTurn'
 import { clauseHooks, connectiveMode, materializeFor, returnsFirstVerb, soBonusFrom } from './hooks'
-import { blankClause, blankSentence, enemyBoard, firstAliveEnemy, hasVerb, isDefensiveVerb } from './sentence'
+import { blankClause, blankSentence, firstAliveEnemy, hasVerb, isDefensiveVerb } from './sentence'
 
 export interface CardInst extends CardInstance {
   readonly wordId: WordId
@@ -59,26 +61,6 @@ export interface RallyState {
   readonly lingering: Readonly<Record<string, readonly WordId[]>>
 }
 
-const SEAL_ORDER: readonly SlotRole[] = ['subject', 'object', 'verb']
-
-/** 다음 봉인이 걸릴 내 슬롯(예고에 보여 준다). ahead는 이번 적 차례에 이 봉인보다 먼저 봉인할 적의 수. */
-export function nextSealRole(state: RallyState, ahead = 0): SlotRole {
-  return SEAL_ORDER[(state.sealCount + ahead) % SEAL_ORDER.length]
-}
-
-/** 첫 절의 이 역할 슬롯을 봉인한다. 이미 걸린 봉인은 그대로 둔다(같은 턴에 여럿이 봉인할 수 있다). */
-function addSeal(board: Board, role: SlotRole): Board {
-  return {
-    clauses: board.clauses.map((clause, index) =>
-      index !== 0 ? clause : { ...clause, slots: clause.slots.map((slot) => (slot.role === role ? { ...slot, sealed: true } : slot)) },
-    ),
-  }
-}
-
-function clearSeals(board: Board): Board {
-  return { clauses: board.clauses.map((clause) => ({ ...clause, slots: clause.slots.map((slot) => ({ ...slot, sealed: false })) })) }
-}
-
 export interface EnemyScale {
   readonly hp: number
   readonly damage: number
@@ -108,22 +90,9 @@ export type RallyAction =
   | { readonly type: 'cast' }
   | { readonly type: 'endTurn' }
 
-export const PLAYER_ID = 'p'
 
-type Result = Reduced<RallyState, CombatEvent>
-
-function getEncounter(id: string): RallyEncounterDef {
-  const encounter = RALLY_ENCOUNTERS[id]
-  if (!encounter) throw new Error(`알 수 없는 조우: ${id}`)
-  return encounter
-}
-
-/** 이번 턴에 index번째 적이 실행할 예고 문장. */
-export function enemyIntent(state: RallyState, enemyIndex: number): RallyIntent {
-  const spec = getEncounter(state.encounterId).enemies[enemyIndex]
-  if (!spec) throw new Error(`적이 없습니다: ${enemyIndex}`)
-  return spec.intents[(state.turn - 1) % spec.intents.length]
-}
+export type RallyResult = Reduced<RallyState, CombatEvent>
+type Result = RallyResult
 
 /** 낭독 직전, 절마다의 실행 조건. 계산식은 이것으로 실제와 같은 값을 낸다. */
 export interface ClauseRun {
@@ -219,60 +188,6 @@ export function sentencePower(state: RallyState): number {
   return runSentence({ ...state, entities: unbounded }).burst
 }
 
-function cardsFrom(words: readonly PlacedWord[]): CardInst[] {
-  return words.flatMap((w) => (w.owner === 'player' && w.instanceId ? [{ instanceId: w.instanceId, wordId: w.wordId }] : []))
-}
-
-function handHasVerb(hand: readonly CardInst[]): boolean {
-  return hand.some((c) => getWord(c.wordId).effect.type === 'verb')
-}
-
-/** 손패 상한을 지키며 한 장씩 뽑는다. 뽑을 더미가 비면 버림 더미를 섞고, 넘치는 카드는 소각한다. */
-function drawCards(state: RallyState, count: number): Result {
-  let { drawPile, hand, discardPile } = state.deck
-  let rng = state.rng
-  let reshuffled = false
-  let drawn = 0
-  const burned: CombatEvent[] = []
-  for (let i = 0; i < count; i++) {
-    if (drawPile.length === 0) {
-      if (discardPile.length === 0) break
-      const [shuffled, nextRng] = shuffle(rng, discardPile)
-      drawPile = shuffled
-      discardPile = []
-      rng = nextRng
-      reshuffled = true
-    }
-    const [card, ...rest] = drawPile
-    drawPile = rest
-    if (hand.length >= state.build.handMax) {
-      discardPile = [...discardPile, card]
-      burned.push({ type: 'burned', wordId: card.wordId })
-    } else {
-      hand = [...hand, card]
-      drawn++
-    }
-  }
-  return {
-    state: { ...state, deck: { drawPile, hand, discardPile }, rng },
-    events: [{ type: 'drawn', count: drawn, reshuffled }, ...burned],
-  }
-}
-
-/** 내 턴 시작: 보호 소멸, 버리기 회복, 드로우, 대상 보정. */
-function startPlayerTurn(state: RallyState, drawCount: number): Result {
-  const entities = state.entities.map((e) => (e.id === PLAYER_ID ? clearBlock(e) : e))
-  const refreshed: RallyState = { ...state, entities, discardsLeft: state.build.discardsPerTurn }
-  const drawn = drawCards(refreshed, drawCount)
-  const target = drawn.state.entities.find((e) => e.id === drawn.state.targetId)
-  const targetId = target && isAlive(target) ? drawn.state.targetId : firstAliveEnemy(drawn.state.entities)
-  const dead = handHasVerb(drawn.state.deck.hand) ? 0 : 1
-  return {
-    state: { ...drawn.state, targetId, log: { ...drawn.state.log, deadTurns: drawn.state.log.deadTurns + dead } },
-    events: drawn.events,
-  }
-}
-
 export function startRally(
   encounterId: string,
   deckWordIds: readonly WordId[],
@@ -315,17 +230,6 @@ export function startRally(
 
 function reject(state: RallyState, reason: RejectReason, at: SlotAddress | null = null): Result {
   return { state, events: [{ type: 'rejected', reason, at }] }
-}
-
-function outcomeOf(entities: readonly Entity[]): 'won' | 'lost' | null {
-  const player = entities.find((e) => e.id === PLAYER_ID)
-  if (!player || !isAlive(player)) return 'lost'
-  return entities.some((e) => e.side === 'enemy' && isAlive(e)) ? null : 'won'
-}
-
-function isAliveEnemy(state: RallyState, id: string): boolean {
-  const entity = state.entities.find((e) => e.id === id)
-  return entity !== undefined && entity.side === 'enemy' && isAlive(entity)
 }
 
 function place(state: RallyState, action: Extract<RallyAction, { type: 'place' }>): Result {
@@ -414,89 +318,6 @@ function disconnect(state: RallyState): Result {
     state: { ...state, board: { clauses: state.board.clauses.slice(0, 1) }, connective: null, deck: { ...state.deck, hand: [...state.deck.hand, ...cards] } },
     events: [{ type: 'disconnected' }],
   }
-}
-
-function enemyDamageTaken(events: readonly CombatEvent[], entities: readonly Entity[]): number {
-  const enemyIds = new Set(entities.filter((e) => e.side === 'enemy').map((e) => e.id))
-  return events.reduce(
-    (sum, e) => ((e.type === 'damaged' || e.type === 'hpLost') && enemyIds.has(e.entityId) ? sum + e.amount : sum),
-    0,
-  )
-}
-
-/** 절 하나를 실행한다. 내 절은 강화(lookup)와 빌드 훅, 적 절은 층 배율 훅을 받는다. */
-function runClause(
-  state: RallyState,
-  board: Board,
-  clause: number,
-  hooks: ClauseHooks,
-  side: 'player' | 'enemy',
-): { state: RallyState; events: CombatEvent[]; targets: ResolvedClause['targets'] } {
-  let nextId = state.nextId
-  const lookup = side === 'player' ? wordLookup(state.build) : undefined
-  // 적 절에는 개체에 남은 형용사 상태를 넘긴다. 남은 형용사는 내 카드라 내 빌드(강화)로 읽는다.
-  const playerLookup = wordLookup(state.build)
-  const lingering = side === 'enemy' ? (id: string) => lingeringMods(state.lingering[id] ?? [], playerLookup) : undefined
-  const r = resolveClause(board, clause, state.entities, () => `t${nextId++}`, { executions: state.executions, lookup, hooks, lingering })
-  return { state: { ...state, entities: r.entities, nextId, executions: state.executions + 1 }, events: r.events, targets: r.targets }
-}
-
-/** 적 턴: 보호 소멸 → 적마다 예고 문장 실행 → 상태 처리 → 다음 내 턴. */
-function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
-  events.push({ type: 'enemyTurn' })
-  // 적 턴 시작: 적의 보호와 지난 봉인이 사라진다.
-  let current: RallyState = {
-    ...state,
-    board: clearSeals(state.board),
-    entities: state.entities.map((e) => (e.side === 'enemy' && isAlive(e) ? clearBlock(e) : e)),
-  }
-  const ended = (outcome: 'won' | 'lost'): Result => {
-    events.push({ type: 'combatEnded', outcome })
-    return { state: { ...current, phase: outcome }, events }
-  }
-
-  for (const [index, spec] of getEncounter(current.encounterId).enemies.entries()) {
-    const enemyId = `e${index}`
-    if (!isAliveEnemy(current, enemyId) || !spec) continue
-    const intent = enemyIntent(current, index)
-    if (intent.kind === 'seal') {
-      // 봉인도 행동이다: 얼어 있으면 빙결을 하나 쓰고 무효가 된다(절 실행과 같은 규칙).
-      const self = current.entities.find((e) => e.id === enemyId)
-      if (self && self.statuses.freeze > 0) {
-        current = { ...current, entities: current.entities.map((e) => (e.id === enemyId ? addStatus(e, 'freeze', -1) : e)) }
-        events.push({ type: 'fizzled', clause: 0, reason: 'frozen' })
-        continue
-      }
-      const role = nextSealRole(current)
-      current = { ...current, board: addSeal(current.board, role), sealCount: current.sealCount + 1 }
-      events.push({ type: 'sealed', role })
-      continue
-    }
-    const board = enemyBoard(intent.clause, enemyId, RALLY_RULES.enemyModifierSlots)
-    const executed = runClause(current, board, 0, { damageScale: current.enemyScale.damage }, 'enemy')
-    current = executed.state
-    events.push(...executed.events)
-    const outcome = outcomeOf(current.entities)
-    if (outcome) return ended(outcome)
-  }
-
-  current = {
-    ...current,
-    // 적 차례가 끝나면 형용사 상태가 사라진다(독 처리와 같은 시점).
-    lingering: {},
-    entities: current.entities.map((entity) => {
-      if (!isAlive(entity)) return entity
-      const r = tickEndOfTurn(entity)
-      if (r.poisonDamage > 0) events.push({ type: 'poisonTick', entityId: entity.id, amount: r.poisonDamage })
-      if (!isAlive(r.entity)) events.push({ type: 'died', entityId: entity.id })
-      return r.entity
-    }),
-  }
-  const outcome = outcomeOf(current.entities)
-  if (outcome) return ended(outcome)
-
-  const started = startPlayerTurn({ ...current, turn: current.turn + 1 }, RALLY_RULES.drawPerTurn)
-  return { state: started.state, events: [...events, ...started.events] }
 }
 
 function cast(state: RallyState): Result {

@@ -1,5 +1,6 @@
 import type { SimGame } from '@/kit/sim/simulate'
-import { PLAYER_ID, type RallyState } from '@/game/rally/combat'
+import { type RallyState } from '@/game/rally/combat'
+import { PLAYER_ID } from '@/game/content/characters'
 import { previewRound } from '@/game/rally/preview'
 import { scoreCandidates } from './bots'
 import { isFinisher, type SimCombatAction } from './combatGame'

@@ -1,5 +1,5 @@
 import type { WordId } from '@/game/content/words'
-import { PLAYER_ID } from '@/game/rally/combat'
+import { PLAYER_ID } from '@/game/content/characters'
 import { REJECT_MESSAGES } from '@/game/rally/text'
 import type { RunState } from '@/game/run/run'
 import { getSlot } from '@/game/sentence/board'

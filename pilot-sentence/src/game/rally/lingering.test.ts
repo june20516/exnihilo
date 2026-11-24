@@ -1,6 +1,7 @@
 import type { WordId } from '@/game/content/words'
 import type { CombatEvent } from '@/game/combat/events'
-import { type CardInst, PLAYER_ID, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
+import { type CardInst, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
+import { PLAYER_ID } from '@/game/content/characters'
 import './testFixtures'
 
 const S = { clause: 0, role: 'subject' } as const
