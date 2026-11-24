@@ -14,11 +14,15 @@
 
 - `any`와 `Math.random` 금지. 엔진 디렉터리(grammar, content, sentence, resolve, combat, rally, build, run, play, sim)는 React를 import하지 않는다. kit은 game을 import하지 않는다.
 - 주석, 화면 문구, 테스트 이름은 한국어로 쓴다. 화면 이름 서고·망각·낭독은 바꾸지 않는다.
-- 규칙 손잡이 값: `handMax` 6, `RALLY_RULES.emptyDrawHpLoss` 2, 떠올린다 4장, 새로고침 3에서 시작해 +1.
+- 규칙 손잡이 값: 탐험가 `handMax` 6, `RALLY_RULES.emptyDrawHpLoss` 2, 떠올린다 4장, 새로고침 3에서 시작해 +1.
 - 보호 처음 값: 막는다 6/holds 1, 숨는다 10/0, 버틴다 4/3, 거미 웅크린다 8/0, 여왕 웅크린다 10/1, 문지기 버틴다 20/0.
-- 기본 동사: id `strike`, 문구 "때린다", 타동사, 공격, 피해 3. 강화 불가, 상점 불가.
+- 기본 동사: 탐험가의 기본 동사는 id `strike`, 문구 "때린다", 타동사, 공격, 피해 3. 강화 불가, 상점 불가.
 - 테스트 명령: `npx vitest run <경로>`, 전체 `npx vitest run`, 타입 `npx tsc -b`, 린트 `npx oxlint`, e2e `npx playwright test`. 모두 `pilot-sentence/`에서 실행한다.
 - Minor도 그 자리에서 고친다(사용자 규칙).
+- **확장 가능한 구조(사용자 규칙)**
+  - 카드, 유물, 캐릭터, 적, 층은 데이터 정의 표에 두고 엔진은 id로 읽는다. 특정 단어·적 id를 로직에서 분기하지 않는다.
+  - 캐릭터마다 달라질 값(최대 HP, 손패 최대치, 버리기, 기본 동사, 시작 덱)은 캐릭터 정의(`content/characters.ts`)에서 읽는다.
+  - 모든 수치는 데이터 필드나 이름 있는 상수(손잡이)에 둔다. 로직 안에 숫자 리터럴을 쓰지 않는다. 규칙 손잡이는 `content/balance.ts`에, 콘텐츠 수치는 각 콘텐츠 표에 둔다(Task 1).
 
 ## Review Focus
 
@@ -30,7 +34,62 @@
 
 ---
 
-### Task 1: 보호 덩어리 (kit)
+### Task 1: 확장 구조 리팩터링 (동작 불변)
+
+**Files:**
+- Modify: `src/game/build/relics.ts`, `src/game/build/build.ts`, `src/game/rally/combat.ts`, `src/game/resolve/resolve.ts`, `src/game/content/words.ts`, `src/game/content/balance.ts`, `src/game/run/shop.ts`, `src/game/run/floors.ts`, `src/game/run/run.ts`, 그리고 `Balance`를 받는 모든 호출부(`grep -rln "Balance\|balance" src scripts tests`)
+- Create: `src/game/rally/hooks.ts`, `src/game/rally/deckFlow.ts`, `src/game/rally/enemyTurn.ts`
+- Test: `src/game/build/relics.test.ts`(생성), 기존 전체 테스트
+
+**목표**: 새 유물, 단어, 적, 층, 수치를 데이터만 고쳐서 넣을 수 있게 한다. 동작은 한 군데도 바꾸지 않는다. 판정 기준은 기존 테스트 전체, 기본 랠리 게이트, `npm run ceiling`의 엔진 교차 검증이 리팩터링 전과 같은 값을 내는 것이다.
+
+**Interfaces:**
+- Produces:
+  - **유물 효과의 데이터화**
+    - `RelicDef.effect: RelicEffect`. 종류는 다음과 같다.
+      - `{ kind: 'perWordBonus'; amount: number }`: 긴 문장, 2
+      - `{ kind: 'blankSubjectBonus'; amount: number }`: 생략의 미학, 4
+      - `{ kind: 'chainBoost'; factor: number; minAdjectives: number }`: 수식의 사슬, 2와 2
+      - `{ kind: 'adverbTwice' }`: 강세
+      - `{ kind: 'poisonBonus'; amount: number }`: 독의 문법, 2
+      - `{ kind: 'impliedSubject'; token: TokenId }`: 허수아비 화자, scarecrow
+      - `{ kind: 'returnFirstVerb' }`: 울림
+      - `{ kind: 'soloRepeat'; amount: number }`: 메아리, 1
+    - `clauseHooks`, `materializeFor`, 울림 처리는 유물 id가 아니라 **가진 유물들의 effect.kind**를 접어서 훅을 만든다.
+    - `CHAIN_FACTOR` 상수와 resolve의 하드코딩된 `>= 2`는 지우고, 훅 `chainBoost: { factor, minAdjectives } | undefined`로 넘긴다.
+    - rally·resolve 코드에는 유물 id 문자열이 남지 않는다.
+  - **강화 규칙**: `build.ts`에 `UPGRADE_RULES = { amountMul: 1.5, mulStep: 0.5, flatStep: 3, poisonStep: 1, maxLevel: 2 } as const`를 둔다. `type UpgradeLevel`과 run.ts의 `1 | 2` 계산은 `maxLevel`에서 나온다.
+  - **상점 제외**: `WordDef.inShop: boolean`(기본 true, slowly만 false)을 두고 `SHOP_EXCLUDED`를 지운다.
+  - **규칙 손잡이 모음**
+    - `content/balance.ts`를 규칙 수치(손잡이)의 집으로 삼는다. 이름 있는 상수를 묶음별로 export한다.
+      - `RALLY_RULES`: 기존 손패·드로우 값, `soRatio: 0.5`, `enemyModifierSlots: 2`, `maxSlots: 4`
+      - `RUN_RULES`: `healRatio`, `rewardGold`, 층 배율 `BASE`·`HARD`
+      - `SHOP_RULES`: `basePrice`, `rarityAdjust`, `rarityWeight`, `materialWeight`, `priceGrowth`, `shopSize`
+    - 콘텐츠 고유 값(단어 수치, 유물 수치, 적 HP)은 각 콘텐츠 표에 그대로 둔다.
+    - `Balance` 타입과 `balance` 인자를 엔진·sim·UI·스크립트의 모든 signature에서 지운다. `playerMaxHp`는 Task 5의 캐릭터 정의로 옮기기 전까지 `RALLY_RULES.playerMaxHp`에 임시로 둔다.
+    - **이후 task의 signature에 적힌 `balance` 인자는 없는 것으로 읽는다.**
+  - **`PLAYER_DEF_ID = 'player'`** 상수를 `combat.ts`에 두고, `resolve.ts`와 `RunTopBar.tsx`의 문자열 비교를 이것으로 바꾼다.
+  - **combat.ts 나누기**(re-export하지 않고 import를 직접 고친다)
+    - `rally/hooks.ts`: `clauseHooks`, `countedWords`, `connectiveMode`, `materializeFor`, `soBonusFrom`
+    - `rally/deckFlow.ts`: `drawCards`, `cardsFrom`, 손패 넘침 처리
+    - `rally/enemyTurn.ts`: `enemyPhase`, `addSeal`, `clearSeals`, `nextSealRole`
+
+- [ ] **Step 1: 기준값 기록**
+  - `npx vitest run`, `npx vitest run src/game/sim/balanceGate.test.ts`, `npm run ceiling`을 실행한다. 출력은 작업 공간 파일에 저장한다.
+  - Expected: 모두 통과. ceiling의 엔진 교차 검증이 모두 일치한다.
+- [ ] **Step 2: 실패하는 테스트 작성** (`relics.test.ts`)
+  - '모든 유물 정의는 effect를 갖고, 효과 문구에 effect의 수치가 들어 있다'
+  - '같은 종류의 유물 정의를 하나 더 만들면(테스트 안 가짜 정의) clauseHooks가 같은 훅을 낸다': 유물 id가 아니라 effect로 동작함을 고정한다.
+- [ ] **Step 3: 실패 확인**: `npx vitest run src/game/build/relics.test.ts`
+  - Expected: FAIL. `effect` 필드가 없다.
+- [ ] **Step 4: 위 Interfaces대로 리팩터링.** 하위 묶음마다 `npx tsc -b && npx vitest run`을 통과시키고 커밋한다(유물 → 강화 → 상점 제외 → 손잡이와 Balance 제거 → combat 나누기).
+- [ ] **Step 5: 동작 불변 확인**
+  - Step 1의 세 명령을 다시 실행해 기준값 파일과 비교한다. 게이트 수치와 ceiling 출력이 같아야 한다.
+  - 이어서 `npx oxlint && npx playwright test`
+  - Expected: 기준값과 동일, 모두 PASS
+- [ ] **Step 6: Commit**(마지막 묶음): `git commit -m "refactor(pilot-sentence): 유물 효과·손잡이 데이터화, Balance 인자 제거, combat 나누기"`
+
+### Task 2: 보호 덩어리 (kit)
 
 **Files:**
 - Modify: `src/kit/core/entity.ts`
@@ -91,27 +150,27 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
   - Expected: PASS. `npx tsc -b`는 아직 `clearBlock`·`freshBlock`·`addStatus(..., 'block')` 호출부에서 실패한다. 커밋 전에 Step 5에서 호출부를 같은 동작으로 옮겨 타입 오류를 없앤다.
 
 - [ ] **Step 5: 호출부를 같은 동작으로 옮기기**
-  - `combat.ts:321`, `combat.ts:509`의 `clearBlock`을 `expireBlock`으로 바꾼다(holds 0이면 같은 동작).
-  - `resolve.ts:312`의 `addStatus(e, 'block', amount)`를 `addBlock(e, amount, 0)`으로 바꾼다(holds는 Task 2에서 카드 속성으로 바꾼다).
+  - `startPlayerTurn`(combat.ts)과 `enemyPhase`(enemyTurn.ts)의 `clearBlock`을 `expireBlock`으로 바꾼다(holds 0이면 같은 동작).
+  - resolve.ts block 동작의 `addStatus(e, 'block', amount)`를 `addBlock(e, amount, 0)`으로 바꾼다(holds는 Task 3에서 카드 속성으로 바꾼다).
   - `cleanse`의 `addStatus` 연쇄는 그대로 둔다(block이 아님).
   - `npx tsc -b && npx vitest run`
   - Expected: 모두 PASS. 기존 freshBlock 동작을 고정하던 테스트가 실패하면, 그 테스트를 덩어리 규칙 기준으로 고친다. 고친 테스트 이름은 ledger에 적는다.
 
 - [ ] **Step 6: Commit**: `git commit -m "feat(kit): 보호를 남은 턴을 가진 덩어리로 바꾼다"`
 
-### Task 2: 단어 정의와 해석기 (보호 이월, 되받아친다, 떠올린다, 공격/지원)
+### Task 3: 단어 정의와 해석기 (보호 이월, 되받아친다, 떠올린다, 공격/지원)
 
 **Files:**
 - Modify: `src/game/content/words.ts`, `src/game/content/enemies.ts`(시작 덱), `src/game/resolve/resolve.ts`, `src/game/rally/sentence.ts`, `src/game/rally/formula.ts`, `src/game/rally/formulaText.ts`, `src/game/ui/describe.ts`, `src/game/build/build.ts`(필요 시), `src/game/run/shop.ts`(`SHOP_EXCLUDED`)
 - Test: `src/game/content/words.test.ts`, `src/game/resolve/resolve.test.ts`(없으면 생성), `src/game/rally/formula*.test.ts`, `src/game/ui/describe.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1의 `addBlock`, `removeAllBlock`
+- Consumes: Task 2의 `addBlock`, `removeAllBlock`
 - Produces:
   - `type VerbRange = 'attack' | 'support'`. 기존 melee·ranged는 모두 attack으로 바꾼다.
   - `VerbAction`의 `block`에 `readonly holds: number`(필수)를 둔다. 새 동작 `{ kind: 'counter' }`, `{ kind: 'recall'; amount: number }`를 추가한다.
   - 새 단어
-    - `strike`: 때린다, verbTransitive, attack, 피해 3, `enemyOnly: true`. 덱과 상점에 들어가지 않게 하려는 것이다. 놓을 수 있게 하는 것은 Task 4가 맡는다.
+    - `strike`: 때린다, verbTransitive, attack, 피해 3, `enemyOnly: true`. 덱과 상점에 들어가지 않게 하려는 것이다. 놓을 수 있게 하는 것은 Task 5가 맡는다.
     - `endure`: 버틴다, verbIntransitive, support, block 4 holds 3, common
     - `counter`: 되받아친다, verbTransitive, attack, counter, uncommon
     - `recall`: 떠올린다, verbIntransitive, support, recall 4, common
@@ -157,20 +216,20 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
   - **shop.ts**: strike는 enemyOnly라 풀에서 자동으로 빠진다. 확인 테스트 '상점 풀에 strike가 없다'를 추가한다.
 
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
-  - Expected: 모두 PASS. 시작 덱이 바뀌어 기존 sim·게이트 수치 테스트가 흔들릴 수 있다. `balanceGate.test.ts`가 실패하면 이 task에서는 실패 내용만 ledger에 적고, 튜닝은 Task 8이 맡는다. 다른 테스트 실패는 이 task에서 고친다.
+  - Expected: 모두 PASS. 시작 덱이 바뀌어 기존 sim·게이트 수치 테스트가 흔들릴 수 있다. `balanceGate.test.ts`가 실패하면 이 task에서는 실패 내용만 ledger에 적고, 튜닝은 Task 9이 맡는다. 다른 테스트 실패는 이 task에서 고친다.
 
 - [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 보호 이월 카드 속성, 되받아친다·떠올린다·버틴다, 공격/지원 분류"`
 
-### Task 3: 전투 흐름 (손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기, 보호 만료)
+### Task 4: 전투 흐름 (손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기, 보호 만료)
 
 **Files:**
-- Modify: `src/game/rally/combat.ts`, `src/game/build/build.ts`(`EMPTY_BUILD.handMax` 6), `src/game/combat/events.ts`, `src/game/rally/text.ts`(이벤트 문구), `src/game/fx/registry.ts`(새 이벤트 무시 또는 숫자 팝업), `src/game/sim/metrics.ts`
+- Modify: `src/game/rally/combat.ts`, `src/game/rally/deckFlow.ts`, `src/game/rally/enemyTurn.ts`, `src/game/content/balance.ts`, `src/game/build/build.ts`(`EMPTY_BUILD.handMax` 6, Task 5에서 캐릭터 정의로 옮김), `src/game/combat/events.ts`, `src/game/rally/text.ts`(이벤트 문구), `src/game/fx/registry.ts`(새 이벤트 무시 또는 숫자 팝업), `src/game/sim/metrics.ts`
 - Test: `src/game/rally/combat.test.ts`, `src/game/rally/preview.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 `expireBlock`, Task 2 `ResolvedClause.recalls`
+- Consumes: Task 2 `expireBlock`, Task 3 `ResolvedClause.recalls`
 - Produces:
-  - `RALLY_RULES = { emptyDrawHpLoss: 2 } as const`(`startHand`, `drawPerTurn` 삭제)
+  - `RALLY_RULES`에 `emptyDrawHpLoss: 2`를 추가하고 `startHand`, `drawPerTurn`을 지운다(`content/balance.ts`)
   - 새 이벤트
     - `{ type: 'emptyDraw'; missing: number; hpLost: number }`
     - `{ type: 'recalled'; count: number }`
@@ -200,24 +259,36 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
   - **enemyPhase**: 적 차례 시작에 적 `expireBlock`을 한다.
   - **discard**: 지금의 순서(먼저 뽑고, 그다음 버린 카드를 망각에 넣음)를 유지한다. 대가는 drawCards가 처리한다.
   - **cast**: `runSentence` 결과의 recall 합(runSentence가 절마다 `recalls`를 모아 반환하도록 확장)이 있으면, 망각에서 그 장수만큼 rng로 고른 카드를 서고에 섞어 넣고 `recalled`를 낸다. 이 낭독에 쓴 카드는 그 다음에 망각으로 간다.
-  - **log**: `deadTurns`를 `basicVerbCasts`로 바꾸는 일은 Task 4가 한다. 이 task에서는 `emptyDrawHpLost`(누계)와 `recalledCards`(누계)를 `RallyLog`에 추가한다.
+  - **log**: `deadTurns`를 `basicVerbCasts`로 바꾸는 일은 Task 5가 한다. 이 task에서는 `emptyDrawHpLost`(누계)와 `recalledCards`(누계)를 `RallyLog`에 추가한다.
   - **text.ts**: `emptyDraw`는 "서고가 비어 HP {hpLost} 잃음", `recalled`는 "망각에서 {count}장을 떠올림"
   - **registry.ts**: `emptyDraw`는 플레이어 위에 `-n` 팝업(damage 톤), `recalled`는 팝업 없음
 
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
-  - Expected: 모두 PASS. 단 balanceGate는 Task 8이 다루므로, 실패하면 ledger에 기록만 한다.
+  - Expected: 모두 PASS. 단 balanceGate는 Task 9이 다루므로, 실패하면 ledger에 기록만 한다.
 
 - [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 손패 채우기, 망각 비순환, 서고 바닥 대가, 떠올리기"`
 
-### Task 4: 기본 동사
+### Task 5: 캐릭터 정의와 기본 동사
 
 **Files:**
-- Modify: `src/game/rally/combat.ts`, `src/game/sim/combatGame.ts`, `src/game/sim/metrics.ts`, `src/game/sim/targets.ts`, `src/game/sim/balanceGate.test.ts`
-- Test: `src/game/rally/combat.test.ts`, 카드 보존 속성 테스트 파일(`grep -rln "보존" src/game`로 찾는다)
+- Create: `src/game/content/characters.ts`
+- Modify: `src/game/rally/combat.ts`, `src/game/build/build.ts`, `src/game/content/balance.ts`, `src/game/content/enemies.ts`, `src/game/run/run.ts`, `src/game/sim/combatGame.ts`, `src/game/sim/metrics.ts`, `src/game/sim/targets.ts`, `src/game/sim/balanceGate.test.ts`, `scripts/ceiling.ts`, `src/game/ui/deck.ts`
+- Test: `src/game/content/characters.test.ts`, `src/game/rally/combat.test.ts`, 카드 보존 속성 테스트 파일(`grep -rln "보존" src/game`로 찾는다)
 
 **Interfaces:**
 - Produces:
-  - `export const BASIC_VERB_INSTANCE = 'basic'`, `export const BASIC_VERB_WORD: WordId = 'strike'`
+  - `content/characters.ts`
+    - `interface CharacterDef { readonly id: CharacterId; readonly name: string; readonly maxHp: number; readonly handMax: number; readonly discardsPerTurn: number; readonly basicVerb: WordId; readonly starterDeck: readonly WordId[] }`
+    - `type CharacterId = 'explorer'`
+    - `CHARACTERS: Record<CharacterId, CharacterDef>`. 탐험가는 maxHp 60, handMax 6, 버리기 1, basicVerb 'strike', 시작 덱은 지금의 `RALLY_STARTER_DECK`(Task 3에서 바꾼 것)
+    - `DEFAULT_CHARACTER: CharacterId = 'explorer'`
+  - `RALLY_STARTER_DECK`, `RALLY_RULES.playerMaxHp`(Task 1의 임시 자리), `EMPTY_BUILD`의 손패·버리기 값은 캐릭터 정의에서 읽도록 옮긴다.
+    - `BuildState.basicVerb: WordId`를 추가한다.
+    - `export function buildFor(character: CharacterDef): BuildState`
+    - `EMPTY_BUILD`는 `buildFor(CHARACTERS.explorer)`로 정의한다. 기본 랠리와 테스트가 지금처럼 쓸 수 있다.
+  - `startRun(seed, balance, characterId = DEFAULT_CHARACTER)`: HP, 덱, 빌드를 캐릭터에서 만든다. `RunState.characterId`를 추가하고 마이그레이션 기본값은 'explorer'다.
+  - `startRally(..., options)`는 HP 기본값을 `options.playerMaxHp ?? CHARACTERS[DEFAULT_CHARACTER].maxHp`로 쓴다. `RALLY_RULES.playerMaxHp`를 지운다. 텍스트 플레이와 스크립트의 참조도 함께 옮긴다.
+  - `export const BASIC_VERB_INSTANCE = 'basic'`. 기본 동사 단어는 `state.build.basicVerb`에서 읽는다(상수로 박지 않음).
   - `export function basicVerbAvailable(state: RallyState): boolean`: 판(두 절 모두)에 기본 동사가 없으면 true
   - `place`는 `instanceId === BASIC_VERB_INSTANCE`를 받는다. 이때 손패에서 꺼내지 않고, 이미 판에 있으면 `'unplayable'`로 거절한다. enemyOnly 검사를 이 경우에만 건너뛴다.
   - `cardsFrom`은 `BASIC_VERB_INSTANCE`를 걸러 낸다. 그래서 낭독, 비우기, 연결어 빼기, 턴 종료, 밀려남 어디서도 손패나 망각으로 가지 않는다.
@@ -231,21 +302,25 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
   - '기본 동사를 놓은 낭독은 basicVerbCasts를 센다'
   - 카드 보존 속성 테스트: 무작위 행동에 기본 동사 place를 섞어도 손패 + 서고 + 망각 + 판의 카드(기본 동사 제외) 수가 덱 장수와 같다.
   - combatGame: '합법 행동에 기본 동사 배치가 들어 있다'. key는 `place:strike@0:verb`
+  - characters.test
+    - '탐험가 정의로 만든 빌드는 손패 6, 버리기 1, 기본 동사 strike다'
+    - '빌드의 basicVerb를 바꾸면 기본 동사 타일이 그 단어로 놓인다'(가짜 캐릭터 정의로 확장 가능성을 고정)
+    - 'startRun은 캐릭터의 HP와 시작 덱으로 시작한다'
 
 - [ ] **Step 2: 실패 확인**: `npx vitest run src/game/rally src/game/sim/sim.test.ts`
   - Expected: FAIL. `BASIC_VERB_INSTANCE`가 없다.
 
 - [ ] **Step 3: 구현**
-  - `legalCombatActions`는 `basicVerbAvailable`일 때 `placementsFor(state, BASIC_VERB_INSTANCE, BASIC_VERB_WORD, balance)`를 더한다.
+  - `legalCombatActions`는 `basicVerbAvailable`일 때 `placementsFor(state, BASIC_VERB_INSTANCE, state.build.basicVerb, balance)`를 더한다.
   - 판에 놓인 기본 동사 PlacedWord는 `owner: 'player'`, `instanceId: BASIC_VERB_INSTANCE`다.
   - 긴 문장 유물은 기본 동사도 한 단어로 센다(판에 놓인 내 단어이므로). 이 결정을 ledger에 적는다.
 
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx vitest run`
-  - Expected: PASS(balanceGate 수치는 Task 8)
+  - Expected: PASS(balanceGate 수치는 Task 9)
 
-- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 손패 밖 기본 동사 때린다"`
+- [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 캐릭터 정의와 손패 밖 기본 동사"`
 
-### Task 5: 상점 새로고침
+### Task 6: 상점 새로고침
 
 **Files:**
 - Modify: `src/game/run/shop.ts`, `src/game/run/run.ts`, `src/game/sim/shopBots.ts`, `src/game/sim/runSim.ts`
@@ -254,7 +329,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 **Interfaces:**
 - Produces:
   - `ShopState.rerolls: number`
-  - `export const REROLL_PRICE = { base: 3, step: 1 } as const`
+  - `SHOP_RULES.reroll = { base: 3, step: 1 }`(`content/balance.ts`)
   - `export function rerollPrice(shop: ShopState): number`(= base + step × rerolls)
   - `export function rerollShop(rng, shop, deck, build): [ShopState, RngState]`: 새로 `rollShop`한 상품으로 팔리지 않은 자리를 앞에서부터 채운다. 팔린 자리는 그대로 둔다. rerolls는 +1이다.
   - `RunAction`에 `{ type: 'reroll' }`, `RunEvent`에 `{ type: 'rerolled'; price: number }`를 추가한다.
@@ -282,14 +357,14 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 
 - [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 상점 새로고침"`
 
-### Task 6: 텍스트 플레이와 저장 호환
+### Task 7: 텍스트 플레이와 저장 호환
 
 **Files:**
 - Modify: `src/game/play/textPlay.ts`, `scripts/play.ts`(필요 시)
 - Test: `src/game/play/textPlay.test.ts`
 
 **Interfaces:**
-- Consumes: Task 4 `BASIC_VERB_INSTANCE`, Task 5 `{ type: 'reroll' }`
+- Consumes: Task 5 `BASIC_VERB_INSTANCE`, Task 6 `{ type: 'reroll' }`
 - Produces:
   - 명령: `0`은 기본 동사를 뜻한다(손패 번호와 겹치지 않음). `reroll`은 상점 새로고침이다.
   - `renderRun`
@@ -318,14 +393,14 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 
 - [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 텍스트 플레이에 v3 규칙과 저장 호환"`
 
-### Task 7: 최소 화면
+### Task 8: 최소 화면
 
 **Files:**
 - Modify: `src/game/ui/CombatScreen.tsx`, `src/game/ui/Hand.tsx`(기본 동사 타일 자리), `src/game/ui/EntityCard.tsx`(보호 덩어리 글자), `src/game/ui/ShopScreen.tsx`(새로고침 버튼), `src/app/useRunStore.ts`(필요 시), `src/game/ui/SidePanel.tsx`(새 이벤트 문구는 text.ts를 따름)
 - Test: `tests/e2e/run.spec.ts`, `tests/e2e/combat-slice.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 3 이벤트, Task 4 `BASIC_VERB_INSTANCE`·`basicVerbAvailable`, Task 5 `reroll`·`rerollPrice`
+- Consumes: Task 4 이벤트, Task 5 `BASIC_VERB_INSTANCE`·`basicVerbAvailable`, Task 6 `reroll`·`rerollPrice`
 - Produces
   - testid `tile-basic`: 손패 왼쪽 고정 자리. 판에 놓이면 비활성으로 보인다.
   - testid `block-<entityId>`: 보호 합과 이월. 예: "보호 10 · 4는 2턴 유지"
@@ -340,7 +415,7 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
   - Expected: FAIL. testid가 없다.
 
 - [ ] **Step 3: 구현**
-  - 기본 동사 타일은 `WordTile`을 재사용한다(def는 `getWord('strike')`, instanceId는 `BASIC_VERB_INSTANCE`).
+  - 기본 동사 타일은 `WordTile`을 재사용한다(def는 `getWord(state.build.basicVerb)`, instanceId는 `BASIC_VERB_INSTANCE`).
   - 선택과 드래그는 손패 카드와 같은 경로로 처리한다. `placement.ts`의 `canPlayAnywhere`는 enemyOnly인 strike를 막는다. 그래서 `instanceId === BASIC_VERB_INSTANCE`이면 동사 칸만 허용하도록 한다.
 
 - [ ] **Step 4: 통과 확인**: `npx tsc -b && npx oxlint && npx vitest run && npx playwright test`
@@ -348,18 +423,18 @@ test('턴 종료 처리는 보호를 건드리지 않는다', () => {
 
 - [ ] **Step 5: Commit**: `git commit -m "feat(pilot-sentence): 기본 동사·보호 이월·새로고침 최소 화면"`
 
-### Task 8: 판정 지표와 튜닝
+### Task 9: 판정 지표와 튜닝
 
 **Files:**
 - Modify: `src/game/sim/combatBot.ts`, `src/game/sim/runSim.ts`, `src/game/sim/bots.ts`, `src/game/sim/metrics.ts`, `src/game/sim/targets.ts`, `src/game/sim/runTargets.ts`, `src/game/sim/balanceGate.test.ts`, `scripts/run-sim.ts`, `scripts/sim.ts`
-- Modify(튜닝 손잡이만): `src/game/content/words.ts` 보호 값, `src/game/build/build.ts` handMax, `RALLY_RULES.emptyDrawHpLoss`, `REROLL_PRICE`, 적 HP·피해
+- Modify(튜닝 손잡이만): `src/game/content/words.ts` 보호 값, `src/game/build/build.ts` handMax, `RALLY_RULES.emptyDrawHpLoss`, `SHOP_RULES.reroll`, 적 HP·피해
 - Docs: `docs/lab/worklog/pilot-sentence.md`
 - Test: `src/game/sim/balanceGate.test.ts`, `src/game/sim/runSim.test.ts`
 
 **Interfaces:**
 - Produces
   - `export function isAttackOnlyAction(state: RallyState, action: RallyAction): boolean`(bots.ts)
-    - 동사 칸에 놓는 단어가 피해 동작(damage, mutualDamage)만 가진 동사일 때 true. 기본 동사 포함, counter 제외.
+    - 동사 칸에 놓는 단어가 피해 동작(damage, mutualDamage)만 가진 동사일 때 true. 단어 id가 아니라 정의의 동작 종류로 판정한다(기본 동사 포함, counter 제외).
     - 동사가 아닌 단어(대상·형용사·부사·연결어), target, cast, endTurn은 true
     - 지원 동사, status 동사, recall은 false
   - `attackOnlyGame(game: SimGame<RallyState, SimCombatAction>): SimGame<...>`: legalActions를 `isAttackOnlyAction`으로 거른다.
