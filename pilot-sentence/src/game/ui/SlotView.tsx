@@ -31,7 +31,7 @@ function PlacedDraggable({ id, enabled, children }: { id: string; enabled: boole
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `${PLACED_DRAG_PREFIX}${id}`, disabled: !enabled })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 60 } : undefined
   return (
-    <span ref={setNodeRef} style={style} {...attributes} {...listeners} role={undefined} tabIndex={undefined} className={`flex flex-col items-center ${isDragging ? 'opacity-70' : ''}`}>
+    <span ref={setNodeRef} style={style} {...attributes} {...listeners} role={undefined} tabIndex={undefined} className={`flex touch-none flex-col items-center ${isDragging ? 'opacity-70' : ''}`}>
       {children}
     </span>
   )

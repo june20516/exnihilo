@@ -78,6 +78,7 @@ export function enemyPhase(state: RallyState, events: CombatEvent[]): Result {
   for (const [index, spec] of getEncounter(current.encounterId).enemies.entries()) {
     const enemyId = `e${index}`
     if (!isAliveEnemy(current, enemyId) || !spec) continue
+    events.push({ type: 'enemyActs', entityId: enemyId })
     const intent = enemyIntent(current, index)
     if (intent.kind === 'seal') {
       // 봉인도 행동이다: 얼어 있으면 빙결을 하나 쓰고 무효가 된다(절 실행과 같은 규칙).

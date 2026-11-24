@@ -1,3 +1,4 @@
+import { STATUS_NAMES } from '@/game/content/statuses'
 import { PLAYER_DEF_ID } from '@/game/content/characters'
 import type { Entity, StatusKind } from '@/kit/core/entity'
 import type { CombatEvent, FizzleReason } from '@/game/combat/events'
@@ -8,14 +9,6 @@ export interface PreviewLine {
   readonly tone: 'harm' | 'help' | 'neutral'
 }
 
-const STATUS_LABELS: Record<StatusKind, string> = {
-  block: '보호',
-  poison: '독',
-  freeze: '빙결',
-  strength: '힘',
-  weak: '약화',
-  vulnerable: '취약',
-}
 const BAD_STATUSES: readonly StatusKind[] = ['poison', 'freeze', 'weak', 'vulnerable']
 const FIZZLE_LABELS: Record<FizzleReason, string> = { noSubject: '주어가 없음', noObject: '목적어가 없음', frozen: '주어가 잠듦' }
 
@@ -38,7 +31,7 @@ function describeEvent(event: CombatEvent, entities: readonly Entity[]): Preview
       return { text: `${name(event.entityId)}: 회복 +${event.amount}`, tone: toneFor(find(event.entityId), false) }
     case 'statusApplied':
       return {
-        text: `${name(event.entityId)}: ${STATUS_LABELS[event.status]} +${event.amount}`,
+        text: `${name(event.entityId)}: ${STATUS_NAMES[event.status]} +${event.amount}`,
         tone: toneFor(find(event.entityId), BAD_STATUSES.includes(event.status)),
       }
     case 'hpLost':

@@ -1,7 +1,7 @@
 import { PLAYER_POOL } from '@/game/content/words'
 import { getWord } from '@/game/content/words'
 import { EMPTY_BUILD } from '@/game/build/build'
-import { blockText, cardFacts, describeWord } from './describe'
+import { blockText, cardFacts, cardSummary, describeWord } from './describe'
 
 test.each([
   ['bite', '피해 6'],
@@ -73,4 +73,10 @@ describe('cardFacts: 카드 설명 구조값', () => {
     expect(f.facts.map((x) => x.kind)).toEqual(['counter'])
   })
   test("숨는다는 배지에 '자동사'", () => expect(cardFacts('hide', build()).badges).toContain('자동사'))
+})
+
+test('보호 카드의 사실 문구에는 이월이 빠지고(배지로 보임), 한 줄 설명에는 배지로 한 번만 붙는다', () => {
+  const f = cardFacts('guard', EMPTY_BUILD)
+  expect(f.facts[0]?.text).toBe('주어에게 보호 6')
+  expect(cardSummary('guard', EMPTY_BUILD)).toBe('주어에게 보호 6 · 1턴 유지')
 })

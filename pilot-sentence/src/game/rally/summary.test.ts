@@ -80,3 +80,26 @@ test('pileContents: 서고는 단어별 장수, 망각은 순서, emptyDrawHpLos
     emptyDrawHpLoss: RALLY_RULES.emptyDrawHpLoss,
   })
 })
+
+describe('적이 여럿일 때 예고', () => {
+  test('내 낭독이 앞 적을 처치해도 뒤 적의 예고는 그 적에게 붙는다', () => {
+    const s = placed(['bite'], 'test-pair')
+    const weakFirst = { ...s, entities: s.entities.map((e) => (e.id === 'e0' ? { ...e, hp: 2 } : e)) }
+    const actions = intentActions(weakFirst)
+    expect(actions.e1).toEqual([{ kind: 'attack', amount: 3, target: '탐험가' }])
+    expect(actions.e0 ?? []).toEqual([])
+  })
+  test('둘 다 살아 있으면 각자 자기 공격', () => {
+    expect(intentActions(placed(['guard'], 'test-pair'))).toEqual({
+      e0: [{ kind: 'attack', amount: 3, target: '탐험가' }],
+      e1: [{ kind: 'attack', amount: 3, target: '탐험가' }],
+    })
+  })
+})
+
+test('previewSummary·intentActions는 미리 계산한 미리보기를 받아도 같은 값을 낸다', () => {
+  const s = placed(['guard'])
+  const preview = previewEvents(s)
+  expect(previewSummary(s, preview)).toEqual(previewSummary(s))
+  expect(intentActions(s, preview)).toEqual(intentActions(s))
+})

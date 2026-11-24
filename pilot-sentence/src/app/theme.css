@@ -48,6 +48,8 @@
 html, body { margin: 0; background: var(--color-surface-container-lowest); height: 100dvh; overflow: hidden; }
 /* 모바일 브라우저의 글자 자동 확대를 끈다: 배치는 Stage가 비율로 줄이므로, 글자만 커지면 영역이 눌린다. */
 html { text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+/* 길게 누르기는 툴팁에 쓴다: iOS의 길게 누르기 메뉴(콜아웃)를 끈다. */
+body { -webkit-touch-callout: none; }
 
 /* 모바일은 가로만 지원한다(표시 spec §3.8). 세로로 든 터치 기기에서는 안내만 보인다. */
 .rotate-notice { display: none; }

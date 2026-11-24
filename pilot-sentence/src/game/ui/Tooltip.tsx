@@ -34,13 +34,17 @@ export function Tooltip({ content, children, longPress = false, testId, classNam
   const pressRef = useRef<{ timer: number; x: number; y: number } | null>(null)
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<Position | null>(null)
+  /** 길게 누르기로 막 열었으면, 손을 뗄 때 따라오는 click(선택)을 한 번 막는다. */
+  const swallowClickRef = useRef(false)
+  /** 열린 동안 내용·창 크기가 바뀌면 위치를 다시 잰다. */
+  const [layoutTick, setLayoutTick] = useState(0)
 
   const cancelPress = useCallback(() => {
     if (pressRef.current) window.clearTimeout(pressRef.current.timer)
     pressRef.current = null
   }, [])
 
-  // 열릴 때 크기를 재서 앵커 위(모자라면 아래)에, 좌우는 화면 안으로 맞춘다.
+  // 열릴 때(그리고 내용·창 크기가 바뀔 때) 크기를 재서 앵커 위(모자라면 아래)에, 좌우는 화면 안으로 맞춘다.
   useLayoutEffect(() => {
     if (!open) return
     const anchor = anchorRef.current?.getBoundingClientRect()
@@ -51,7 +55,7 @@ export function Tooltip({ content, children, longPress = false, testId, classNam
     const centered = anchor.left + anchor.width / 2 - tip.width / 2
     const left = Math.max(MARGIN, Math.min(window.innerWidth - tip.width - MARGIN, centered))
     setPosition({ left, top: Math.max(MARGIN, top) })
-  }, [open])
+  }, [open, content, layoutTick])
 
   useEffect(() => {
     if (!open) return
@@ -63,11 +67,14 @@ export function Tooltip({ content, children, longPress = false, testId, classNam
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
+    const relayout = () => setLayoutTick((n) => n + 1)
     document.addEventListener('pointerdown', closeOutside)
     document.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('resize', relayout)
     return () => {
       document.removeEventListener('pointerdown', closeOutside)
       document.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('resize', relayout)
     }
   }, [open])
 
@@ -86,6 +93,8 @@ export function Tooltip({ content, children, longPress = false, testId, classNam
       onPointerEnter={(e) => e.pointerType === 'mouse' && show()}
       onPointerLeave={(e) => e.pointerType === 'mouse' && setOpen(false)}
       onPointerDown={(e) => {
+        // 새로 누르면 지난 길게 누르기의 'click 막기'는 끝난다(따라오는 click이 없었던 경우).
+        swallowClickRef.current = false
         if (e.pointerType === 'mouse') return
         if (!longPress) {
           if (open) setOpen(false)
@@ -93,7 +102,14 @@ export function Tooltip({ content, children, longPress = false, testId, classNam
           return
         }
         cancelPress()
-        pressRef.current = { x: e.clientX, y: e.clientY, timer: window.setTimeout(show, LONG_PRESS_MS) }
+        pressRef.current = {
+          x: e.clientX,
+          y: e.clientY,
+          timer: window.setTimeout(() => {
+            swallowClickRef.current = true
+            show()
+          }, LONG_PRESS_MS),
+        }
       }}
       onPointerMove={(e) => {
         const press = pressRef.current
@@ -101,6 +117,12 @@ export function Tooltip({ content, children, longPress = false, testId, classNam
       }}
       onPointerUp={cancelPress}
       onPointerCancel={cancelPress}
+      onClickCapture={(e) => {
+        if (!swallowClickRef.current) return
+        swallowClickRef.current = false
+        e.preventDefault()
+        e.stopPropagation()
+      }}
     >
       {children}
       {open &&

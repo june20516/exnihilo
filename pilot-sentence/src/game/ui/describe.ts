@@ -1,13 +1,13 @@
+import { STATUS_NAMES } from '@/game/content/statuses'
 import type { BlockChunk } from '@/kit/core/entity'
 import { type BuildState, effectiveWord } from '@/game/build/build'
 import { TOKENS } from '@/game/content/tokens'
-import { type AdjectiveMod, type AdverbMod, type AppliedStatus, type ConnectiveMode, getWord, LASTS_TEXT, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
+import { type AdjectiveMod, type AdverbMod, type ConnectiveMode, getWord, LASTS_TEXT, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
 import { attachParticle } from '@/game/grammar/josa'
 
 export const ROLE_NAMES: Record<SlotRole, string> = { subject: '주어', object: '목적어', verb: '동사' }
 
-const STATUS_NAMES: Record<AppliedStatus, string> = { poison: '독', weak: '약화', vulnerable: '취약', strength: '힘' }
 
 /** 조사 부분만(예: '거미' + object → '를'). */
 const particleOf = (word: string, kind: Parameters<typeof attachParticle>[1]) => attachParticle(word, kind).slice(word.length)
@@ -16,7 +16,8 @@ const particleOf = (word: string, kind: Parameters<typeof attachParticle>[1]) =>
 type NumText = (value: number) => string
 const plain: NumText = (value) => String(value)
 
-function describeAction(action: VerbAction, num: NumText = plain): string {
+/** withHolds가 false면 보호의 이월(n턴 유지)을 문구에서 뺀다(카드에서는 배지로 따로 보이므로). */
+function describeAction(action: VerbAction, num: NumText = plain, withHolds = true): string {
   const role = (to: 'subject' | 'object') => ROLE_NAMES[to]
   switch (action.kind) {
     case 'damage':
@@ -26,7 +27,7 @@ function describeAction(action: VerbAction, num: NumText = plain): string {
     case 'loseHp':
       return `${role(action.to)} HP −${num(action.amount)}`
     case 'block':
-      return action.holds > 0 ? `${role(action.to)}에게 보호 ${num(action.amount)} · ${action.holds}턴 유지` : `${role(action.to)}에게 보호 ${num(action.amount)}`
+      return withHolds && action.holds > 0 ? `${role(action.to)}에게 보호 ${num(action.amount)} · ${action.holds}턴 유지` : `${role(action.to)}에게 보호 ${num(action.amount)}`
     case 'counter':
       return '주어의 보호만큼 피해, 보호를 모두 씀'
     case 'recall':
@@ -193,13 +194,11 @@ export function cardFacts(wordId: WordId, build: BuildState): CardFacts {
         const kind: FactKind = action.kind === 'status' ? action.status : ACTION_KIND[action.kind]
         const to = 'to' in action ? action.to : null
         const baseAction = before[i]
-        return fact(kind, actionValue(action), baseAction ? actionValue(baseAction) : null, to, (num) => describeAction(action, num))
+        return fact(kind, actionValue(action), baseAction ? actionValue(baseAction) : null, to, (num) => describeAction(action, num, false))
       })
       const holds = effect.actions.flatMap((a) => (a.kind === 'block' && a.holds > 0 ? [`${a.holds}턴 유지`] : []))
       const badges = [...holds, ...(def.kind === 'verbIntransitive' ? ['자동사'] : [])]
-      // 이월은 배지로 보이므로 사실 문구에서는 뺀다.
-      const plainFacts = facts.map((f) => (f.kind === 'block' ? { ...f, text: f.text.replace(/ · \d+턴 유지$/, '') } : f))
-      return { facts: plainFacts, tone: effect.range === 'attack' ? 'attack' : 'support', badges }
+      return { facts, tone: effect.range === 'attack' ? 'attack' : 'support', badges }
     }
     case 'adjective': {
       const before = originalEffect.type === 'adjective' ? originalEffect.mods : []

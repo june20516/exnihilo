@@ -1,3 +1,4 @@
+import { STATUS_NAMES } from '@/game/content/statuses'
 /**
  * 텍스트 플레이(런 spec §8): 터미널 명령으로 런을 한 단계씩 진행한다. 플레이테스터 에이전트가 쓴다.
  * 순수 모듈이다. 상태 파일 읽기·쓰기는 scripts/play.ts가 맡는다.
@@ -273,7 +274,6 @@ function markerLine(event: CombatEvent): string | null {
 // ───────────────────────── 화면 ─────────────────────────
 
 const TIER_NAMES: Record<EncounterTier, string> = { normal: '일반', elite: '정예', boss: '보스' }
-const STATUS_NAMES: Record<StatusKind, string> = { block: '보호', poison: '독', freeze: '빙결', strength: '힘', weak: '약화', vulnerable: '취약' }
 
 /** 이월하는 보호 덩어리를 밝힌다(예: "(4는 2턴 유지)"). 다음 차례에 사라질 몫은 따로 적지 않는다. */
 function blockDetail(entity: Entity): string {

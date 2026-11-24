@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, useState } from 'react'
+import { overlapFor } from './handLayout'
 import type { BuildState } from '@/game/build/build'
 import { type CardFacts, cardFacts } from './describe'
 import { Icon } from './Icon'
@@ -23,15 +25,6 @@ interface HandProps {
   basic: { readonly wordId: WordId; readonly available: boolean }
 }
 
-/** 겹침: 손패가 이 장수를 넘으면 카드끼리 겹친다. 카드 하나가 더해질 때마다 겹침이 늘고, 최대치에서 멈춘다(px). */
-const OVERLAP = { freeCards: 4, stepPx: 14, basePx: 18, maxPx: 84 } as const
-
-/** 카드 수에 따른 이웃 카드와의 겹침 폭(px). */
-function overlapFor(count: number): number {
-  if (count <= OVERLAP.freeCards) return 0
-  return Math.min(OVERLAP.maxPx, OVERLAP.basePx + (count - OVERLAP.freeCards) * OVERLAP.stepPx)
-}
-
 /** 카드 설명 툴팁 내용: 사실(강화 전후 포함)과 배지. */
 function CardTip({ facts }: { facts: CardFacts }) {
   return (
@@ -47,9 +40,28 @@ function CardTip({ facts }: { facts: CardFacts }) {
   )
 }
 
+/** 기본 동사 열과 손패 줄 사이 간격(gap-2, px). */
+const HAND_ROW_GAP = 8
+
 export function Hand({ hand, board, build, selectedId, marked, disabled, onSelect, basic }: HandProps) {
   const basicDef = getWord(basic.wordId)
-  const overlap = overlapFor(hand.length)
+  // 손패 줄의 실제 폭을 재서, 장수가 많으면 그 폭에 다 들어가게 겹친다.
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [available, setAvailable] = useState(Number.POSITIVE_INFINITY)
+  useLayoutEffect(() => {
+    const row = rowRef.current?.parentElement
+    if (!row) return
+    const measure = () => {
+      const basicColumn = row.firstElementChild
+      const used = basicColumn instanceof HTMLElement ? basicColumn.offsetWidth : 0
+      setAvailable(row.clientWidth - used - HAND_ROW_GAP)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [])
+  const overlap = overlapFor(hand.length, available)
   return (
     <div className="flex min-w-0 flex-1 items-end justify-center gap-2" data-testid="hand">
       <div className="flex flex-col items-center gap-1 border-r border-outline-variant pr-2">
@@ -69,7 +81,7 @@ export function Hand({ hand, board, build, selectedId, marked, disabled, onSelec
         </Tooltip>
         <span className="font-ui text-[10px] text-outline">기본 동사</span>
       </div>
-      <div className="flex items-end">
+      <div ref={rowRef} className="flex items-end">
         {hand.map((card, index) => {
           const def = getWord(card.wordId)
           const facts = cardFacts(card.wordId, build)

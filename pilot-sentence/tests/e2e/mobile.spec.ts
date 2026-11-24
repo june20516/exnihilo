@@ -100,3 +100,28 @@ test.describe('가로(844×390) 버리기 모드', () => {
     await expectInViewport(page, ['discard', 'discard-confirm', 'hand', 'cast', 'end-turn'])
   })
 })
+
+test.describe('가로(844×390) 터치 세부', () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true })
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?mode=rally&seed=5')
+    await expect(page.getByTestId('end-turn')).toBeVisible()
+  })
+
+  test('끌 수 있는 카드와 놓은 단어는 touch-action: none이다(브라우저 화면 이동이 드래그를 끊지 않게)', async ({ page }) => {
+    const touchAction = (testId: string) => page.getByTestId(testId).first().evaluate((el) => getComputedStyle(el).touchAction)
+    expect(await touchAction('tile-bite')).toBe('none')
+    await page.getByTestId('tile-bite').first().tap()
+    await page.getByTestId('slot-0-verb').tap()
+    const placed = await page.getByTestId('slot-0-verb').locator('[aria-roledescription="draggable"]').first().evaluate((el) => getComputedStyle(el).touchAction)
+    expect(placed).toBe('none')
+  })
+
+  test('길게 눌러 툴팁을 열면 그 카드는 선택되지 않는다', async ({ page }) => {
+    const card = page.getByTestId('tile-guard').first()
+    await longPress(page, card)
+    await card.dispatchEvent('click')
+    await expect(page.getByTestId('tooltip')).toBeVisible()
+    await expect(card).toHaveAttribute('data-selected', 'false')
+  })
+})

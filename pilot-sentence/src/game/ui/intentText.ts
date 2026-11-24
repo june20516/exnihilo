@@ -1,7 +1,7 @@
+import { STATUS_NAMES } from '@/game/content/statuses'
 import type { IntentAction } from '@/game/rally/summary'
 import { ROLE_NAMES } from './describe'
 
-const STATUS_NAMES = { poison: '독', weak: '약화', vulnerable: '취약', strength: '힘' } as const
 
 /** 예고 행동 칩의 문구. 예: '공격 14', '보호 8 · 1턴 유지', '봉인 주어 칸'. */
 export function intentActionText(action: IntentAction): string {

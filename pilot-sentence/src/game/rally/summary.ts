@@ -11,6 +11,8 @@ import type { RallyState } from './combat'
 import { enemyIntent, nextSealRole } from './enemyTurn'
 import { previewEvents } from './preview'
 
+type PreviewEvents = ReturnType<typeof previewEvents>
+
 /**
  * 화면이 그릴 구조값: 미리보기(개체별 변화), 적 예고의 행동, 적용 중인 증폭 요소, 서고·망각 내용.
  * 수치는 모두 미리보기(실제 엔진)에서 나오므로 실제 결과와 같다.
@@ -130,8 +132,8 @@ function changesFrom(events: readonly CombatEvent[], start: ReadonlyMap<string, 
 }
 
 /** 미리보기: 내 낭독 구간과 이어지는 적 차례 구간의 개체별 변화. */
-export function previewSummary(state: RallyState): { mine: EntityChange[]; enemy: EntityChange[] } {
-  const { mine, enemy, after } = previewEvents(state)
+export function previewSummary(state: RallyState, preview: PreviewEvents = previewEvents(state)): { mine: EntityChange[]; enemy: EntityChange[] } {
+  const { mine, enemy, after } = preview
   const start = new Map(state.entities.map((e) => [e.id, { hp: e.hp, maxHp: e.maxHp }]))
   const mineChanges = changesFrom(mine, start, after.entities)
   const middle = new Map(start)
@@ -149,39 +151,40 @@ export type IntentAction =
   | { readonly kind: 'grow'; readonly amount: number }
   | { readonly kind: 'fizzled' }
 
-/** 적 차례 이벤트를 절 단위로 나눈다(clauseExecuted가 한 적의 절의 시작). */
-function enemyClauseGroups(events: readonly CombatEvent[]): CombatEvent[][] {
-  const groups: CombatEvent[][] = []
+/** 적 차례 이벤트를 행동한 적별로 나눈다(enemyActs가 한 적의 행동의 시작). */
+function eventsByEnemy(events: readonly CombatEvent[]): Map<string, CombatEvent[]> {
+  const groups = new Map<string, CombatEvent[]>()
+  let current: CombatEvent[] | null = null
   for (const e of events) {
-    if (e.type === 'clauseExecuted') groups.push([])
-    else groups[groups.length - 1]?.push(e)
+    if (e.type === 'enemyActs') {
+      current = []
+      groups.set(e.entityId, current)
+    } else current?.push(e)
   }
   return groups
 }
 
-/** 적마다 이번 차례에 할 행동과 수치. 수치는 미리보기의 적 차례(실제 엔진)에서 그 적이 낸 결과다. */
-export function intentActions(state: RallyState): Record<string, IntentAction[]> {
-  const { enemy, after } = previewEvents(state)
-  const groups = enemyClauseGroups(enemy)
+/**
+ * 적마다 이번 차례에 할 행동과 수치. 수치는 미리보기의 적 차례(실제 엔진)에서 그 적이 낸 결과다.
+ * 내 낭독으로 쓰러지거나, 앞 적의 행동으로 전투가 끝나 행동하지 못하는 적은 넣지 않는다.
+ * preview를 넘기면 다시 계산하지 않는다.
+ */
+export function intentActions(state: RallyState, preview: PreviewEvents = previewEvents(state)): Record<string, IntentAction[]> {
+  const { enemy, after } = preview
+  const groups = eventsByEnemy(enemy)
   const nameOf = (id: string) => after.entities.find((e) => e.id === id)?.name ?? state.entities.find((e) => e.id === id)?.name ?? id
   const result: Record<string, IntentAction[]> = {}
-  let sealsAhead = 0
-  let clauseIndex = 0
-  RALLY_ENCOUNTERS[state.encounterId]?.enemies.forEach((_, index) => {
-    const id = `e${index}`
-    const self = state.entities.find((e) => e.id === id)
-    if (!self || self.hp <= 0) return
-    const frozen = self.statuses.freeze > 0
-    const intent = enemyIntent(state, index)
-    if (intent.kind === 'seal') {
-      result[id] = [{ kind: 'seal', role: nextSealRole(state, sealsAhead), fizzled: frozen }]
-      if (!frozen) sealsAhead++
-      return
+  for (const [id, group] of groups) {
+    const index = Number(id.slice(1))
+    const intent = RALLY_ENCOUNTERS[state.encounterId]?.enemies[index] ? enemyIntent(state, index) : null
+    if (intent?.kind === 'seal') {
+      const sealed = group.find((e) => e.type === 'sealed')
+      result[id] = [sealed?.type === 'sealed' ? { kind: 'seal', role: sealed.role, fizzled: false } : { kind: 'seal', role: nextSealRole(state), fizzled: true }]
+      continue
     }
-    const group = groups[clauseIndex++] ?? []
     if (group.some((e) => e.type === 'fizzled')) {
       result[id] = [{ kind: 'fizzled' }]
-      return
+      continue
     }
     const actions: IntentAction[] = []
     for (const e of group) {
@@ -191,7 +194,7 @@ export function intentActions(state: RallyState): Record<string, IntentAction[]>
       else if (e.type === 'statusApplied' && e.status !== 'block' && e.status !== 'freeze') actions.push({ kind: 'status', status: e.status, amount: e.amount })
     }
     result[id] = actions
-  })
+  }
   return result
 }
 

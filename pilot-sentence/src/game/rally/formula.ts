@@ -1,3 +1,4 @@
+import { STATUS_NAMES } from '@/game/content/statuses'
 import { type Entity, scaleIncoming, scaleOutgoing, VULNERABLE_MULTIPLIER, WEAK_MULTIPLIER } from '@/kit/core/entity'
 import { wordLookup } from '@/game/build/build'
 import { RELICS, type RelicEffect } from '@/game/build/relics'
@@ -118,15 +119,15 @@ function clauseCalc(state: RallyState, board: Board, clause: number, run: Clause
 
   const terms: FormulaTerm[] = [
     { kind: 'plus', amount: (hooks.damageBonus ?? 0) - soBonus, label: 'relic', sources: sources.damageRelics },
-    { kind: 'plus', amount: soBonus, label: 'so', sources: ['그래서'] },
+    { kind: 'plus', amount: soBonus, label: 'so', sources: sources.connective },
     { kind: 'times', factor: adverbs.power, label: null, sources: sources.adverbs },
     { kind: 'plus', amount: executionBonus, label: 'again', sources: sources.againAdverbs },
-    { kind: 'plus', amount: strength, label: 'strength', sources: ['힘'] },
-    { kind: 'times', factor: weak, label: 'weak', sources: ['약화'] },
+    { kind: 'plus', amount: strength, label: 'strength', sources: [STATUS_NAMES.strength] },
+    { kind: 'times', factor: weak, label: 'weak', sources: [STATUS_NAMES.weak] },
     { kind: 'plus', amount: sourceMods.outgoingFlat, label: null, sources: sources.subjectAdjectives },
     { kind: 'times', factor: sourceMods.outgoingMul, label: null, sources: sources.subjectAdjectives },
     { kind: 'times', factor: sourceChain, label: 'chain', sources: sources.chainRelics },
-    { kind: 'times', factor: vulnerable, label: 'vulnerable', sources: ['취약'] },
+    { kind: 'times', factor: vulnerable, label: 'vulnerable', sources: [STATUS_NAMES.vulnerable] },
     { kind: 'times', factor: targetMods.incomingMul, label: null, sources: sources.objectAdjectives },
     { kind: 'times', factor: targetChain, label: 'chain', sources: sources.chainRelics },
     { kind: 'minus', amount: targetMods.incomingFlat, sources: sources.objectAdjectives },
@@ -156,6 +157,7 @@ function termSources(state: RallyState, board: Board, clause: number, lookup: (i
     damageRelics: relicsWith(subjectBlank ? ['perWordBonus', 'blankSubjectBonus'] : ['perWordBonus']),
     supportRelics: relicsWith(['perWordBonus']),
     chainRelics: relicsWith(['chainBoost']),
+    connective: state.connective ? [lookup(state.connective.wordId).text] : [],
   }
 }
 

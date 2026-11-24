@@ -54,12 +54,13 @@ export function CombatScreen({ state, busy, lastEvents, dispatch, onRestart }: C
   const notice = eventNotice(lastEvents)
   const preview = useMemo(() => (state.phase === 'player' ? previewEvents(state) : null), [state])
   const calcs = useMemo(() => (state.phase === 'player' ? sentenceCalc(state) : []), [state])
-  const summary = useMemo(() => (state.phase === 'player' ? previewSummary(state) : { mine: [], enemy: [] }), [state])
+  // 미리보기는 한 번만 계산하고(previewEvents), 요약·예고가 같은 결과를 나눠 쓴다.
+  const summary = useMemo(() => (state.phase === 'player' && preview ? previewSummary(state, preview) : { mine: [], enemy: [] }), [state, preview])
   const amplifierItems = useMemo(() => amplifiers(state), [state])
   const intents = useMemo(() => {
     if (state.phase !== 'player' || !preview) return {}
     const texts = intentTexts(state, preview.enemy, nameOf, { withNumbers: false })
-    const actions = intentActions(state)
+    const actions = intentActions(state, preview)
     return Object.fromEntries(Object.entries(texts).map(([id, text]) => [id, { text, actions: actions[id] ?? [] }]))
   }, [state, preview, nameOf])
   const states = useMemo(() => {

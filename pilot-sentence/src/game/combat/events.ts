@@ -43,6 +43,8 @@ export type CombatEvent =
   | { readonly type: 'recalled'; readonly count: number }
   | { readonly type: 'combatEnded'; readonly outcome: 'won' | 'lost' }
   | { readonly type: 'enemyTurn' }
+  /** 적 차례에서 이 적이 행동을 시작한다(그 뒤 이벤트는 다음 enemyActs까지 이 적의 행동이다). */
+  | { readonly type: 'enemyActs'; readonly entityId: string }
   | { readonly type: 'discarded'; readonly count: number }
   | { readonly type: 'cleared' }
   | { readonly type: 'connected'; readonly wordId: WordId }

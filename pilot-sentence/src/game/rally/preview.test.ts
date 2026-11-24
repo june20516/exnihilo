@@ -1,6 +1,6 @@
 import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
-import { getWord, type WordId } from '@/game/content/words'
+import { getWord, type WordId, WORDS } from '@/game/content/words'
 import { type CardInst, type RallyAction, type RallyState, reduceRally, runSentence, startRally } from './combat'
 import { PLAYER_ID } from '@/game/content/characters'
 import { type BuildState, EMPTY_BUILD, type RelicId } from '@/game/build/build'
@@ -320,4 +320,15 @@ describe('계산식 항의 출처', () => {
     const s = act({ ...base, entities: base.entities.map((e) => (e.id === PLAYER_ID ? addBlock(e, 5, 0) : e)) }, { type: 'place', instanceId: 'h0', at: V })
     expect(sentenceCalc(s)[0]?.baseSource).toBe('보호')
   })
+})
+
+test('그래서 항의 출처는 놓인 연결어 단어의 문구다(같은 효과의 다른 연결어도)', () => {
+  WORDS['testThus'] = { ...WORDS.so, id: 'testThus', text: '그러므로' }
+  const base = withHand(['bite', 'testThus', 'slash'])
+  let s = act(base, { type: 'place', instanceId: 'h0', at: V })
+  s = act(s, { type: 'connect', instanceId: 'h1' })
+  s = act(s, { type: 'place', instanceId: 'h2', at: { clause: 1, role: 'verb' } })
+  const second = sentenceCalc(s).find((c) => c.clause === 1)
+  expect(second?.terms.find((t) => t.kind === 'plus' && t.label === 'so')?.sources).toEqual(['그러므로'])
+  delete WORDS['testThus']
 })
