@@ -1,5 +1,5 @@
 import { nextFloat, nextInt, type RngState, shuffle } from '@/kit/core/rng'
-import { type BuildState, isUpgradable, MAX_SLOTS, type RelicId, type StructureId } from '@/game/build/build'
+import { type BuildState, canUpgradeFurther, isUpgradable, MAX_SLOTS, type RelicId, type StructureId } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import { getWord, type Rarity, WORDS, type WordId } from '@/game/content/words'
 import type { SlotRole, WordKind } from '@/game/grammar/frames'
@@ -62,7 +62,7 @@ export function priceOf(offer: Offer): number {
 
 
 function upgradeCandidates(deck: readonly WordId[], build: BuildState): WordId[] {
-  return [...new Set(deck)].filter((id) => isUpgradable(id) && (build.upgrades[id] ?? 0) < 2)
+  return [...new Set(deck)].filter((id) => isUpgradable(id) && canUpgradeFurther(build, id))
 }
 
 function structureCandidates(build: BuildState): StructureId[] {

@@ -1,3 +1,4 @@
+import { UPGRADE_RULES } from '@/game/content/balance'
 import { type AdjectiveMod, type AdverbMod, getWord, type VerbAction, type WordDef, type WordId } from '@/game/content/words'
 import type { SlotRole } from '@/game/grammar/frames'
 
@@ -12,7 +13,8 @@ export interface BuildState {
   readonly handMax: number
   readonly discardsPerTurn: number
   /** 단어 종류별 강화 단계. */
-  readonly upgrades: Readonly<Record<WordId, 1 | 2>>
+  /** 1 이상 UPGRADE_RULES.maxLevel 이하. */
+  readonly upgrades: Readonly<Record<WordId, number>>
   readonly relics: readonly RelicId[]
 }
 
@@ -36,25 +38,41 @@ export function applyStructure(build: BuildState, id: StructureId): BuildState {
   return { ...build, discardsPerTurn: build.discardsPerTurn + 1 }
 }
 
-/** 동사 수치: 단계마다 ×1.5, 각 단계에서 반올림. */
+/** 이 단어의 지금 강화 단계(0 = 강화 안 함). */
+export function upgradeLevel(build: BuildState, wordId: WordId): number {
+  return build.upgrades[wordId] ?? 0
+}
+
+/** 한 단계 더 강화할 수 있는가. */
+export function canUpgradeFurther(build: BuildState, wordId: WordId): boolean {
+  return upgradeLevel(build, wordId) < UPGRADE_RULES.maxLevel
+}
+
+/** 한 단계 강화한 빌드. 최대 단계면 그대로 둔다. */
+export function withUpgrade(build: BuildState, wordId: WordId): BuildState {
+  const level = Math.min(UPGRADE_RULES.maxLevel, upgradeLevel(build, wordId) + 1)
+  return { ...build, upgrades: { ...build.upgrades, [wordId]: level } }
+}
+
+/** 동사 수치: 단계마다 ×amountMul, 각 단계에서 반올림. */
 function upgradeAmount(amount: number, level: number): number {
   let value = amount
-  for (let i = 0; i < level; i++) value = Math.round(value * 1.5)
+  for (let i = 0; i < level; i++) value = Math.round(value * UPGRADE_RULES.amountMul)
   return value
 }
 
-/** 배율은 단계마다 +0.5(1보다 작은 약화 배율은 그대로), 주는·받는 가산 +3, 독 +1. */
+/** 배율·가산·독의 단계별 상승(UPGRADE_RULES). */
 function upgradeMod<M extends AdjectiveMod | AdverbMod>(mod: M, level: number): M {
   switch (mod.kind) {
     case 'powerMul':
     case 'outgoingDamageMul':
     case 'incomingMul':
-      return mod.value < 1 ? mod : { ...mod, value: mod.value + 0.5 * level }
+      return mod.value < 1 ? mod : { ...mod, value: mod.value + UPGRADE_RULES.mulStep * level }
     case 'outgoingFlat':
     case 'incomingFlat':
-      return { ...mod, amount: mod.amount + 3 * level }
+      return { ...mod, amount: mod.amount + UPGRADE_RULES.flatStep * level }
     case 'onHitPoison':
-      return { ...mod, amount: mod.amount + level }
+      return { ...mod, amount: mod.amount + UPGRADE_RULES.poisonStep * level }
     default:
       return mod
   }

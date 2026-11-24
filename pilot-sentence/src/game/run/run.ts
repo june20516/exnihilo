@@ -1,6 +1,6 @@
 import { createRng, nextInt, type RngState } from '@/kit/core/rng'
 import type { Reduced } from '@/kit/core/reduced'
-import { applyStructure, type BuildState, EMPTY_BUILD } from '@/game/build/build'
+import { applyStructure, type BuildState, EMPTY_BUILD, withUpgrade } from '@/game/build/build'
 import type { Balance } from '@/game/content/balance'
 import { type EncounterTier, RALLY_STARTER_DECK } from '@/game/content/enemies'
 import type { WordId } from '@/game/content/words'
@@ -144,10 +144,8 @@ function applyOffer(state: RunState, offer: Offer): RunState {
   switch (offer.kind) {
     case 'word':
       return { ...state, deck: [...state.deck, offer.wordId] }
-    case 'upgrade': {
-      const level: 1 | 2 = (state.build.upgrades[offer.wordId] ?? 0) >= 1 ? 2 : 1
-      return { ...state, build: { ...state.build, upgrades: { ...state.build.upgrades, [offer.wordId]: level } } }
-    }
+    case 'upgrade':
+      return { ...state, build: withUpgrade(state.build, offer.wordId) }
     case 'structure':
       return { ...state, build: applyStructure(state.build, offer.id) }
     case 'relic':

@@ -10,6 +10,20 @@ export const BALANCE = {
 
 export type Balance = { readonly [K in keyof typeof BALANCE]: number }
 
+/** 강화 규칙: 단계마다 수치가 어떻게 오르는가(build.ts effectiveWord). */
+export const UPGRADE_RULES = {
+  /** 동사 수치(피해·보호·회복 등)는 단계마다 ×amountMul, 각 단계에서 반올림. */
+  amountMul: 1.5,
+  /** 배율(1 이상)은 단계마다 +mulStep. 1보다 작은 약화 배율은 그대로. */
+  mulStep: 0.5,
+  /** 주는·받는 가산은 단계마다 +flatStep. */
+  flatStep: 3,
+  /** 맞힐 때 독은 단계마다 +poisonStep. */
+  poisonStep: 1,
+  /** 최대 강화 단계. */
+  maxLevel: 2,
+} as const
+
 /** 전투 규칙. */
 export const RALLY_RULES = {
   /** 첫 턴 드로우 수. */

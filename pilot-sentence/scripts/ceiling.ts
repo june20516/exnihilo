@@ -13,11 +13,11 @@
  * 사용: npm run ceiling [-- --runs 200]
  */
 import { createRng, type RngState, shuffle } from '@/kit/core/rng'
-import { applyStructure, type BuildState, EMPTY_BUILD, effectiveWord, isUpgradable, MAX_SLOTS, type RelicId } from '@/game/build/build'
+import { applyStructure, type BuildState, canUpgradeFurther, EMPTY_BUILD, effectiveWord, isUpgradable, MAX_SLOTS, type RelicId, withUpgrade } from '@/game/build/build'
 import { RELICS, relicEffects } from '@/game/build/relics'
 import { hooksFromEffects } from '@/game/rally/hooks'
 import { VULNERABLE_MULTIPLIER } from '@/kit/core/entity'
-import { BALANCE } from '@/game/content/balance'
+import { BALANCE, UPGRADE_RULES } from '@/game/content/balance'
 import { RALLY_STARTER_DECK } from '@/game/content/enemies'
 import { type AdjectiveMod, type AdverbMod, getWord, type WordId } from '@/game/content/words'
 import { FLOORS, REWARD_GOLD } from '@/game/run/floors'
@@ -337,10 +337,8 @@ function applyOffer(deck: readonly WordId[], build: BuildState, offer: Offer): {
   switch (offer.kind) {
     case 'word':
       return { deck: [...deck, offer.wordId], build }
-    case 'upgrade': {
-      const level: 1 | 2 = (build.upgrades[offer.wordId] ?? 0) >= 1 ? 2 : 1
-      return { deck: [...deck], build: { ...build, upgrades: { ...build.upgrades, [offer.wordId]: level } } }
-    }
+    case 'upgrade':
+      return { deck: [...deck], build: withUpgrade(build, offer.wordId) }
     case 'structure':
       return { deck: [...deck], build: applyStructure(build, offer.id) }
     case 'relic':
@@ -359,7 +357,7 @@ function offerName(o: Offer): string {
 
 /** 지금 살 수 있는 모든 것(상점 운 무시). */
 function everyOffer(deck: readonly WordId[], build: BuildState): Offer[] {
-  const upgradable = [...new Set(deck)].filter((id) => isUpgradable(id) && (build.upgrades[id] ?? 0) < 2)
+  const upgradable = [...new Set(deck)].filter((id) => isUpgradable(id) && canUpgradeFurther(build, id))
   const slotOf = { subjectSlot: 'subject', objectSlot: 'object', verbSlot: 'verb' } as const
   return [
     ...WORD_POOL.map((wordId): Offer => ({ kind: 'word', wordId })),
@@ -396,9 +394,9 @@ function section(title: string) {
 
 // 1. 배율 목록
 section('1. 곱으로 쌓이는 원천 (강화 0 / 1 / 2단계)')
-const levelBuild = (id: WordId, level: 0 | 1 | 2): BuildState =>
+const levelBuild = (id: WordId, level: number): BuildState =>
   level === 0 ? EMPTY_BUILD : { ...EMPTY_BUILD, upgrades: { [id]: level } }
-const modValue = (id: WordId, level: 0 | 1 | 2) => {
+const modValue = (id: WordId, level: number) => {
   const b = levelBuild(id, level)
   const adj = adjectiveMods(id, b).find((m) => m.kind === 'outgoingDamageMul' || m.kind === 'incomingMul' || m.kind === 'outgoingFlat')
   if (adj) return 'value' in adj ? `×${adj.value}` : `+${adj.amount}`
@@ -408,7 +406,7 @@ const modValue = (id: WordId, level: 0 | 1 | 2) => {
 }
 for (const id of ['bite', 'slash', 'sacrifice', 'giant', 'hungry', 'cracked', 'fiercely', 'twice']) {
   const w = getWord(id)
-  console.log(`${w.text.padEnd(8)} (${w.rarity.padEnd(8)}) ${[0, 1, 2].map((l) => modValue(id, l as 0 | 1 | 2).padStart(6)).join(' ')}`)
+  console.log(`${w.text.padEnd(8)} (${w.rarity.padEnd(8)}) ${Array.from({ length: UPGRADE_RULES.maxLevel + 1 }, (_, l) => modValue(id, l).padStart(6)).join(' ')}`)
 }
 console.log('유물: 강세 = 부사 세기 제곱 · 사슬 = 형용사 2개 이상 슬롯 ×2 · 메아리 = 첫 절 한 번 더(연결어 없을 때) · 긴 문장 = 단어당 기본값 +2 · 생략 +4')
 console.log('연결어: 그리고 = 두 절 · 그래서 = 절 1 피해 절반을 절 2 기본값에 · 그러면서 = 절 1 수식어를 절 2에도')

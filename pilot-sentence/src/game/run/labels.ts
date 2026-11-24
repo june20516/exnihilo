@@ -1,5 +1,5 @@
 /** 상점 보상·카드 문구. 화면(상점)과 텍스트 플레이가 함께 쓴다. */
-import { type BuildState, effectiveWord, type StructureId } from '@/game/build/build'
+import { type BuildState, effectiveWord, type StructureId, withUpgrade } from '@/game/build/build'
 import { RELICS } from '@/game/build/relics'
 import { getWord, type WordId } from '@/game/content/words'
 import type { WordKind } from '@/game/grammar/frames'
@@ -47,8 +47,7 @@ export function offerDetail(offer: Offer, build: BuildState): string {
     case 'word':
       return cardText(offer.wordId, build)
     case 'upgrade': {
-      const level = build.upgrades[offer.wordId] ?? 0
-      const next: BuildState = { ...build, upgrades: { ...build.upgrades, [offer.wordId]: level >= 1 ? 2 : 1 } }
+      const next = withUpgrade(build, offer.wordId)
       return `${describeWord(effectiveWord(offer.wordId, build))} → ${describeWord(effectiveWord(offer.wordId, next))} (덱의 같은 카드 전부)`
     }
     case 'structure':
