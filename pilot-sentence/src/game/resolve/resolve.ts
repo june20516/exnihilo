@@ -332,7 +332,7 @@ export function resolveClause(
         for (const id of targetsOf(action.to)) {
           const amount = scaled(action.amount + supportBonus)
           table.update(id, (e) => addBlock(e, amount, action.holds))
-          events.push({ type: 'statusApplied', entityId: id, status: 'block', amount })
+          events.push({ type: 'statusApplied', entityId: id, status: 'block', amount, holds: action.holds })
         }
         return
       case 'heal':

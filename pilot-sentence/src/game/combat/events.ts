@@ -26,7 +26,8 @@ export type CombatEvent =
   | { readonly type: 'fizzled'; readonly clause: number; readonly reason: FizzleReason }
   | { readonly type: 'damaged'; readonly entityId: string; readonly amount: number; readonly blocked: number; readonly sourceId: string }
   | { readonly type: 'healed'; readonly entityId: string; readonly amount: number }
-  | { readonly type: 'statusApplied'; readonly entityId: string; readonly status: StatusKind; readonly amount: number }
+  /** 상태를 얻었다. 보호면 holds(이월 턴 수)를 함께 싣는다. */
+  | { readonly type: 'statusApplied'; readonly entityId: string; readonly status: StatusKind; readonly amount: number; readonly holds?: number }
   | { readonly type: 'poisonTick'; readonly entityId: string; readonly amount: number }
   | { readonly type: 'hpLost'; readonly entityId: string; readonly amount: number }
   | { readonly type: 'grew'; readonly entityId: string; readonly amount: number }
