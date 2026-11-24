@@ -2,7 +2,7 @@ import { CHARACTERS, DEFAULT_CHARACTER } from '@/game/content/characters'
 import { createRng } from '@/kit/core/rng'
 import { applyStructure, type BuildState, EMPTY_BUILD, type RelicId } from '@/game/build/build'
 import { getWord } from '@/game/content/words'
-import { buyFrom, priceOf, rollShop, type ShopState, WORD_POOL } from './shop'
+import { buyFrom, priceOf, rerollPrice, rerollShop, rollShop, type ShopState, WORD_POOL } from './shop'
 
 const roll = (seed: number, build = EMPTY_BUILD, deck = CHARACTERS[DEFAULT_CHARACTER].starterDeck) => rollShop(createRng(seed), deck, build)[0]
 
@@ -34,6 +34,7 @@ test('구매마다 남은 값 ×1.5 올림: 8 → 12 → 18', () => {
       { offer: { kind: 'upgrade', wordId: 'bite' }, price: 8, sold: false },
       { offer: { kind: 'structure', id: 'handSize' }, price: 12, sold: false },
     ],
+    rerolls: 0,
   }
   const once = buyFrom(shop, 0)
   expect(once.items.map((i) => [i.price, i.sold])).toEqual([[12, true], [12, false], [18, false]])
@@ -86,4 +87,25 @@ test('상점 단어 풀: 천천히는 빠지고, 눈먼·단단한은 있다', (
   expect(WORD_POOL).not.toContain('strike')
   expect(WORD_POOL).toContain('blind')
   expect(WORD_POOL).toContain('sturdy')
+})
+
+describe('새로고침', () => {
+  test('새로고침은 팔리지 않은 상품만 바꾸고 팔린 상품은 남긴다', () => {
+    const shop = buyFrom(roll(5), 0)
+    const [next] = rerollShop(createRng(99), shop, CHARACTERS[DEFAULT_CHARACTER].starterDeck, EMPTY_BUILD)
+    expect(next.items[0]).toEqual(shop.items[0])
+    expect(next.items).toHaveLength(shop.items.length)
+    expect(next.items.slice(1).every((item) => !item.sold)).toBe(true)
+    expect(next.rerolls).toBe(1)
+  })
+
+  test('새로고침 값은 3, 4, 5로 오른다', () => {
+    let shop = roll(6)
+    const prices: number[] = []
+    for (let i = 0; i < 3; i++) {
+      prices.push(rerollPrice(shop))
+      shop = rerollShop(createRng(i), shop, CHARACTERS[DEFAULT_CHARACTER].starterDeck, EMPTY_BUILD)[0]
+    }
+    expect(prices).toEqual([3, 4, 5])
+  })
 })

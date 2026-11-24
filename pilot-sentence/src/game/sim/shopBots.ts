@@ -2,7 +2,8 @@ import { createRng, nextFloat, nextInt } from '@/kit/core/rng'
 import type { RelicId, StructureId } from '@/game/build/build'
 import { getWord, type WordId } from '@/game/content/words'
 import type { RunState } from '@/game/run/run'
-import type { OfferKind, ShopItem } from '@/game/run/shop'
+import { type OfferKind, rerollPrice, type ShopItem } from '@/game/run/shop'
+import { SHOP_RULES } from '@/game/content/balance'
 import { simulateRun, type ShopPolicy } from './runSim'
 
 /** 상점 구매 성향. 점수 = 종류 가중치 × 세부 가중치 ÷ 값. 점수가 saveThreshold보다 큰 것을 높은 순으로 산다. */
@@ -50,6 +51,15 @@ function itemScore(run: RunState, item: ShopItem, w: ShopWeights): number {
   return (w.kinds[offer.kind] * detail) / Math.max(1, item.price)
 }
 
+/** 한 상점에서 봇이 새로고침하는 최대 횟수(무한 루프 방지). */
+export const MAX_BOT_REROLLS = 2
+
+/** 살 것이 없을 때 새로고침할까: 새로고침 값 + 가장 싼 단어 값을 낼 수 있고 아직 횟수가 남았으면. */
+function shouldReroll(run: RunState): boolean {
+  if (!run.shop || run.shop.rerolls >= MAX_BOT_REROLLS) return false
+  return run.gold >= rerollPrice(run.shop) + SHOP_RULES.basePrice.word
+}
+
 export function weightedShopBot(w: ShopWeights): ShopPolicy {
   return (run, rng) => {
     const items = run.shop?.items ?? []
@@ -60,7 +70,8 @@ export function weightedShopBot(w: ShopWeights): ShopPolicy {
       const score = itemScore(run, item, w)
       if (score > bestScore) [bestIndex, bestScore] = [index, score]
     }
-    return [bestIndex >= 0 ? { type: 'buy', index: bestIndex } : { type: 'leave' }, rng]
+    if (bestIndex >= 0) return [{ type: 'buy', index: bestIndex }, rng]
+    return [shouldReroll(run) ? { type: 'reroll' } : { type: 'leave' }, rng]
   }
 }
 

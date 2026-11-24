@@ -16,7 +16,7 @@ import { linesFromEvents } from '@/game/rally/lines'
 import { previewEvents } from '@/game/rally/preview'
 import { intentTexts, lingeringTexts, REJECT_MESSAGES, sentenceText, wordNamer } from '@/game/rally/text'
 import { FLOORS } from '@/game/run/floors'
-import { type RunAction, type RunEvent, type RunState, reduceRun, startRun } from '@/game/run/run'
+import { isCombatEvent, type RunAction, type RunEvent, type RunState, reduceRun, startRun } from '@/game/run/run'
 import { cardText, offerDetail, offerName, upgradeSummary } from '@/game/run/labels'
 import { describeWord, ROLE_NAMES } from '@/game/ui/describe'
 
@@ -180,21 +180,17 @@ export function runCommand(state: RunState | null, command: PlayCommand): PlayRe
 
 // ───────────────────────── 이벤트 기록 ─────────────────────────
 
-const RUN_ONLY = ['floorCleared', 'bought', 'runEnded'] as const
-type RunOnlyEvent = Extract<RunEvent, { type: (typeof RUN_ONLY)[number] }>
 
-function isRunOnly(event: RunEvent): event is RunOnlyEvent {
-  return (RUN_ONLY as readonly string[]).includes(event.type)
-}
 
 /** 명령 하나가 일으킨 일. 결과 문장 사이에 차례 경계·봉인·뽑기 같은 표식을 끼운다. */
 function describeEvents(events: readonly RunEvent[], before: RunState, after: RunState): string[] {
   const entities: Entity[] = [...(before.combat?.entities ?? []), ...(after.combat?.entities ?? [])]
   const lines: string[] = []
   for (const event of events) {
-    if (isRunOnly(event)) {
+    if (!isCombatEvent(event)) {
       if (event.type === 'floorCleared') lines.push(`★ ${event.floor}층 통과 · 화폐 +${event.gold}`)
       if (event.type === 'bought') lines.push(`${offerName(event.offer, before.build)}을(를) ${event.price}에 샀습니다.`)
+      if (event.type === 'rerolled') lines.push(`상점을 새로고침했습니다(${event.price}).`)
       if (event.type === 'runEnded') lines.push(event.outcome === 'won' ? '★ 런 완주!' : '✗ 런 패배')
       continue
     }

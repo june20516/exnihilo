@@ -166,7 +166,7 @@ test('강화: 산 뒤에는 단계 화살표 대신 빌드 요약에 지금 단�
   const withUpgrade: RunState = {
     ...shop,
     gold: 100,
-    shop: { items: [{ offer: { kind: 'upgrade', wordId: 'fiercely' }, price: 8, sold: false }] },
+    shop: { items: [{ offer: { kind: 'upgrade', wordId: 'fiercely' }, price: 8, sold: false }], rerolls: 0 },
   }
   expect(renderRun(withUpgrade)).toContain('격렬하게 0→1단계')
   const bought = run(withUpgrade, { type: 'buy', item: 1 })

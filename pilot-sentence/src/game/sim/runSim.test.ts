@@ -53,6 +53,7 @@ test('weightedShopBot은 점수 높은 순으로 사고, 기준 이하이거나 
         { offer: { kind: 'relic', id: 'echo' }, price: 18, sold: false },
         { offer: { kind: 'structure', id: 'verbSlot' }, price: 12, sold: false },
       ],
+      rerolls: 0,
     },
   }
   const weights: ShopWeights = {
@@ -78,4 +79,29 @@ test('시간 초과로 끝난 전투도 층별 턴에 기록되고 timedOut으�
   const last = r.floorTurns[r.floorTurns.length - 1]
   expect(last?.floor).toBe(r.floorReached)
   expect(last?.turns).toBeGreaterThan(1)
+})
+
+test('weightedShopBot은 살 만한 것이 없고 화폐가 넉넉하면 새로고침하되, 같은 상점에서 2번까지만 한다', () => {
+  const base = startRun(1).state
+  const shop = { items: [{ offer: { kind: 'word' as const, wordId: 'slowly' }, price: 3, sold: false }], rerolls: 0 }
+  const shopRun: RunState = { ...base, phase: 'shop', gold: 30, shop }
+  const weights: ShopWeights = {
+    kinds: { word: 0, upgrade: 0, structure: 0, relic: 0 },
+    relics: {}, structures: {}, wordBias: {}, connectiveBias: 1, saveThreshold: 0.1,
+  }
+  const bot = weightedShopBot(weights)
+  expect(bot(shopRun, base.rng)[0]).toEqual({ type: 'reroll' })
+  expect(bot({ ...shopRun, shop: { ...shop, rerolls: 2 } }, base.rng)[0]).toEqual({ type: 'leave' })
+  expect(bot({ ...shopRun, gold: 4 }, base.rng)[0]).toEqual({ type: 'leave' })
+})
+
+test('학습 봇 런의 새로고침 횟수는 상점 수 × 2를 넘지 않는다', () => {
+  const weights: ShopWeights = {
+    kinds: { word: 0, upgrade: 0, structure: 0, relic: 0 },
+    relics: {}, structures: {}, wordBias: {}, connectiveBias: 1, saveThreshold: 0.1,
+  }
+  for (const seed of [11, 12]) {
+    const r = simulateRun(seed, weightedShopBot(weights))
+    expect(r.rerolls).toBeLessThanOrEqual(2 * Math.max(0, r.floorReached - 1))
+  }
 })

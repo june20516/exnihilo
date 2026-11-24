@@ -18,6 +18,8 @@ export interface RunResult {
   readonly twoClauseCasts: number
   /** 전투 턴 한계나 전체 단계 한계에 걸려 끝났다(패배로 센다). */
   readonly timedOut: boolean
+  /** 상점 새로고침 횟수. */
+  readonly rerolls: number
 }
 
 /** 한 전투가 이 턴 수를 넘기면 교착으로 보고 진 것으로 처리한다. */
@@ -30,6 +32,7 @@ export function simulateRun(seed: number, shop: ShopPolicy, maxFightTurns = MAX_
   let rng = createRng(seed ^ 0x5eed)
   let casts = 0
   let twoClauseCasts = 0
+  let rerolls = 0
   let timedOut = false
   let floorTurns = [...state.log.floorTurns]
   let step = 0
@@ -37,6 +40,7 @@ export function simulateRun(seed: number, shop: ShopPolicy, maxFightTurns = MAX_
     if (state.phase === 'shop') {
       const [action, next] = shop(state, rng)
       rng = next
+      if (action.type === 'reroll') rerolls++
       state = reduceRun(state, action).state
       continue
     }
@@ -66,5 +70,6 @@ export function simulateRun(seed: number, shop: ShopPolicy, maxFightTurns = MAX_
     casts,
     twoClauseCasts,
     timedOut,
+    rerolls,
   }
 }

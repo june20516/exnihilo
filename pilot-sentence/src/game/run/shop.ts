@@ -21,6 +21,8 @@ export interface ShopItem {
 
 export interface ShopState {
   readonly items: readonly ShopItem[]
+  /** 이 상점에서 새로고침한 횟수. 값이 오른다. */
+  readonly rerolls: number
 }
 
 /** 조합 재료: 단어 보상 가중치에 SHOP_RULES.materialWeight를 곱하는 품사. */
@@ -121,14 +123,32 @@ export function rollShop(rng: RngState, deck: readonly WordId[], build: BuildSta
     }
     items.push({ offer, price: priceOf(offer), sold: false })
   }
-  return [{ items }, current]
+  return [{ items, rerolls: 0 }, current]
 }
 
 /** 산 것을 표시하고, 남은 보상의 값을 ×1.5(올림) 올린다. */
 export function buyFrom(shop: ShopState, index: number): ShopState {
   return {
+    ...shop,
     items: shop.items.map((item, i) =>
       i === index ? { ...item, sold: true } : item.sold ? item : { ...item, price: Math.ceil(item.price * SHOP_RULES.priceGrowth) },
     ),
   }
+}
+
+/** 이 상점에서 다음 새로고침의 값. */
+export function rerollPrice(shop: ShopState): number {
+  return SHOP_RULES.reroll.base + SHOP_RULES.reroll.step * shop.rerolls
+}
+
+/** 팔리지 않은 자리를 새로 뽑은 상품으로 앞에서부터 채운다. 팔린 자리는 그대로 둔다. */
+export function rerollShop(rng: RngState, shop: ShopState, deck: readonly WordId[], build: BuildState): [ShopState, RngState] {
+  const [fresh, next] = rollShop(rng, deck, build)
+  let cursor = 0
+  const items = shop.items.map((item) => {
+    if (item.sold) return item
+    const replacement = fresh.items[cursor++]
+    return replacement ?? item
+  })
+  return [{ items, rerolls: shop.rerolls + 1 }, next]
 }

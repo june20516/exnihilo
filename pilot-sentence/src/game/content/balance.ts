@@ -54,4 +54,6 @@ export const SHOP_RULES = {
   priceGrowth: 1.5,
   /** 상점 상품 수. */
   size: 3,
+  /** 새로고침 값: base + step × (이 상점에서 새로고침한 횟수). */
+  reroll: { base: 3, step: 1 },
 } as const

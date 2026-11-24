@@ -47,7 +47,7 @@ test('구매: 화폐 차감과 반영, 모자라면 notEnoughGold, 두 번 사�
 
 test('구매 효과: 단어는 덱에, 강화·구조·유물은 빌드에', () => {
   const base = { ...winFloor(startRun(3).state), gold: 999 }
-  const withItems = (offer: NonNullable<RunState['shop']>['items'][number]['offer']): RunState => ({ ...base, shop: { items: [{ offer, price: 1, sold: false }] } })
+  const withItems = (offer: NonNullable<RunState['shop']>['items'][number]['offer']): RunState => ({ ...base, shop: { items: [{ offer, price: 1, sold: false }], rerolls: 0 } })
   expect(act(withItems({ kind: 'word', wordId: 'so' }), { type: 'buy', index: 0 }).state.deck).toContain('so')
   expect(act(withItems({ kind: 'upgrade', wordId: 'bite' }), { type: 'buy', index: 0 }).state.build.upgrades.bite).toBe(1)
   expect(act(withItems({ kind: 'structure', id: 'verbSlot' }), { type: 'buy', index: 0 }).state.build.slots.verb).toBe(3)
@@ -96,4 +96,23 @@ test('패배 → lost, 이후 행동 거부', () => {
 test('같은 시드는 같은 런(결정적)', () => {
   const play = (seed: number) => act(winFloor(startRun(seed).state), { type: 'leave' }).state
   expect(play(11)).toEqual(play(11))
+})
+
+describe('상점 새로고침', () => {
+  test('새로고침은 화폐를 깎고 rerolled 이벤트를 낸다', () => {
+    const shopState = { ...winFloor(startRun(2).state), gold: 10 }
+    const r = act(shopState, { type: 'reroll' })
+    expect(r.events).toEqual([{ type: 'rerolled', price: 3 }])
+    expect(r.state.gold).toBe(7)
+    expect(r.state.shop?.rerolls).toBe(1)
+  })
+
+  test('화폐가 모자라면 notEnoughGold로 거절된다', () => {
+    const shopState = { ...winFloor(startRun(2).state), gold: 2 }
+    expect(act(shopState, { type: 'reroll' }).events[0]).toMatchObject({ type: 'rejected', reason: 'notEnoughGold' })
+  })
+
+  test('상점 단계가 아니면 거절된다', () => {
+    expect(act(startRun(2).state, { type: 'reroll' }).events[0]).toMatchObject({ type: 'rejected', reason: 'notPlayerTurn' })
+  })
 })

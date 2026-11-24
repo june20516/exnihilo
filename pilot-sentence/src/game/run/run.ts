@@ -8,7 +8,7 @@ import type { CombatEvent, RejectReason } from '@/game/combat/events'
 import { type RallyAction, type RallyState, reduceRally, startRally } from '@/game/rally/combat'
 import { type CharacterId, CHARACTERS, DEFAULT_CHARACTER, PLAYER_ID } from '@/game/content/characters'
 import { FIXED_ENCOUNTERS, FLOORS, goldFor, NORMAL_ENCOUNTERS } from './floors'
-import { buyFrom, type Offer, rollShop, type ShopState } from './shop'
+import { buyFrom, type Offer, rerollPrice, rerollShop, rollShop, type ShopState } from './shop'
 
 export interface FloorRecord {
   readonly floor: number
@@ -44,15 +44,17 @@ export type RunAction =
   | { readonly type: 'combat'; readonly action: RallyAction }
   | { readonly type: 'buy'; readonly index: number }
   | { readonly type: 'leave' }
+  | { readonly type: 'reroll' }
 
 export type RunEvent =
   | CombatEvent
   | { readonly type: 'floorCleared'; readonly floor: number; readonly gold: number }
   | { readonly type: 'bought'; readonly offer: Offer; readonly price: number }
+  | { readonly type: 'rerolled'; readonly price: number }
   | { readonly type: 'runEnded'; readonly outcome: 'won' | 'lost' }
 
 /** 런 전용 이벤트 종류. 런 이벤트를 새로 만들면 여기 빠뜨린 것을 컴파일러가 잡는다. */
-const RUN_ONLY_EVENTS: Record<Exclude<RunEvent['type'], CombatEvent['type']>, true> = { floorCleared: true, bought: true, runEnded: true }
+const RUN_ONLY_EVENTS: Record<Exclude<RunEvent['type'], CombatEvent['type']>, true> = { floorCleared: true, bought: true, rerolled: true, runEnded: true }
 
 /** 런 이벤트 중 전투 이벤트(연출 큐에 넣을 것). */
 export function isCombatEvent(event: RunEvent): event is CombatEvent {
@@ -174,6 +176,15 @@ function buy(state: RunState, index: number): Result {
   }
 }
 
+/** 상점 새로고침: 값을 내고 팔리지 않은 상품을 새로 뽑는다. */
+function reroll(state: RunState): Result {
+  if (!state.shop) return reject(state, 'notPlayerTurn')
+  const price = rerollPrice(state.shop)
+  if (price > state.gold) return reject(state, 'notEnoughGold')
+  const [shop, rng] = rerollShop(state.rng, state.shop, state.deck, state.build)
+  return { state: { ...state, gold: state.gold - price, shop, rng }, events: [{ type: 'rerolled', price }] }
+}
+
 export function reduceRun(state: RunState, action: RunAction): Result {
   switch (action.type) {
     case 'combat': {
@@ -184,6 +195,9 @@ export function reduceRun(state: RunState, action: RunAction): Result {
     case 'buy':
       if (state.phase !== 'shop') return reject(state, 'notPlayerTurn')
       return buy(state, action.index)
+    case 'reroll':
+      if (state.phase !== 'shop') return reject(state, 'notPlayerTurn')
+      return reroll(state)
     case 'leave':
       if (state.phase !== 'shop') return reject(state, 'notPlayerTurn')
       return startFloor({ ...state, floor: state.floor + 1 })
