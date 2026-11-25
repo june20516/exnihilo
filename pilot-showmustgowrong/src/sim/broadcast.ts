@@ -124,9 +124,13 @@ export class BroadcastScore {
 
   /** 상한의 AUTO_SLOWMO_GAUGE_RATIO 이상인 첫 게이지. 매번 현재 상태로 계산한다. */
   nearLimit(): GaugeKind | null {
-    return (
-      GAUGE_KINDS.find((kind) => this.gauges[kind] >= this.limits[kind] * AUTO_SLOWMO_GAUGE_RATIO) ??
-      null
+    return this.nearLimitGauges()[0] ?? null
+  }
+
+  /** 상한의 AUTO_SLOWMO_GAUGE_RATIO 이상인 게이지 전부(정의 순서). */
+  nearLimitGauges(): GaugeKind[] {
+    return GAUGE_KINDS.filter(
+      (kind) => this.currentGauges[kind] >= this.limits[kind] * AUTO_SLOWMO_GAUGE_RATIO,
     )
   }
 

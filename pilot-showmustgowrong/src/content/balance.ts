@@ -7,6 +7,20 @@ export const CORNER_STEPS = 3600
 export const MAX_STEPS_PER_FRAME = 4
 export const REACTION_COOLDOWN_SECONDS = 1
 
+// 엔진
+/** leap의 수직 속도 = speed × 이 비율 */
+export const LEAP_VERTICAL_RATIO = 0.6
+/** 이탈한 출연자가 출구로 걸어가는 수평 속도(m/s) */
+export const WALKOUT_SPEED = 5
+/** 이탈 뒤 물리 월드에서 빠지기까지 걸리는 시간 */
+export const WALKOUT_SECONDS = 2
+/** 이탈할 때 내뿜는 분노와 소음의 강도 */
+export const WALKOUT_INTENSITY: Intensity = 2
+/** 조명이 부서질 때 구역 중앙에 생기는 어둠의 강도 */
+export const LIGHT_DARKNESS_INTENSITY: Intensity = 2
+/** BroadcastView.log에 담는 최근 줄 수 */
+export const VIEW_LOG_LINES = 50
+
 // 현상 전파
 export const NOISE_RADIUS: Record<Intensity, number> = { 1: 3, 2: 6, 3: 12 }
 /** 웃음과 노출이 보이는 반경(m) */

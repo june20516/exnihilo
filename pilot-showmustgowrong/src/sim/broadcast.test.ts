@@ -146,6 +146,14 @@ describe('BroadcastScore 게이지와 중단', () => {
     expect(score.nearLimit()).toBeNull()
   })
 
+  it('nearLimitGauges는 상한의 80% 이상인 게이지를 정의 순서로 모두 돌려준다', () => {
+    const score = new BroadcastScore(show('TV-14'))
+    expect(score.nearLimitGauges()).toEqual([])
+    score.addGauge('language', 40)
+    score.addGauge('sexual', 56)
+    expect(score.nearLimitGauges()).toEqual(['sexual', 'language'])
+  })
+
   it('gauges로 받은 객체를 바꿔도 내부 게이지는 그대로다', () => {
     const score = new BroadcastScore(show())
     const received = score.gauges as Record<GaugeKind, number>
