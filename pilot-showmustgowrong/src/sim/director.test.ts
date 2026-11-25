@@ -65,7 +65,8 @@ function direct(director: Director, id: string, count: number, rng: RngState) {
   return { outcome, rng: current }
 }
 
-// seed별 다섯 번째 난수: 4와 5는 0.5 미만(엇나감), 1은 0.5 이상(정상)
+// 이전 누적 피로 5(확률 0.5)에서 판정하는 여섯 번째 지시는 첫 지시가 rng를 쓰지 않으므로
+// 다섯 번째 난수를 쓴다: seed 4는 0.23(엇나감), seed 1은 0.97(정상)
 const MISFIRE_SEED = 4
 const CLEAN_SEED = 1
 
@@ -86,11 +87,22 @@ describe('Director 출연자 지시', () => {
     expect(after).toEqual(before)
   })
 
-  it('fatigue 1에서는 확률이 있어 rng를 한 번 소비하고, 이탈 전 지시는 이탈이 아니다', () => {
+  it('fatigue 0의 첫 지시는 엇나가지 않고 rng도 소비하지 않는다', () => {
     const director = makeDirector()
-    const [outcome, rng] = director.directPerformer('over', 'shout', createRng(1))
-    expect(outcome.kind).toBe('executed')
-    expect(rng.cursor).toBe(1)
+    // seed 7 첫 난수 0.01은 확률이 있었다면 엇나갔을 값이다
+    const rng = createRng(7)
+    const [outcome, after] = director.directPerformer('over', 'shout', rng)
+    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT })
+    expect(after).toEqual(rng)
+  })
+
+  it('확률은 지시를 더하기 전 값으로 계산하고 rng를 정확히 한 번 소비한다', () => {
+    const director = makeDirector()
+    const [, afterFirst] = director.directPerformer('over', 'shout', createRng(7))
+    // 이전 피로 1 -> 확률 0.1. seed 7 첫 난수 0.01 < 0.1이므로 엇나간다
+    const [outcome, afterSecond] = director.directPerformer('over', 'shout', afterFirst)
+    expect(outcome).toMatchObject({ kind: 'executed', misfired: true })
+    expect(afterSecond.cursor).toBe(afterFirst.cursor + 1)
   })
 
   it('이미 이탈한 출연자에게 지시하면 오류를 던진다', () => {
@@ -109,10 +121,10 @@ describe('Director 출연자 지시', () => {
     expect(() => director.isWalkedOut('ghost')).toThrow()
   })
 
-  it('fatigue 5에서 overdo가 엇나가면 강도 +1(최대 3), 속도 x1.5이고 causePlusOne은 그대로다', () => {
+  it('이전 누적 피로 5에서 overdo가 엇나가면 강도 +1(최대 3), 속도 x1.5이고 causePlusOne은 그대로다', () => {
     const director = makeDirector()
-    const { outcome } = direct(director, 'over', 5, createRng(MISFIRE_SEED))
-    expect(director.fatigue).toBe(5)
+    const { outcome } = direct(director, 'over', 6, createRng(MISFIRE_SEED))
+    expect(director.fatigue).toBe(6)
     expect(outcome).toEqual({
       kind: 'executed',
       misfired: true,
@@ -130,13 +142,13 @@ describe('Director 출연자 지시', () => {
 
   it('엇나가지 않는 시드에서는 원본 action을 그대로 돌려준다', () => {
     const director = makeDirector()
-    const { outcome } = direct(director, 'over', 5, createRng(CLEAN_SEED))
+    const { outcome } = direct(director, 'over', 6, createRng(CLEAN_SEED))
     expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT })
   })
 
   it('awkward가 엇나가면 강도 -1이고 0이 되는 emit은 제거된다', () => {
     const director = makeDirector()
-    const { outcome } = direct(director, 'awk', 5, createRng(MISFIRE_SEED))
+    const { outcome } = direct(director, 'awk', 6, createRng(MISFIRE_SEED))
     expect(outcome).toMatchObject({ kind: 'executed', misfired: true })
     if (outcome.kind !== 'executed') return
     expect(outcome.action.emits).toEqual([
@@ -148,59 +160,71 @@ describe('Director 출연자 지시', () => {
 
   it('엇나감 변환은 원본 ActionDef를 바꾸지 않는다', () => {
     const snapshot = structuredClone(SHOUT)
-    direct(makeDirector(), 'over', 5, createRng(MISFIRE_SEED))
-    direct(makeDirector(), 'awk', 5, createRng(MISFIRE_SEED))
+    direct(makeDirector(), 'over', 6, createRng(MISFIRE_SEED))
+    direct(makeDirector(), 'awk', 6, createRng(MISFIRE_SEED))
     expect(SHOUT).toEqual(snapshot)
   })
 
-  it('never 출연자는 fatigue 10에서도 엇나가지 않고 rng를 소비하지 않는다', () => {
+  it('never 출연자는 피로가 아무리 높아도 엇나가지 않고 rng를 소비하지 않는다', () => {
     const director = makeDirector()
-    direct(director, 'over', 5, createRng(MISFIRE_SEED))
-    direct(director, 'awk', 4, createRng(MISFIRE_SEED))
+    direct(director, 'over', 6, createRng(MISFIRE_SEED))
+    direct(director, 'awk', 5, createRng(MISFIRE_SEED))
     const rng = createRng(MISFIRE_SEED)
     const [outcome, after] = director.directPerformer('never', 'shout', rng)
-    expect(director.fatigue).toBe(10)
     expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT })
     expect(after).toEqual(rng)
   })
 
   it('엇나감 확률은 MISFIRE_CAP(0.6)을 넘지 않는다', () => {
-    // fatigue 10이면 계산상 1.0이지만 상한 0.6이 적용된다. 난수 0.73(seed 2 첫 값)은 정상이어야 한다.
     const director = makeDirector()
-    direct(director, 'over', 8, createRng(2)) // fatigue 8
-    direct(director, 'awk', 1, createRng(2)) // fatigue 9
+    direct(director, 'over', 8, createRng(2))
+    direct(director, 'awk', 2, createRng(2)) // 이전 피로 10 -> 계산상 1.0이지만 상한 0.6
+    // seed 2 첫 난수 0.73은 상한 0.6 이상이라 정상. 상한이 없었다면 엇나갔을 값이다.
     const [outcome] = director.directPerformer('awk', 'shout', createRng(2))
     expect(outcome).toMatchObject({ kind: 'executed', misfired: false })
   })
 })
 
 describe('Director 스태프 지시', () => {
-  it('엇나가지 않으면 지정한 aim을 돌려주고 staffFatigue만 올린다', () => {
+  it('첫 지시는 엇나가지 않고 aim을 그대로 돌려주며 staffFatigue만 올린다', () => {
     const director = makeDirector()
-    // staffFatigue 1 -> 확률 0.15, seed 1 첫 난수 0.63은 정상
-    const [result, rng] = director.directStaff('cam', 'audience', createRng(1))
+    const rng = createRng(7) // 첫 난수 0.01이어도 확률이 0이라 정상
+    const [result, after] = director.directStaff('cam', 'audience', rng)
     expect(result).toEqual({ aim: 'audience', misfired: false })
-    expect(rng.cursor).toBe(1)
+    expect(after).toEqual(rng)
     expect(director.staffFatigue).toBe(1)
     expect(director.fatigue).toBe(0)
     expect(director.directivesUsed('low')).toBe(0)
   })
 
-  it('엇나가면 aim이 random이다', () => {
-    const director = makeDirector()
-    // seed 7 첫 난수 0.01 < 0.15
-    const [result] = director.directStaff('cam', 'audience', createRng(7))
-    expect(result).toEqual({ aim: 'random', misfired: true })
-  })
-
-  it('확률은 올린 뒤의 staffFatigue로 계산한다', () => {
+  it('이전 staffFatigue 1이면 확률 0.15로 판정하고 엇나가면 aim이 random이다', () => {
     const director = makeDirector()
     director.directStaff('cam', 'audience', createRng(1))
-    // staffFatigue 2 -> 0.3. seed 2 두 번째 난수 0.32는 정상, seed 1 두 번째 0.00은 엇나감
+    const [result, rng] = director.directStaff('cam', 'audience', createRng(7))
+    expect(result).toEqual({ aim: 'random', misfired: true })
+    expect(rng.cursor).toBe(1)
+  })
+
+  it('이전 staffFatigue 2는 확률 0.3이다', () => {
+    const director = makeDirector()
+    director.directStaff('cam', 'audience', createRng(1))
+    director.directStaff('cam', 'audience', createRng(1))
+    // seed 2 두 번째 난수 0.32는 정상, seed 1 두 번째 난수 0.00은 엇나감
     const [clean] = director.directStaff('cam', 'audience', { seed: 2, cursor: 1 })
     expect(clean.misfired).toBe(false)
-    const [bad] = director.directStaff('cam', 'audience', { seed: 1, cursor: 1 })
+    const again = makeDirector()
+    again.directStaff('cam', 'audience', createRng(1))
+    again.directStaff('cam', 'audience', createRng(1))
+    const [bad] = again.directStaff('cam', 'audience', { seed: 1, cursor: 1 })
     expect(bad.misfired).toBe(true)
+  })
+
+  it('엇나감 확률은 MISFIRE_CAP(0.6)을 넘지 않는다', () => {
+    const director = makeDirector()
+    for (let i = 0; i < 5; i++) director.directStaff('cam', 'audience', createRng(1))
+    // 이전 staffFatigue 5 -> 계산상 0.75지만 상한 0.6. seed 2 첫 난수 0.73은 정상이다.
+    const [result] = director.directStaff('cam', 'audience', createRng(2))
+    expect(result.misfired).toBe(false)
   })
 })
 
@@ -217,6 +241,7 @@ describe('Director 광고와 피로', () => {
     const director = makeDirector()
     direct(director, 'over', 3, createRng(1))
     director.directStaff('cam', 'audience', createRng(1))
+    expect(director.fatigue).toBe(3)
     director.resetFatigue()
     expect(director.fatigue).toBe(0)
     expect(director.staffFatigue).toBe(1)

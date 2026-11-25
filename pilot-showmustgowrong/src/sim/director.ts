@@ -1,6 +1,9 @@
 import {
+  ADS_PER_BROADCAST,
   FATIGUE_MISFIRE_PER_POINT,
   MISFIRE_CAP,
+  MISFIRE_MAX_INTENSITY,
+  OVERDO_SPEED_MULTIPLIER,
   STAFF_FATIGUE_MISFIRE_PER_POINT,
   TOLERANCE_COUNT,
 } from '@/content/balance'
@@ -25,10 +28,6 @@ export interface StaffDirectiveResult {
   misfired: boolean
 }
 
-const MAX_INTENSITY = 3
-const OVERDO_SPEED_MULTIPLIER = 1.5
-const STARTING_ADS = 1
-
 function misfireChance(fatigue: number, perPoint: number): number {
   return Math.min(MISFIRE_CAP, fatigue * perPoint)
 }
@@ -48,7 +47,7 @@ function shiftEmits(emits: readonly EmitDef[], delta: 1 | -1): EmitDef[] {
       shifted.push({ ...emit })
       continue
     }
-    const intensity = Math.min(MAX_INTENSITY, emit.intensity + delta)
+    const intensity = Math.min(MISFIRE_MAX_INTENSITY, emit.intensity + delta)
     if (intensity < 1) continue
     shifted.push({ ...emit, intensity: intensity as Intensity })
   }
@@ -68,9 +67,9 @@ function misfireAction(action: ActionDef, misfire: 'overdo' | 'awkward'): Action
 
 /** PD 개입의 상태(내성, 피로, 광고)와 판정. 지시 결과의 실행은 엔진이 맡는다. */
 export class Director {
-  fatigue = 0
-  staffFatigue = 0
-  adsLeft = STARTING_ADS
+  private currentFatigue = 0
+  private currentStaffFatigue = 0
+  private currentAdsLeft = ADS_PER_BROADCAST
 
   private readonly performers = new Map<string, PerformerDef>()
   private readonly staff = new Map<string, StaffDef>()
@@ -83,6 +82,18 @@ export class Director {
       this.used.set(performer.id, 0)
     }
     for (const member of staff) this.staff.set(member.id, member)
+  }
+
+  get fatigue(): number {
+    return this.currentFatigue
+  }
+
+  get staffFatigue(): number {
+    return this.currentStaffFatigue
+  }
+
+  get adsLeft(): number {
+    return this.currentAdsLeft
   }
 
   directivesUsed(performerId: string): number {
@@ -107,20 +118,23 @@ export class Director {
       throw new Error(`이미 이탈한 출연자에게 지시했습니다: ${performerId}`)
     }
 
+    // 엇나감 확률은 이번 지시를 더하기 전의 누적 피로로 계산한다.
+    const fatigueBefore = this.currentFatigue
     const used = (this.used.get(performerId) ?? 0) + 1
     this.used.set(performerId, used)
-    this.fatigue += 1
+    this.currentFatigue += 1
 
     if (used > TOLERANCE_COUNT[performer.tolerance]) {
       this.walkedOut.add(performerId)
       return [{ kind: 'walkout' }, rng]
     }
-
-    const chance = performer.misfire === 'never' ? 0 : misfireChance(this.fatigue, FATIGUE_MISFIRE_PER_POINT)
-    const [misfired, next] = rollMisfire(chance, rng)
-    if (!misfired || performer.misfire === 'never') {
-      return [{ kind: 'executed', action: directive.action, misfired: false }, next]
+    if (performer.misfire === 'never') {
+      return [{ kind: 'executed', action: directive.action, misfired: false }, rng]
     }
+
+    const chance = misfireChance(fatigueBefore, FATIGUE_MISFIRE_PER_POINT)
+    const [misfired, next] = rollMisfire(chance, rng)
+    if (!misfired) return [{ kind: 'executed', action: directive.action, misfired: false }, next]
     const action = misfireAction(directive.action, performer.misfire)
     return [{ kind: 'executed', action, misfired: true }, next]
   }
@@ -135,21 +149,22 @@ export class Director {
     const directive = member.directives.find((candidate) => candidate.id === directiveId)
     if (!directive) throw new Error(`스태프 ${staffId}에게 없는 지시입니다: ${directiveId}`)
 
-    this.staffFatigue += 1
-    const chance = misfireChance(this.staffFatigue, STAFF_FATIGUE_MISFIRE_PER_POINT)
+    const staffFatigueBefore = this.currentStaffFatigue
+    this.currentStaffFatigue += 1
+    const chance = misfireChance(staffFatigueBefore, STAFF_FATIGUE_MISFIRE_PER_POINT)
     const [misfired, next] = rollMisfire(chance, rng)
     return [{ aim: misfired ? 'random' : directive.aim, misfired }, next]
   }
 
   takeAd(): boolean {
-    if (this.adsLeft <= 0) return false
-    this.adsLeft -= 1
+    if (this.currentAdsLeft <= 0) return false
+    this.currentAdsLeft -= 1
     return true
   }
 
   /** 광고 재정비용. 출연자 누적 피로만 0으로 되돌린다. */
   resetFatigue(): void {
-    this.fatigue = 0
+    this.currentFatigue = 0
   }
 
   private requirePerformer(performerId: string): PerformerDef {
