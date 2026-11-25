@@ -150,9 +150,11 @@ describe('BroadcastLoop 개입', () => {
     const { broadcast, loop } = setup()
     loop.openIntervention()
     loop.send(DIRECT)
-    expect(loop.snapshot()).toMatchObject({ interventionOpen: false, interventionsIssued: 1 })
+    expect(loop.snapshot().interventionOpen).toBe(false)
     runFrames(loop, 1)
     expect(broadcast.steps[0]).toEqual([DIRECT])
+    // 실제로 방송에 넘긴 지시만 센다
+    expect(loop.snapshot().interventionsIssued).toBe(1)
   })
 
   it('카메라 전환은 개입을 닫지 않는다', () => {
@@ -186,11 +188,12 @@ describe('BroadcastLoop 입력 재검증(Ruling 35)', () => {
     loop.openIntervention()
     loop.send(DIRECT)
     loop.send(SWITCH)
+    // 지시로 개입이 닫혀 평상 속도이므로 다음 프레임에 한 스텝. 그 사이 렉스가 이탈했다.
     broadcast.actors = [actor('rex', { walkedOut: true }), actor('priya')]
-    // 느려진 상태가 아니므로 다음 프레임에 한 스텝. 그 전에 최신 view를 읽도록 한 프레임을 0초로 돌린다.
-    loop.frame(0)
-    loop.frame(FRAME)
+    runFrames(loop, 1)
     expect(broadcast.steps[0]).toEqual([SWITCH])
+    // 버린 지시는 개입으로 세지 않는다
+    expect(loop.snapshot().interventionsIssued).toBe(0)
   })
 
   it('물리에서 빠진(departed) 출연자에게 간 지시도 버리고, 무대에 있는 출연자 지시는 그대로 넘긴다', () => {
@@ -199,9 +202,9 @@ describe('BroadcastLoop 입력 재검증(Ruling 35)', () => {
     loop.send(DIRECT)
     loop.send(toPriya)
     broadcast.actors = [actor('rex', { walkedOut: true, departed: true }), actor('priya')]
-    loop.frame(0)
-    loop.frame(FRAME)
+    runFrames(loop, 1)
     expect(broadcast.steps[0]).toEqual([toPriya])
+    expect(loop.snapshot().interventionsIssued).toBe(1)
   })
 })
 

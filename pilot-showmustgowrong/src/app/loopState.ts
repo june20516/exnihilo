@@ -9,6 +9,10 @@ import { Clock } from '@/sim/clock'
 import type { AdEffect } from '@/sim/director'
 import type { ActorView, AutoSlowmo, BroadcastInput, Phase } from '@/sim/engineTypes'
 
+function isDirective(input: BroadcastInput): boolean {
+  return input.type === 'direct' || input.type === 'directStaff'
+}
+
 /** 루프가 view에서 읽는 필드. */
 export interface LoopViewFields {
   phase: Phase
@@ -31,7 +35,7 @@ export interface LoopSnapshot {
   slowmo: Slowmo
   interventionOpen: boolean
   interventionSecondsLeft: number
-  /** 실제로 지시를 내린 횟수. 시간이 다 되거나 취소한 개입은 세지 않는다. */
+  /** 실제로 방송에 넘긴 지시 수. 시간이 다 되거나 취소한 개입, 버린 지시는 세지 않는다. */
   interventionsIssued: number
   adPanelOpen: boolean
   adBreak: boolean
@@ -76,10 +80,8 @@ export class BroadcastLoop<V extends LoopViewFields> {
   send(input: BroadcastInput): void {
     if (this.ended) return
     this.queuedInputs.push(input)
-    if (input.type === 'direct' || input.type === 'directStaff') {
-      this.interventionsIssued += 1
-      this.interventionOpen = false
-    }
+    // 지시는 개입을 닫는다. 개입 횟수는 실제로 방송에 넘길 때 센다(Ruling 35로 버리면 세지 않음).
+    if (isDirective(input)) this.interventionOpen = false
   }
 
   /** 이미 열려 있으면 남은 시간을 그대로 둔다(대상만 바꾸는 클릭). */
@@ -132,6 +134,7 @@ export class BroadcastLoop<V extends LoopViewFields> {
       const inputs = this.stillValid(this.queuedInputs)
       this.queuedInputs = []
       this.broadcast.step(inputs)
+      this.interventionsIssued += inputs.filter(isDirective).length
     }
     this.tickTimers(seconds)
     return this.refresh()
@@ -152,15 +155,16 @@ export class BroadcastLoop<V extends LoopViewFields> {
 
   /**
    * Ruling 35: 큐에 쌓인 지시가 그사이 이탈한(출구로 걸어가거나 빠진) 출연자를 가리키면
-   * 넘기기 전에 버린다. 엔진은 그런 지시에 그대로 throw한다.
+   * 넘기기 전에 버린다. 지시가 있을 때만 방송의 최신 view를 읽는다. 엔진은 그런 지시에 그대로 throw한다.
    */
   private stillValid(inputs: BroadcastInput[]): BroadcastInput[] {
+    if (!inputs.some((input) => input.type === 'direct')) return inputs
     const gone = new Set(
-      this.currentView.actors
-        .filter((actor) => actor.walkedOut || actor.departed)
+      this.broadcast
+        .view()
+        .actors.filter((actor) => actor.walkedOut || actor.departed)
         .map((actor) => actor.id),
     )
-    if (gone.size === 0) return inputs
     return inputs.filter((input) => input.type !== 'direct' || !gone.has(input.actorId))
   }
 
