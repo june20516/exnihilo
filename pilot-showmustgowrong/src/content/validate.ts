@@ -98,6 +98,7 @@ export function validateShow(
   const placements: [string, FloorPoint][] = [
     ...show.homeSpots.map((spot, index): [string, FloorPoint] => [`home spot ${index + 1}`, spot]),
     ['bench spot', show.benchSpot],
+    ['exit', show.exit],
     ...equipment.map((piece): [string, FloorPoint] => [`장비 ${piece.id}`, piece.position]),
     ...show.cameras.map((camera): [string, FloorPoint] => [`카메라 ${camera.id}`, camera.position]),
   ]

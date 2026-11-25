@@ -111,7 +111,8 @@ function clampToStudio(point: FloorPoint): FloorPoint {
   }
 }
 
-function isInsideStudio(point: FloorPoint): boolean {
+/** 캡슐이 옆벽에 박히지 않고 설 수 있는 바닥 자리(벽에서 캡슐 반경 이상 떨어짐)면 true */
+function isStandable(point: FloorPoint): boolean {
   const clamped = clampToStudio(point)
   return clamped.x === point.x && clamped.z === point.z
 }
@@ -443,7 +444,7 @@ export class PhysicsWorld {
 
     const start = clampToStudio(at)
     for (const candidate of spiralAround(start)) {
-      if (isInsideStudio(candidate) && isFree(candidate)) return candidate
+      if (isStandable(candidate) && isFree(candidate)) return candidate
     }
     return start
   }

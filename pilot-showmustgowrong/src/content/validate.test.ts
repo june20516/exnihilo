@@ -64,7 +64,7 @@ const show: ShowDef = {
     { x: 12, z: 4 },
   ],
   benchSpot: { x: 1, z: 6 },
-  exit: { x: -1, z: 4 },
+  exit: { x: 16, z: 4 },
   audienceZone: { minX: 0, maxX: 16, minZ: 8, maxZ: 10 },
 }
 
@@ -258,6 +258,12 @@ describe('validateShow', () => {
       const outside = { ...show, cameras: [{ ...show.cameras[0], position }] }
       const errors = validateShow(outside, performers, [makeStaff()], equipment)
       expect(errors.join('\n')).toContain('스튜디오 밖 좌표: 카메라 cam1')
+    })
+
+    it('exit도 스튜디오 밖이면 오류다', () => {
+      const outside = { ...show, exit: { x: 16.5, z: 4 } }
+      const errors = validateShow(outside, performers, [makeStaff()], equipment)
+      expect(errors.join('\n')).toContain('스튜디오 밖 좌표: exit')
     })
 
     it('경계 위(x 0·16, z 0·10)는 허용한다', () => {

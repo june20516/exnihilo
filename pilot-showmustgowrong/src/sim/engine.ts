@@ -943,6 +943,7 @@ export class Broadcast {
   /**
    * 송출 카메라의 시야 안이고 장비가 시선을 가리지 않으면 송출된다(spec 3.1).
    * lineOfSight는 직전 물리 step의 장비 위치를 쓰므로 물리 step 뒤에 부른다.
+   * 생성 직후(첫 step 전) view와 wasOnAir 초기값은 장비 가림을 반영하지 않는다.
    */
   private isOnAir(point: Vec3): boolean {
     const camera = this.onAirCamera()
