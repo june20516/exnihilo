@@ -346,7 +346,7 @@ export class StudioRenderer {
       text: actor.name,
       style: { fill: COLORS.nameText, fontSize: NAME_FONT_SIZE, fontFamily: FONT_FAMILY },
     })
-    label.anchor.set(0.5, 0)
+    label.anchor.set(0.5, 1)
     root.addChild(body)
     this.actorLayer.addChild(root, symbol, label)
     const sprite: ActorSprite = { root, body, symbol, label, drawnKey: null }
@@ -386,11 +386,13 @@ export class StudioRenderer {
     sprite.root.position.set(center.x, center.y)
     sprite.root.rotation = -actor.angle
     sprite.root.alpha = actor.walkedOut ? WALKED_OUT_ALPHA : 1
-    // 글자는 몸과 함께 돌지 않고, 캡슐이 화면에서 위아래로 차지하는 폭만큼 떨어진 곳에 둔다.
+    // 글자는 몸과 함께 돌지 않고, 캡슐이 화면에서 위로 차지하는 폭만큼 떨어진 곳에 둔다.
+    // 바닥(y=0)이 캔버스 아래 끝이라 몸 아래에 쓰면 잘리므로 이름은 머리 위, 포즈 기호는 그 위에 둔다.
     const extent = capsuleVerticalExtent(actor.angle)
-    sprite.symbol.position.set(center.x, center.y - extent - TEXT_GAP)
     if (sprite.label.text !== actor.name) sprite.label.text = actor.name
-    sprite.label.position.set(center.x, center.y + extent + TEXT_GAP)
+    const labelBottom = center.y - extent - TEXT_GAP
+    sprite.label.position.set(center.x, labelBottom)
+    sprite.symbol.position.set(center.x, labelBottom - sprite.label.height - TEXT_GAP)
   }
 
   private collectBubbles(view: BroadcastView): void {
