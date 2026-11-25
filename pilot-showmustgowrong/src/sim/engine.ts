@@ -124,6 +124,8 @@ export class Broadcast {
   private rng: RngState
   private stepCount = 0
   private currentPhase: Phase = 'live'
+  /** 시작한 코너 수. 코너 경계 스텝이 광고 스텝이면 재개 뒤 첫 스텝에 시작한다(Ruling 36). */
+  private cornersStarted = 0
   private onAirCameraId: string
   /** 직전 스텝에 생겨 이번 스텝에 판정할 이벤트 */
   private pendingEvents: PhenomenonEvent[] = []
@@ -214,8 +216,10 @@ export class Broadcast {
   }
 
   /**
-   * 한 스텝. live가 아니면 아무것도 하지 않는다. 광고 입력이 들어오면 입력만 적용하고
-   * 스텝을 멈춘다(스텝 수도 그대로). resumeFromAd 뒤 같은 스텝 번호로 다시 돈다.
+   * 한 스텝. live가 아니면 아무것도 하지 않는다.
+   * Ruling 36: 광고 입력이 들어온 스텝은 입력(광고 효과)만 적용하고 물리·현상은 진행하지 않지만
+   * 스텝 수는 1 올린다. 그래서 step 번호와 입력 묶음이 일대일로 대응하고(replay), 광고 한 번은
+   * 방송 시간 한 스텝(1/60초)을 쓴다. 방송 길이(BROADCAST_STEPS)와 코너 경계도 이 번호로 센다.
    */
   step(inputs: readonly BroadcastInput[] = []): void {
     if (this.currentPhase !== 'live') return
@@ -234,7 +238,10 @@ export class Broadcast {
       this.inputs.push({ step: this.stepCount, input: recorded })
     }
     // 광고 입력이 phase를 바꿨을 수 있다(필드는 위 검사로 'live'로 좁혀져 있어 getter로 읽는다).
-    if (this.phase === 'adBreak') return
+    if (this.phase === 'adBreak') {
+      this.finishAdStep()
+      return
+    }
     this.advanceWalkouts()
     // 2. 코너 시작
     this.startCornerIfDue()
@@ -264,12 +271,16 @@ export class Broadcast {
     this.currentEvents = []
   }
 
-  /** 광고를 끝내고 방송으로 돌아온다. */
+  /**
+   * 광고를 끝내고 방송으로 돌아온다. 복귀할 때 시청자 일부가 이탈한다(spec 5.5).
+   * 마지막 스텝에 광고를 받았으면 그대로 방송이 끝난다.
+   */
   resumeFromAd(): void {
     if (this.currentPhase !== 'adBreak') {
       throw new Error(`광고 중이 아닙니다: ${this.currentPhase}`)
     }
-    this.currentPhase = 'live'
+    this.score.applyAdLoss()
+    this.currentPhase = this.stepCount >= BROADCAST_STEPS ? 'ended' : 'live'
   }
 
   view(): BroadcastView {
@@ -404,10 +415,18 @@ export class Broadcast {
           break
       }
     }
-    this.score.applyAdLoss()
     this.log.breakChains()
     this.silentSteps = 0
     this.currentPhase = 'adBreak'
+  }
+
+  /**
+   * Ruling 36: 광고 스텝은 물리·현상 없이 스텝 수만 올린다. 초 경계면 시청자 표본도 남겨
+   * 평균 시청자의 표본 수가 방송 초 수와 맞게 한다(광고가 정적을 지웠으므로 정적은 0이다).
+   */
+  private finishAdStep(): void {
+    if ((this.stepCount + 1) % STEPS_PER_SECOND === 0) this.score.tickSecond(this.silenceLevel())
+    this.stepCount += 1
   }
 
   private resetCast(): void {
@@ -488,9 +507,10 @@ export class Broadcast {
   // ── 코너, 물리, 반응, 시선 ─────────────────────────────
 
   private startCornerIfDue(): void {
-    if (this.stepCount % CORNER_STEPS !== 0) return
-    const corner = this.setup.show.corners[this.stepCount / CORNER_STEPS]
+    if (this.stepCount < this.cornersStarted * CORNER_STEPS) return
+    const corner = this.setup.show.corners[this.cornersStarted]
     if (corner === undefined) return
+    this.cornersStarted += 1
     for (const member of this.cast.active()) {
       if (!member.def.tags.includes(corner.startTag)) continue
       const reaction = member.def.reactions.find(
@@ -935,7 +955,7 @@ export class Broadcast {
 
 /**
  * 입력 기록으로 방송을 처음부터 다시 돌린다(결정론 확인용). 광고 입력 뒤에는 바로 재개한다.
- * 끝나면 물리 월드를 해제한다.
+ * step 번호마다 입력 묶음이 하나다(Ruling 36). 끝나면 물리 월드를 해제한다.
  */
 export async function replay(
   setup: BroadcastSetup,
@@ -951,13 +971,8 @@ export async function replay(
 
   const broadcast = await Broadcast.create(setup)
   try {
-    let fedStep = -1
     while (broadcast.currentStep < steps && broadcast.phase !== 'ended') {
-      const step = broadcast.currentStep
-      // 광고로 멈춘 스텝은 같은 번호로 다시 돌므로 입력을 두 번 넣지 않는다.
-      const inputs = step === fedStep ? [] : (byStep.get(step) ?? [])
-      fedStep = step
-      broadcast.step(inputs)
+      broadcast.step(byStep.get(broadcast.currentStep) ?? [])
       if (broadcast.phase === 'adBreak') broadcast.resumeFromAd()
     }
     return broadcast.view()

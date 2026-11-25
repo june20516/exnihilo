@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   AD_GAUGE_RELIEF,
+  AD_VIEWER_LOSS,
   AUDIENCE_NOISE_SECONDS,
+  BROADCAST_STEPS,
   CORNER_STEPS,
   GRAVITY,
   LEAP_VERTICAL_RATIO,
@@ -9,6 +11,8 @@ import {
   REACTION_COOLDOWN_SECONDS,
   STEP_SECONDS,
 } from '@/content/balance'
+import { LINEUP } from '@/content/lineup'
+import { TALK_SHOW } from '@/content/talkShow'
 import type {
   ActionDef,
   CameraDef,
@@ -211,18 +215,15 @@ afterEach(() => {
   for (const broadcast of opened.splice(0)) broadcast.dispose()
 })
 
-/** steps 스텝을 끝까지 돌린다. 광고로 멈춘 스텝은 입력 없이 다시 돈다. */
+/** steps 스텝을 끝까지 돌린다. 광고 입력을 받은 스텝 뒤에는 바로 재개한다. */
 function run(
   broadcast: Broadcast,
   steps: number,
   inputs: Map<number, BroadcastInput[]> = new Map(),
 ): void {
   const target = broadcast.currentStep + steps
-  let fedStep = -1
   while (broadcast.currentStep < target && broadcast.phase !== 'ended') {
-    const step = broadcast.currentStep
-    broadcast.step(step === fedStep ? [] : (inputs.get(step) ?? []))
-    fedStep = step
+    broadcast.step(inputs.get(broadcast.currentStep) ?? [])
     if (broadcast.phase === 'adBreak') broadcast.resumeFromAd()
   }
 }
@@ -316,6 +317,87 @@ describe('결정론', () => {
     expect(second.view()).toEqual(view)
     expect(first.events().length).toBeGreaterThan(5)
     expect(await replay(setup(), first.inputLog(), 3000)).toEqual(view)
+  })
+})
+
+describe('광고 스텝(Ruling 36)', () => {
+  const realSetup = (): BroadcastSetup => ({ show: TALK_SHOW, ...LINEUP, seed: 7 })
+  const AD_STEP = 30
+  const TOTAL_STEPS = 600
+
+  /** AD_STEP까지 돌리고 광고를 받은 뒤 재개 직후 스텝에 afterResume을 넣고 TOTAL_STEPS까지 돌린다. */
+  async function adThenResume(afterResume: BroadcastInput[]): Promise<Broadcast> {
+    const broadcast = await open(realSetup())
+    run(broadcast, AD_STEP)
+    broadcast.step([{ type: 'ad', effects: ['setup', 'relief'] }])
+    broadcast.resumeFromAd()
+    broadcast.step(afterResume)
+    run(broadcast, TOTAL_STEPS - broadcast.currentStep)
+    return broadcast
+  }
+
+  it('광고 입력을 받은 스텝도 스텝 수를 1 올리고, 물리·현상은 진행하지 않는다', async () => {
+    const broadcast = await open(quietSetup())
+    run(broadcast, 10)
+    const before = broadcast.view()
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    const during = broadcast.view()
+    expect(during).toMatchObject({ phase: 'adBreak', step: before.step + 1 })
+    expect(broadcast.events()).toHaveLength(0)
+    expect(during.actors.map((actor) => actor.x)).toEqual(before.actors.map((actor) => actor.x))
+  })
+
+  it('재개 직후 스텝의 입력은 광고 묶음과 다른 step 번호로 기록되고 replay가 같은 결과를 낸다', async () => {
+    const story: BroadcastInput = { type: 'direct', actorId: 'june', directiveId: 'story' }
+    const broadcast = await adThenResume([story])
+
+    expect(broadcast.inputLog()).toEqual([
+      { step: AD_STEP, input: { type: 'ad', effects: ['setup', 'relief'] } },
+      { step: AD_STEP + 1, input: story },
+    ])
+    const view = broadcast.view()
+    expect(view.step).toBe(TOTAL_STEPS)
+    expect(await replay(realSetup(), broadcast.inputLog(), TOTAL_STEPS)).toEqual(view)
+  })
+
+  it('재개 직후 switch도 replay가 같은 결과를 낸다(대조)', async () => {
+    const broadcast = await adThenResume([{ type: 'switch', cameraId: 'close' }])
+    expect(broadcast.inputLog().map(({ step }) => step)).toEqual([AD_STEP, AD_STEP + 1])
+    expect(await replay(realSetup(), broadcast.inputLog(), TOTAL_STEPS)).toEqual(broadcast.view())
+  })
+
+  it('코너 경계 스텝에 광고를 받으면 재개 뒤 첫 스텝에 그 코너가 시작된다', async () => {
+    const broadcast = await open(setup({ staff: [], equipment: [] }))
+    run(broadcast, CORNER_STEPS)
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    broadcast.resumeFromAd()
+    broadcast.step([])
+    expect(broadcast.view().cornerIndex).toBe(1)
+    expect(
+      broadcast
+        .events()
+        .filter((event) => event.sourceId === 'mo' && event.kind === 'noise' && event.causeId === null)
+        .map((event) => event.step),
+    ).toEqual([CORNER_STEPS + 1])
+  })
+
+  it('마지막 스텝에 광고를 받으면 재개할 때 방송이 끝난다', async () => {
+    const broadcast = await open(quietSetup())
+    run(broadcast, BROADCAST_STEPS - 1)
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    expect(broadcast.view()).toMatchObject({ phase: 'adBreak', step: BROADCAST_STEPS })
+    broadcast.resumeFromAd()
+    expect(broadcast.view()).toMatchObject({ phase: 'ended', step: BROADCAST_STEPS })
+  })
+
+  it('광고 중에는 시청자가 그대로이고 복귀할 때 일부가 이탈한다(spec 5.5)', async () => {
+    const broadcast = await open(quietSetup())
+    run(broadcast, 10)
+    const before = broadcast.view().viewers
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    expect(broadcast.view().viewers).toBe(before)
+    broadcast.resumeFromAd()
+    expect(broadcast.view().viewers).toBeCloseTo(before * (1 - AD_VIEWER_LOSS))
   })
 })
 
@@ -542,7 +624,7 @@ describe('광고', () => {
     expect(() => broadcast.resumeFromAd()).toThrow()
   })
 
-  it('relief와 setup: 게이지 −25, 출연자 추가, 시청자 −10%, 이후 연쇄 깊이는 1부터', async () => {
+  it('relief와 setup: 게이지 −25, 출연자 추가, 복귀 때 시청자 −10%, 이후 연쇄 깊이는 1부터', async () => {
     const broadcast = await open(adSetup())
     broadcast.step([flash])
     const before = broadcast.view()
@@ -551,11 +633,12 @@ describe('광고', () => {
     broadcast.step([{ type: 'ad', effects: ['relief', 'setup'] }])
     const during = broadcast.view()
     expect(during.phase).toBe('adBreak')
-    expect(during.step).toBe(1)
+    // Ruling 36: 광고 스텝도 번호 하나를 쓴다
+    expect(during.step).toBe(2)
     expect(during.adsLeft).toBe(0)
     expect(during.benchLeft).toBe(0)
     expect(during.gauges.sexual).toBe(54 - AD_GAUGE_RELIEF)
-    expect(during.viewers).toBeCloseTo(before.viewers * 0.9)
+    expect(during.viewers).toBe(before.viewers)
     expect(during.actors.map((actor) => [actor.id, actor.x])).toEqual([
       ['rex', 4],
       ['mo', 6.5],
@@ -566,9 +649,10 @@ describe('광고', () => {
     expect(broadcast.view()).toEqual(during)
 
     broadcast.resumeFromAd()
+    expect(broadcast.view().viewers).toBeCloseTo(before.viewers * (1 - AD_VIEWER_LOSS))
     broadcast.step([])
     expect(laughs(broadcast).length).toBeGreaterThan(0)
-    expect(laughs(broadcast)[0]).toMatchObject({ step: 1, sourceId: 'mo', depth: 1 })
+    expect(laughs(broadcast)[0]).toMatchObject({ step: 2, sourceId: 'mo', depth: 1 })
     expect(laughs(broadcast)[0].causeId).not.toBeNull()
 
     const again: BroadcastInput = { type: 'ad', effects: ['relief', 'reset'] }
@@ -795,9 +879,10 @@ describe('관객(Ruling 17)', () => {
       NOISE_STEPS + 1,
       new Map([[adStep, [{ type: 'ad', effects: ['reset', 'relief'] }]]]),
     )
+    // 광고 스텝(adStep)에는 세지 않고 재개 뒤 adStep + 1부터 다시 센다(Ruling 36).
     // reset이 없었다면 첫 소음은 NOISE_STEPS - 1 스텝에 난다
     expect(fromAudience(broadcast, 'noise').map((event) => event.step)).toEqual([
-      adStep + NOISE_STEPS - 1,
+      adStep + NOISE_STEPS,
     ])
   })
 
