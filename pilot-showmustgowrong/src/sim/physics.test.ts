@@ -89,6 +89,18 @@ describe('PhysicsWorld', () => {
     expect(contacts).toEqual([])
   })
 
+  it('바닥에 선 actor를 위로 날려도(첫 스텝 포함) 이륙은 바닥 접촉이 아니다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('fresh', 3, 'normal')
+    world.addActor('settled', 8, 'normal')
+    world.impulse('fresh', 0, 12)
+    const firstStep = world.step()
+    stepMany(world, SETTLE_STEPS)
+    world.impulse('settled', 0, 12)
+    const takeoff = world.step()
+    expect([...firstStep, ...takeoff].filter((contact) => contact.b === 'floor')).toEqual([])
+  })
+
   it('위로 세게 날린 actor는 천장과 벽 안에 머문다', () => {
     const world = new PhysicsWorld()
     world.addActor('up', 8, 'light')

@@ -430,10 +430,10 @@ export class PhysicsWorld {
 
     const v1 = previous.get(firstHandle) ?? { vx: 0, vy: 0 }
     if (second.kind === 'floor') {
-      // 바닥 접촉은 actor만 보고하고, actor의 직전 수직 속력을 상대 속도로 본다.
-      // 수평으로 미끄러지기만 해서는 충격이 생기지 않는다.
+      // 바닥 접촉은 actor만 보고하고, actor의 직전 수직 속도 중 내려오는 성분만 상대 속도로 본다
+      // (Ruling 24). 수평으로 미끄러지거나 위로 이륙하는 것은 충격이 아니다.
       if (first.kind !== 'actor') return undefined
-      const intensity = intensityForSpeed(Math.abs(v1.vy))
+      const intensity = intensityForSpeed(Math.max(0, -v1.vy))
       if (intensity === undefined) return undefined
       return { a: first.id, b: 'floor', intensity, fasterId: first.id }
     }

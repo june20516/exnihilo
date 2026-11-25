@@ -691,9 +691,9 @@ describe('장비 파손 연쇄', () => {
 
   it('충격 → 조명 파손 → 어둠 → 낙하 충격이 원인으로 이어진다', async () => {
     const broadcast = await open(lightSetup())
-    // 생성 직후 첫 스텝의 바닥 접촉 시작과 겹치지 않게 서 있는 상태에서 뛴다
-    run(broadcast, 5)
+    // 생성 직후 첫 스텝에 바로 뛰어도 이륙은 충격이 아니다(Ruling 24)
     broadcast.step([{ type: 'direct', actorId: 'jumper', directiveId: 'jump' }])
+    expect(broadcast.events().filter((event) => event.kind === 'impact')).toEqual([])
 
     const breakImpact = runUntil(
       broadcast,
