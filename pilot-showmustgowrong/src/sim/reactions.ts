@@ -45,8 +45,9 @@ function isEventTrigger(trigger: Trigger): trigger is EventTrigger {
   return trigger.kind !== 'gaze' && trigger.kind !== 'corner'
 }
 
-function cooldownKey(trigger: EventTrigger): string {
-  return `${trigger.kind}:${trigger.scope}`
+/** 쿨다운은 같은 요소가 같은 현상에 반응하는 데 걸리므로 key는 현상 종류 하나다(scope 무관). */
+export function cooldownKey(trigger: Trigger): string {
+  return trigger.kind
 }
 
 interface Candidate {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ActionDef, Intensity, PhenomenonKind, ReactionDef } from '@/content/types'
 import { createRng } from '@/kit/rng'
 import type { PhenomenonEvent } from './phenomena'
-import { CooldownTable, resolveReactions, type ReactorView } from './reactions'
+import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
 
 const action = (pose: ActionDef['pose']): ActionDef => ({ pose, emits: [] })
 
@@ -72,25 +72,26 @@ describe('resolveReactions', () => {
     expect(resolveReactions([event({ id: 3 })], [a], cooldowns, 60, rng, describeEvent)[0]).toHaveLength(1)
   })
 
-  it('A→B, B→A 순환을 120 스텝 흉내 내면 반응 횟수가 스텝 수를 넘지 않는다', () => {
+  it('A→B, B→A 순환은 쿨다운 때문에 각자 60 스텝 간격으로만 반응한다', () => {
     const a = reactor('A', [reaction('laughter', 1, 'targetsSelf', 'laugh')], { x: 0 })
     const b = reactor('B', [reaction('laughter', 1, 'targetsSelf', 'laugh')], { x: 1 })
     const cooldowns = new CooldownTable()
     let rng = createRng(1)
-    let pending: PhenomenonEvent[] = [event({ id: 1, sourceId: 'B', targetId: 'A' })]
+    // 각자를 향한 가장 최근 이벤트가 계속 지각되는 상황을 흉내 낸다.
+    const latest: Record<string, PhenomenonEvent> = { A: event({ id: 1, sourceId: 'B', targetId: 'A' }) }
+    const reactedSteps: Record<string, number[]> = { A: [], B: [] }
     let id = 2
-    let count = 0
     for (let step = 0; step < 120; step++) {
-      const [planned, next] = resolveReactions(pending, [a, b], cooldowns, step, rng, describeEvent)
+      const [planned, next] = resolveReactions(Object.values(latest), [a, b], cooldowns, step, rng, describeEvent)
       rng = next
-      count += planned.length
-      expect(planned.length).toBeLessThanOrEqual(2)
-      pending = planned.map((p) =>
-        event({ id: id++, sourceId: p.actorId, targetId: p.actorId === 'A' ? 'B' : 'A', step: step + 1 }),
-      )
+      for (const p of planned) {
+        reactedSteps[p.actorId].push(step)
+        const target = p.actorId === 'A' ? 'B' : 'A'
+        latest[target] = event({ id: id++, sourceId: p.actorId, targetId: target, step: step + 1 })
+      }
     }
-    expect(count).toBeLessThanOrEqual(120)
-    expect(count).toBeGreaterThan(0)
+    expect(reactedSteps.A).toEqual([0, 60])
+    expect(reactedSteps.B).toEqual([1, 61])
   })
 
   it('chance 0.5 반응은 같은 시드에서 항상 같은 결과이고 rng 상태를 이어 쓴다', () => {
@@ -118,10 +119,38 @@ describe('resolveReactions', () => {
     expect(next).toEqual(rng)
   })
 
-  it('walkedOut이면 아무것도 계획하지 않는다', () => {
-    const a = reactor('A', [reaction('laughter', 2, 'targetsSelf', 'angry')], { walkedOut: true })
-    const [planned] = resolveReactions([event({ id: 1 })], [a], new CooldownTable(), 0, createRng(1), describeEvent)
-    expect(planned).toHaveLength(0)
+  it('walkedOut이면 아무것도 계획하지 않고 rng도 쓰지 않는다', () => {
+    const a = reactor('A', [reaction('laughter', 2, 'targetsSelf', 'angry', 0.9)], { walkedOut: true })
+    const rng = createRng(1)
+    const [planned, next] = resolveReactions([event({ id: 1 })], [a], new CooldownTable(), 0, rng, describeEvent)
+    expect(planned).toEqual([])
+    expect(next).toEqual(rng)
+  })
+
+  it('이벤트가 없거나 reactor가 없으면 빈 결과이고 rng를 쓰지 않는다', () => {
+    const a = reactor('A', [reaction('laughter', 1, 'perceived', 'angry', 0.5)])
+    const rng = createRng(1)
+    const noEvents = resolveReactions([], [a], new CooldownTable(), 0, rng, describeEvent)
+    expect(noEvents[0]).toEqual([])
+    expect(noEvents[1]).toEqual(rng)
+    const noReactors = resolveReactions([event({ id: 1 })], [], new CooldownTable(), 0, rng, describeEvent)
+    expect(noReactors[0]).toEqual([])
+    expect(noReactors[1]).toEqual(rng)
+  })
+
+  it('같은 actor의 laughter perceived와 targetsSelf는 쿨다운을 공유한다', () => {
+    const a = reactor('A', [
+      reaction('laughter', 1, 'targetsSelf', 'angry'),
+      reaction('laughter', 1, 'perceived', 'laugh'),
+    ])
+    const cooldowns = new CooldownTable()
+    const rng = createRng(1)
+    const first = resolveReactions([event({ id: 1 })], [a], cooldowns, 0, rng, describeEvent)[0]
+    expect(first[0].action.pose).toBe('angry')
+    const second = resolveReactions([event({ id: 2, targetId: null })], [a], cooldowns, 30, rng, describeEvent)[0]
+    expect(second).toEqual([])
+    const third = resolveReactions([event({ id: 3, targetId: null })], [a], cooldowns, 60, rng, describeEvent)[0]
+    expect(third[0].action.pose).toBe('laugh')
   })
 
   it('한 actor는 한 스텝에 강도가 가장 큰 이벤트의 반응 하나만 한다', () => {
@@ -149,7 +178,7 @@ describe('resolveReactions', () => {
   it('쿨다운 중인 반응은 후보에서 빠져 다음 후보가 선택된다', () => {
     const a = reactor('A', [reaction('noise', 1, 'perceived', 'panic'), reaction('laughter', 1, 'perceived', 'angry')])
     const cooldowns = new CooldownTable()
-    cooldowns.mark('A', 'noise:perceived', 0)
+    cooldowns.mark('A', cooldownKey(reaction('noise', 1, 'perceived', 'panic').trigger), 0)
     const events = [
       event({ id: 1, kind: 'noise', intensity: 3, sourceId: 'X', targetId: null }),
       event({ id: 2, kind: 'laughter', intensity: 1 }),
@@ -171,7 +200,7 @@ describe('resolveReactions', () => {
     const [planned, next] = resolveReactions(events, [a], cooldowns, 0, createRng(1), describeEvent)
     expect(planned).toHaveLength(0)
     expect(next.cursor).toBe(1)
-    expect(cooldowns.ready('A', 'noise:perceived', 0)).toBe(true)
+    expect(cooldowns.ready('A', cooldownKey(reaction('noise', 1, 'perceived', 'panic').trigger), 0)).toBe(true)
   })
 
   it('결과는 reactors 순서를 따른다', () => {
