@@ -152,4 +152,64 @@ describe('validateShow', () => {
     const errors = validateShow(show, duplicated, [makeStaff()], equipment)
     expect(errors.join('\n')).toContain('중복 id')
   })
+
+  it('지시 안의 알 수 없는 태그를 보고한다', () => {
+    const withDirective = [
+      makePerformer('a', {
+        directives: [
+          {
+            id: 'd1',
+            label: '지시',
+            action: {
+              pose: 'idle',
+              emits: [{ kind: 'noise', intensity: 1, target: { tag: 'dir-ghost' } }],
+            },
+          },
+        ],
+      }),
+    ]
+    const errors = validateShow(show, withDirective, [makeStaff()], equipment)
+    expect(errors.join('\n')).toContain('알 수 없는 태그: dir-ghost')
+  })
+
+  it('장비 onBreak 안의 알 수 없는 태그를 보고한다', () => {
+    const badEquipment: EquipmentDef[] = [
+      { ...equipment[0], onBreak: [{ kind: 'noise', intensity: 1, target: { tag: 'eq-ghost' } }] },
+    ]
+    const errors = validateShow(show, performers, [makeStaff()], badEquipment)
+    expect(errors.join('\n')).toContain('알 수 없는 태그: eq-ghost')
+  })
+
+  it('스태프 중복 id를 보고한다', () => {
+    const errors = validateShow(show, performers, [makeStaff(), makeStaff()], equipment)
+    expect(errors.join('\n')).toContain('중복 id: 스태프 staff1')
+  })
+
+  it('장비 중복 id를 보고한다', () => {
+    const errors = validateShow(show, performers, [makeStaff()], [equipment[0], equipment[0]])
+    expect(errors.join('\n')).toContain('중복 id: 장비 light1')
+  })
+
+  it('카메라 중복 id를 보고한다', () => {
+    const dupShow = { ...show, cameras: [show.cameras[0], show.cameras[0]] }
+    const errors = validateShow(dupShow, performers, [makeStaff()], equipment)
+    expect(errors.join('\n')).toContain('중복 id: 카메라 cam1')
+  })
+
+  it('출연자가 없는 코너 startTag와 corner 트리거 태그는 허용한다', () => {
+    const noTagShow = {
+      ...show,
+      corners: [
+        { label: 'c1', startTag: 'absent' },
+        { label: 'c2', startTag: 'tag-a' },
+        { label: 'c3', startTag: 'tag-a' },
+      ] as ShowDef['corners'],
+    }
+    const withCorner = [
+      makePerformer('a', {
+        reactions: [reactionWith({ trigger: { kind: 'corner', tag: 'other-lineup' } })],
+      }),
+    ]
+    expect(validateShow(noTagShow, withCorner, [makeStaff()], equipment)).toEqual([])
+  })
 })

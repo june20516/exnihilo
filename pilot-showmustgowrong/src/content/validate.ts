@@ -56,12 +56,9 @@ export function validateShow(
   }
   const checkReactions = (reactions: ReactionDef[], owner: string) => {
     for (const reaction of reactions) {
-      const { chance, trigger } = reaction
+      const { chance } = reaction
       if (chance !== undefined && !(chance > 0 && chance <= 1)) {
         errors.push(`확률 범위 오류: ${chance} (${owner})`)
-      }
-      if (trigger.kind === 'corner' && !knownTags.has(trigger.tag)) {
-        errors.push(`알 수 없는 태그: ${trigger.tag} (${owner})`)
       }
     }
     for (const target of reactionTargets(reactions)) checkTarget(target, owner)
@@ -83,12 +80,6 @@ export function validateShow(
 
   for (const piece of equipment) {
     for (const emit of piece.onBreak) checkTarget(emit.target, piece.id)
-  }
-
-  for (const corner of show.corners) {
-    if (!knownTags.has(corner.startTag)) {
-      errors.push(`알 수 없는 태그: ${corner.startTag} (${corner.label})`)
-    }
   }
 
   return errors
