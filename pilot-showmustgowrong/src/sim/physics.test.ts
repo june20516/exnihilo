@@ -69,6 +69,17 @@ describe('PhysicsWorld', () => {
     expect((right?.x ?? 0) - (left?.x ?? 0)).toBeLessThan(0.75)
   })
 
+  it('수평으로 빠르게 미끄러지며 바닥에 닿으면 접촉을 돌려주지 않는다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('slider', 3, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    // 살짝 떠서 다시 닿는다: 착지 속력은 8m/s 이상이지만 수직 속력은 3m/s 미만이다.
+    world.impulse('slider', 8, 1)
+    const contacts = stepMany(world, 30)
+    expect(world.actorState('slider')?.grounded).toBe(true)
+    expect(contacts).toEqual([])
+  })
+
   it('위로 세게 날린 actor는 천장과 벽 안에 머문다', () => {
     const world = new PhysicsWorld()
     world.addActor('up', 8, 'light')

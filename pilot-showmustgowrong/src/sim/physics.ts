@@ -1,31 +1,25 @@
 import RAPIER from '@dimforge/rapier2d-deterministic-compat'
 import {
+  ACTOR_FRICTION,
+  ACTOR_RESTITUTION,
+  BOUNDARY_THICKNESS,
   CAPSULE,
+  FLOOR_FRICTION,
+  GRAVITY,
   IMPACT_SPEED,
+  LIGHT_DENSITY,
+  LIGHT_HALF_EXTENTS,
   MASS_DENSITY,
+  SET_WALL_DENSITY,
+  SET_WALL_HALF_EXTENTS,
+  SET_WALL_TOPPLE_ANGVEL,
   SETTLED_SPEED,
   STAND_UP_SECONDS,
   STEP_SECONDS,
+  STUDIO_HEIGHT,
+  STUDIO_WIDTH,
 } from '@/content/balance'
 import type { EquipmentDef, Intensity, Weight } from '@/content/types'
-
-/** 스튜디오 크기(m). 바닥 y=0, 위가 +y. */
-const STUDIO_WIDTH = 16
-const STUDIO_HEIGHT = 9
-/** 바닥·벽·천장 collider의 두께(m). 빠른 actor가 뚫지 않도록 넉넉히 둔다. */
-const BOUNDARY_THICKNESS = 1
-const GRAVITY = { x: 0, y: -9.81 }
-
-const ACTOR_FRICTION = 0.5
-const ACTOR_RESTITUTION = 0.1
-const FLOOR_FRICTION = 0.6
-
-const LIGHT_HALF_EXTENTS = { hx: 0.4, hy: 0.2 }
-const LIGHT_DENSITY = 2
-const SET_WALL_HALF_EXTENTS = { hx: 0.1, hy: 1.5 }
-const SET_WALL_DENSITY = 3
-/** 풀려난 세트 벽이 스튜디오 가운데 쪽으로 쓰러지기 시작하는 각속도(rad/s). */
-const SET_WALL_TOPPLE_ANGVEL = 1.2
 
 /** 서 있는 캡슐 중심의 높이 */
 const STANDING_Y = CAPSULE.halfHeight + CAPSULE.radius
@@ -44,7 +38,7 @@ export interface Contact {
   a: string
   b: string | 'floor'
   intensity: Intensity
-  /** 직전 스텝 속력이 더 큰 쪽 id. 같으면 a. 바닥 접촉이면 a. */
+  /** 직전 스텝 속력이 더 큰 참여자 id(actor 또는 장비). 같으면 a, 바닥 접촉이면 a. */
   fasterId: string
 }
 
@@ -333,9 +327,10 @@ export class PhysicsWorld {
 
     const v1 = previous.get(firstHandle) ?? { vx: 0, vy: 0 }
     if (second.kind === 'floor') {
-      // 바닥 접촉은 actor만 보고하고, actor 자신의 직전 속력을 상대 속도로 본다.
+      // 바닥 접촉은 actor만 보고하고, actor의 직전 수직 속력을 상대 속도로 본다.
+      // 수평으로 미끄러지기만 해서는 충격이 생기지 않는다.
       if (first.kind !== 'actor') return undefined
-      const intensity = intensityForSpeed(Math.hypot(v1.vx, v1.vy))
+      const intensity = intensityForSpeed(Math.abs(v1.vy))
       if (intensity === undefined) return undefined
       return { a: first.id, b: 'floor', intensity, fasterId: first.id }
     }

@@ -19,6 +19,23 @@ export const MASS_DENSITY: Record<Weight, number> = { light: 0.6, normal: 1, hea
 export const CAPSULE = { halfHeight: 0.5, radius: 0.35 }
 export const STAND_UP_SECONDS = 1.5
 export const SETTLED_SPEED = 0.5
+export const GRAVITY = { x: 0, y: -9.81 }
+/** 스튜디오 크기(m). 바닥 y=0, 위가 +y. */
+export const STUDIO_WIDTH = 16
+export const STUDIO_HEIGHT = 9
+/** 바닥·벽·천장 collider의 두께(m). 빠른 actor가 뚫지 않도록 넉넉히 둔다. */
+export const BOUNDARY_THICKNESS = 1
+export const ACTOR_FRICTION = 0.5
+export const ACTOR_RESTITUTION = 0.1
+export const FLOOR_FRICTION = 0.6
+/** 매달린 조명 cuboid의 반 크기(m) */
+export const LIGHT_HALF_EXTENTS = { hx: 0.4, hy: 0.2 }
+export const LIGHT_DENSITY = 2
+/** 세트 벽 cuboid의 반 크기(m) */
+export const SET_WALL_HALF_EXTENTS = { hx: 0.1, hy: 1.5 }
+export const SET_WALL_DENSITY = 3
+/** 풀려난 세트 벽이 스튜디오 가운데 쪽으로 쓰러지기 시작하는 각속도(rad/s) */
+export const SET_WALL_TOPPLE_ANGVEL = 1.2
 
 // 시청률
 export const INTENSITY_POINTS: Record<Intensity, number> = { 1: 1, 2: 3, 3: 9 }
