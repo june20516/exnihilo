@@ -309,11 +309,13 @@ describe('Broadcast.create', () => {
     expect(view.benchLeft).toBe(1)
   })
 
-  it('dispose는 두 번 불러도 안전하고, 그 뒤 step은 오류를 던진다', async () => {
+  it('dispose는 두 번 불러도 안전하고, 그 뒤 step과 view는 오류를 던진다', async () => {
     const broadcast = await Broadcast.create(quietSetup())
+    broadcast.view() // 캐시를 채운 뒤에도 dispose 후 view는 오류여야 한다
     broadcast.dispose()
     expect(() => broadcast.dispose()).not.toThrow()
     expect(() => broadcast.step([])).toThrow('dispose')
+    expect(() => broadcast.view()).toThrow('dispose')
   })
 })
 

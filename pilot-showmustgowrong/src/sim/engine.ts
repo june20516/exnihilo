@@ -370,8 +370,9 @@ export class Broadcast {
     }
   }
 
-  /** 물리 월드(wasm 메모리)를 해제한다. 두 번 불러도 안전하다. 이후 step은 오류를 던진다. */
+  /** 물리 월드(wasm 메모리)를 해제한다. 두 번 불러도 안전하다. 이후 step과 view는 오류를 던진다. */
   dispose(): void {
+    this.subjectsCache = null
     this.physics.dispose()
   }
 
