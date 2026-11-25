@@ -1,5 +1,11 @@
 import { BROADCAST_STEPS, STEP_SECONDS } from '@/content/balance'
-import type { GaugeKind } from '@/content/types'
+import type {
+  GaugeKind,
+  Intensity,
+  PhenomenonKind,
+  StaffDirectiveDef,
+  Weight,
+} from '@/content/types'
 import type { AdEffect } from '@/sim/director'
 
 export const GAUGE_LABELS: Record<GaugeKind, string> = {
@@ -7,6 +13,40 @@ export const GAUGE_LABELS: Record<GaugeKind, string> = {
   violence: '폭력성',
   drugs: '약물',
   language: '언어',
+}
+
+export const PHENOMENON_LABELS: Record<PhenomenonKind, string> = {
+  gaze: '시선',
+  noise: '소음',
+  impact: '충격',
+  laughter: '웃음',
+  anger: '분노',
+  darkness: '어둠',
+  exposure: '노출',
+  silence: '정적',
+}
+
+export const WEIGHT_LABELS: Record<Weight, string> = {
+  light: '가벼움',
+  normal: '보통',
+  heavy: '무거움',
+}
+
+/** 스태프 지시의 예상 결과. 스태프 지시는 방향(aim)만 정하므로 방향마다 한 줄로 쓴다. */
+export const STAFF_AIM_EXPECT: Record<StaffDirectiveDef['aim'], string> = {
+  default: '카메라를 기본 방향으로 되돌림',
+  audience: '카메라를 관객석으로 돌림',
+  nearestPerformer: '카메라를 가까운 출연자에게 돌림',
+}
+
+/** 강도 1~3을 "강도 2"처럼 쓴다. */
+export function formatIntensity(intensity: Intensity): string {
+  return `강도 ${intensity}`
+}
+
+/** 0~1 확률을 "30%"처럼 쓴다. */
+export function formatPercent(chance: number): string {
+  return `${Math.round(chance * 100)}%`
 }
 
 export const AD_EFFECTS: readonly AdEffect[] = ['relief', 'reset', 'setup']

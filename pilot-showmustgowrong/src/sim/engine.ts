@@ -1111,9 +1111,14 @@ export class Broadcast {
       }))
   }
 
-  private staffView(view: Omit<StaffView, 'name' | 'x' | 'y' | 'z'>): StaffView {
+  private staffView(view: Omit<StaffView, 'name' | 'misfireChance' | 'x' | 'y' | 'z'>): StaffView {
     const member = this.requireStaff(view.id)
-    return { ...view, name: member.name, ...this.requireCamera(member.cameraId).position }
+    return {
+      ...view,
+      name: member.name,
+      misfireChance: this.director.previewStaffMisfireChance(view.id),
+      ...this.requireCamera(member.cameraId).position,
+    }
   }
 
   private equipmentView(id: string): EquipmentView {

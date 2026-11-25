@@ -91,26 +91,28 @@ test('광고 효과 2개를 골라 확정하면 남은 광고가 0회가 된다'
   await expect(page.getByTestId('commercial-break')).toBeVisible()
 })
 
-test('스튜디오의 출연자를 클릭하면 그 대상으로 개입하고, 지시하면 패널이 닫히며 내성이 준다', async ({
+test('개입 중에 스튜디오의 출연자를 클릭하면 대상 카드가 열리고, 지시하면 패널이 닫히며 내성이 준다', async ({
   page,
 }) => {
   await openBroadcast(page)
-  // 렉스는 첫 home spot(4.5, 4)에 서 있다(몸 중심 높이 약 0.85m). 960×540 캔버스에서
-  // fitIso(960, 540, 16)으로 투영한 몸 중심은 약 (409, 209)이다.
-  // Task 7 배치 변경으로 스튜디오 크기가 바뀌면 이 좌표도 함께 갱신한다(페이지에서 투영 좌표를
-  // 읽을 공개 API가 아직 없어 하드코딩한다).
+  // 렉스는 첫 home spot(4.5, 4)에 서 있다(몸 중심 높이 약 0.85m). Task 7 배치(스튜디오 영역 약
+  // 700×608)에서 fitIso로 투영한 몸 중심은 스튜디오 기준 약 (285, 247)이다.
+  // 페이지에서 투영 좌표를 읽을 공개 API가 아직 없어 하드코딩한다(Task 8에서 정리).
   const studio = page.getByTestId('studio')
   await expect(studio.locator('canvas')).toHaveCount(1)
-  await studio.click({ position: { x: 409, y: 209 } })
+  // 개입 밖에서 출연자를 누르면 클로즈업 대상 바꾸기(track)이므로 먼저 Space로 개입을 연다.
+  await page.keyboard.press('Space')
   const panel = page.getByTestId('intervention-panel')
   await expect(panel).toBeVisible()
-  const rex = panel.getByTestId('target-rex')
-  await expect(rex).toHaveAttribute('aria-pressed', 'true')
-  await expect(rex).toContainText('남은 내성 5')
+  await studio.click({ position: { x: 285, y: 247 } })
+  await expect(panel.getByTestId('target-rex')).toHaveAttribute('aria-pressed', 'true')
+  const card = panel.getByTestId('target-card')
+  await expect(card).toContainText('남은 내성 5')
+  await expect(card.getByTestId('misfire-chance')).toHaveCount(1)
   await page.screenshot({ path: INTERVENTION_SCREENSHOT_PATH })
 
-  await panel.getByTestId('directive-stepUp').click()
+  await card.getByTestId('directive-stepUp').click()
   await expect(panel).toBeHidden()
   await page.keyboard.press('Space')
-  await expect(page.getByTestId('target-rex')).toContainText('남은 내성 4')
+  await expect(page.getByTestId('target-rex')).toContainText('내성 4')
 })

@@ -194,7 +194,7 @@ export class CameraRig {
     return [...this.settled]
   }
 
-  staffViews(): Omit<StaffView, 'name' | 'x' | 'y' | 'z'>[] {
+  staffViews(): Omit<StaffView, 'name' | 'misfireChance' | 'x' | 'y' | 'z'>[] {
     return [...this.staff.values()].map((member) => ({
       id: member.def.id,
       cameraId: member.def.cameraId,

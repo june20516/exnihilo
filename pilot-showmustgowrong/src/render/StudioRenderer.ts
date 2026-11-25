@@ -255,6 +255,19 @@ export class StudioRenderer {
     return pickHit({ x: px, y: py }, this.hits)
   }
 
+  /**
+   * 마지막 draw에서 그린 출연자·스태프의 캔버스 논리 좌표(몸 중심). 화면에 없으면 null.
+   * 개입 카드와 스튜디오의 대상을 선으로 잇는 데 쓴다.
+   */
+  anchorOf(kind: 'actor' | 'staff', id: string): Point | null {
+    if (kind === 'actor') {
+      return this.hits.actors.find((shape) => shape.id === id)?.center ?? null
+    }
+    const staff = this.hits.staff.find((shape) => shape.id === id)
+    if (staff === undefined) return null
+    return { x: (staff.left + staff.right) / 2, y: (staff.top + staff.bottom) / 2 }
+  }
+
   resize(width: number, height: number): void {
     if (this.destroyed || width <= 0 || height <= 0) return
     if (width === this.logicalWidth && height === this.logicalHeight) return

@@ -73,6 +73,8 @@ export interface StaffView {
   mode: StaffMode
   /** 놀란 순간 0에서 복구 완료 1까지(유지+복귀 전체 기준). 평상시 1. */
   recoveryProgress: number
+  /** 지금 지시하면 엇나갈 확률(0~1). 스태프 피로로 정해진다. */
+  misfireChance: number
   x: number
   y: number
   z: number

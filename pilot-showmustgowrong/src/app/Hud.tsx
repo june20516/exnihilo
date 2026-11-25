@@ -1,134 +1,132 @@
 import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
-import { GAUGE_KINDS, type CameraDef, type GaugeKind, type ShowDef } from '@/content/types'
+import { GAUGE_KINDS, type GaugeKind, type ShowDef } from '@/content/types'
 import type { BroadcastView, LogLine } from '@/sim/engine'
-import { GAUGE_LABELS, SWITCHER_KEYS, formatRemaining, formatStepTime, formatViewers } from './labels'
+import { GAUGE_LABELS, formatRemaining, formatStepTime, formatViewers } from './labels'
 
 /** 사고 로그에 보여 주는 최근 줄 수 */
-const LOG_LINES_SHOWN = 8
+const LOG_LINES_SHOWN = 14
 /** 연쇄 깊이 한 단계의 들여쓰기(px) */
-const LOG_INDENT_PX = 18
+const LOG_INDENT_PX = 12
+/** 들여쓰기를 멈추는 연쇄 깊이(좁은 열에서 문장이 사라지지 않게) */
+const LOG_INDENT_MAX_LEVEL = 4
 /** 게이지 막대 전체 길이가 상한의 몇 배인지. 상한 눈금이 막대 안쪽에 보이게 여유를 둔다. */
 const GAUGE_TRACK_SCALE = 1.25
 
-interface HudProps {
+/** 연쇄 깊이의 들여쓰기(px). 상한 단계에서 멈춘다. */
+function logIndent(depth: number): number {
+  return (Math.min(depth, LOG_INDENT_MAX_LEVEL) - 1) * LOG_INDENT_PX
+}
+
+const TREND_MARKS: Record<BroadcastView['viewersTrend'], { mark: string; className: string }> = {
+  1: { mark: '▲', className: 'text-emerald-400' },
+  0: { mark: '–', className: 'text-slate-400' },
+  [-1]: { mark: '▼', className: 'text-red-400' },
+}
+
+interface TopBandProps {
   view: BroadcastView
   show: ShowDef
+  /** 자동 슬로모션 계기나 중단 원인이라 깜박일 게이지 */
+  alertGauge: GaugeKind | null
 }
 
-export function ViewerBoard({ view, show }: HudProps) {
+/** 위 띠(spec 8.2 1단계): 수위 게이지 4개 | 시청자 수·추세·남은 시간 | 코너 */
+export function TopBand({ view, show, alertGauge }: TopBandProps) {
   const corner = show.corners[view.cornerIndex]
+  const trend = TREND_MARKS[view.viewersTrend]
   return (
-    <section className="rounded border border-neutral-700 bg-neutral-900 p-3">
-      <div className="text-xs text-neutral-400">시청자 수</div>
-      <div data-testid="viewers" className="text-3xl font-bold tabular-nums text-amber-300">
-        {formatViewers(view.viewers)}
+    <header className="flex h-[96px] shrink-0 items-center gap-4 px-3">
+      <section className="flex gap-2 rounded-xl border-2 border-slate-700 bg-slate-900 p-1.5">
+        {GAUGE_KINDS.map((gauge) => (
+          <GaugeMeter
+            key={gauge}
+            gauge={gauge}
+            value={view.gauges[gauge]}
+            limit={view.limits[gauge]}
+            alert={alertGauge === gauge || view.haltedBy === gauge}
+          />
+        ))}
+      </section>
+      <section className="mx-auto flex items-center gap-4 rounded-xl border-2 border-slate-700 bg-slate-900 px-5 py-2">
+        <div className="flex flex-col leading-none">
+          <span className="text-[11px] text-slate-400">시청자 수</span>
+          <span className="flex items-baseline gap-1.5">
+            <span data-testid="viewers" className="text-3xl font-black tabular-nums text-slate-100">
+              {formatViewers(view.viewers)}
+            </span>
+            <span data-testid="viewers-trend" className={`text-xl font-bold ${trend.className}`}>
+              {trend.mark}
+            </span>
+          </span>
+        </div>
+        <div className="h-10 w-px bg-slate-700" />
+        <div className="flex flex-col leading-none">
+          <span className="text-[11px] text-slate-400">남은 시간</span>
+          <span
+            data-testid="broadcast-time"
+            className="flex items-center gap-1.5 text-3xl font-black tabular-nums text-amber-300"
+          >
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
+            {formatRemaining(view.step)}
+          </span>
+        </div>
+      </section>
+      <div
+        data-testid="corner"
+        className="-rotate-2 rounded-lg border-2 border-amber-200 bg-amber-400 px-4 py-2 text-xl font-black text-slate-950 shadow-[3px_3px_0_#000]"
+      >
+        {corner.label} {view.cornerIndex + 1}/{show.corners.length}
       </div>
-      <div className="mt-2 flex items-baseline justify-between text-sm">
-        <span data-testid="broadcast-time" className="tabular-nums">
-          남은 시간 <b className="text-lg">{formatRemaining(view.step)}</b>
-        </span>
-        <span data-testid="corner" className="text-neutral-300">
-          코너 {view.cornerIndex + 1}/{show.corners.length} · {corner.label}
-        </span>
-      </div>
-    </section>
+    </header>
   )
 }
 
-interface GaugeMetersProps {
-  view: BroadcastView
-  /** 자동 슬로모션 중 강조할 게이지 */
-  highlighted: GaugeKind | null
-}
-
-export function GaugeMeters({ view, highlighted }: GaugeMetersProps) {
-  return (
-    <section className="space-y-1.5 rounded border border-neutral-700 bg-neutral-900 p-3">
-      <div className="text-xs text-neutral-400">수위 게이지</div>
-      {GAUGE_KINDS.map((gauge) => (
-        <GaugeBar
-          key={gauge}
-          gauge={gauge}
-          value={view.gauges[gauge]}
-          limit={view.limits[gauge]}
-          highlighted={highlighted === gauge || view.haltedBy === gauge}
-        />
-      ))}
-    </section>
-  )
-}
-
-interface GaugeBarProps {
+interface GaugeMeterProps {
   gauge: GaugeKind
   value: number
   limit: number
-  highlighted: boolean
+  alert: boolean
 }
 
-function GaugeBar({ gauge, value, limit, highlighted }: GaugeBarProps) {
+/** 게이지 하나. 상한의 80% 이상이면 그 게이지만 빨간 테두리(spec 8.2 강조 규칙). */
+function GaugeMeter({ gauge, value, limit, alert }: GaugeMeterProps) {
   const trackMax = limit * GAUGE_TRACK_SCALE
   const fillPercent = Math.min(100, (value / trackMax) * 100)
   const limitPercent = (limit / trackMax) * 100
   const warnPercent = limitPercent * AUTO_SLOWMO_GAUGE_RATIO
-  const danger = value >= limit * AUTO_SLOWMO_GAUGE_RATIO
+  const highlighted = value >= limit * AUTO_SLOWMO_GAUGE_RATIO
   return (
     <div
       data-testid={`gauge-${gauge}`}
-      className={`flex items-center gap-2 text-sm ${highlighted ? 'animate-pulse' : ''}`}
+      data-highlighted={highlighted}
+      className={`flex w-[116px] flex-col gap-1 rounded-lg border-2 px-2 py-1.5 ${
+        highlighted ? 'border-red-500 bg-red-950/70' : 'border-transparent bg-slate-950'
+      } ${alert ? 'animate-pulse' : ''}`}
     >
-      <span className="w-12 shrink-0">{GAUGE_LABELS[gauge]}</span>
-      <div className="relative h-3 flex-1 rounded-sm bg-neutral-800">
+      <div className="flex items-baseline justify-between">
+        <span className={`text-sm font-bold ${highlighted ? 'text-red-200' : 'text-slate-200'}`}>
+          {GAUGE_LABELS[gauge]}
+        </span>
+        <span className="text-[11px] tabular-nums text-slate-400">
+          {Math.round(value)}/{limit}
+        </span>
+      </div>
+      <div className="relative h-3 rounded-sm bg-slate-800">
+        {/* 자동 슬로모션 경계(상한의 80%)부터 상한까지의 빨간 구간 */}
         <div
-          className={`h-full rounded-sm ${danger ? 'bg-red-500' : 'bg-sky-500'}`}
+          className="absolute inset-y-0 bg-red-900/70"
+          style={{ left: `${warnPercent}%`, width: `${limitPercent - warnPercent}%` }}
+        />
+        <div
+          className={`relative h-full rounded-sm ${highlighted ? 'bg-red-500' : 'bg-emerald-400'}`}
           style={{ width: `${fillPercent}%` }}
         />
-        {/* 자동 슬로모션 경계(상한의 80%)와 상한 눈금 */}
         <div
-          className="absolute -top-0.5 h-4 w-px bg-amber-400/70"
-          style={{ left: `${warnPercent}%` }}
+          className="absolute -top-1 h-5 w-0.5 bg-red-400"
+          style={{ left: `${limitPercent}%` }}
         />
-        <div className="absolute -top-1 h-5 w-0.5 bg-red-400" style={{ left: `${limitPercent}%` }} />
       </div>
-      <span className="w-14 shrink-0 text-right text-xs tabular-nums text-neutral-300">
-        {Math.round(value)}/{limit}
-      </span>
     </div>
-  )
-}
-
-interface CameraSwitcherProps {
-  cameras: readonly CameraDef[]
-  onAirCameraId: string
-  onSwitch(cameraId: string): void
-}
-
-export function CameraSwitcher({ cameras, onAirCameraId, onSwitch }: CameraSwitcherProps) {
-  return (
-    <section className="flex w-44 shrink-0 flex-col gap-1.5" aria-label="카메라 스위처">
-      {cameras.map((camera, index) => {
-        const onAir = camera.id === onAirCameraId
-        return (
-          <button
-            key={camera.id}
-            type="button"
-            data-testid={`switcher-${camera.id}`}
-            aria-pressed={onAir}
-            onClick={() => onSwitch(camera.id)}
-            className={`flex h-12 items-center gap-2 rounded border px-2 text-left text-sm ${
-              onAir
-                ? 'border-red-500 bg-red-900/60 font-bold'
-                : 'border-neutral-600 bg-neutral-800 hover:bg-neutral-700'
-            }`}
-          >
-            <kbd className="rounded bg-neutral-950 px-1.5 text-xs text-neutral-300">
-              {SWITCHER_KEYS[index]}
-            </kbd>
-            <span className="flex-1">{camera.label}</span>
-            {onAir && <span className="text-xs text-red-300">ON AIR</span>}
-          </button>
-        )
-      })}
-    </section>
   )
 }
 
@@ -138,38 +136,36 @@ interface EventLogProps {
   highlightedEventId: number | null
 }
 
+/** 평소 왼쪽 열의 작고 흐린 사고 로그(spec 8.2 5단계). 연쇄 깊이만큼 들여쓴다. */
 export function EventLog({ log, highlightedEventId }: EventLogProps) {
   const recent = log.slice(-LOG_LINES_SHOWN)
   return (
     <section
       data-testid="event-log"
-      className="min-w-0 flex-1 overflow-hidden rounded border border-neutral-700 bg-neutral-900 px-3 py-1"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-2 border-slate-800 bg-slate-900/60 px-2.5 py-2 opacity-80"
     >
-      <div className="text-xs text-neutral-400">사고 로그</div>
-      {recent.length === 0 && <div className="text-sm text-neutral-500">아직 아무 일도 없습니다.</div>}
-      <ol className="text-[13px] leading-[18px]">
+      <div className="mb-1 text-[11px] font-bold text-slate-500">사고 로그</div>
+      {recent.length === 0 && <div className="text-xs text-slate-500">아직 아무 일도 없습니다.</div>}
+      <ol className="flex flex-col gap-0.5 text-xs leading-4 text-slate-300">
         {recent.map((line) => (
           <li
             key={line.index}
-            className={`flex ${
+            className={`flex rounded-sm ${
               line.eventId !== null && line.eventId === highlightedEventId
                 ? 'bg-amber-500/30 text-amber-100'
                 : ''
             }`}
           >
-            {/* 시각은 고정 칸, 문장만 연쇄 깊이만큼 들여쓴다 */}
-            <span className="w-10 shrink-0 tabular-nums text-neutral-500">
+            <span className="w-8 shrink-0 tabular-nums text-slate-500">
               {formatStepTime(line.step)}
             </span>
             <span
               className="min-w-0 truncate"
-              style={{ paddingLeft: `${(line.depth - 1) * LOG_INDENT_PX}px` }}
+              title={line.text}
+              style={{ paddingLeft: `${logIndent(line.depth)}px` }}
             >
-              {line.depth > 1 && <span className="text-neutral-500">└ </span>}
+              {line.depth > 1 && <span className="text-slate-500">└ </span>}
               {line.text}
-              {line.depth > 1 && (
-                <span className="ml-1 text-xs text-amber-400">연쇄 {line.depth}</span>
-              )}
             </span>
           </li>
         ))}

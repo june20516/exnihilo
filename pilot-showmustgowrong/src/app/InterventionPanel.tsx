@@ -1,48 +1,51 @@
+import type { Ref } from 'react'
 import type { PerformerDef, StaffDef } from '@/content/types'
 import type { BroadcastInput, BroadcastView } from '@/sim/engine'
 import { interventionTargets, type InterventionTarget } from './interventionTargets'
+import { TargetCard } from './TargetCard'
 
 interface InterventionPanelProps {
   view: BroadcastView
   performers: ReadonlyMap<string, PerformerDef>
   staff: readonly StaffDef[]
   selected: InterventionTarget | null
-  secondsLeft: number
   onSelect(target: InterventionTarget): void
   onDirect(input: BroadcastInput): void
   onClose(): void
+  cardRef?: Ref<HTMLElement>
 }
 
-function toleranceText(directivesLeft: number): string {
-  return directivesLeft === 0 ? '내성 0 · 한 번 더 지시하면 이탈' : `남은 내성 ${directivesLeft}`
-}
-
+/**
+ * 개입 중 왼쪽 열(사고 로그 자리). 위에 대상 칩, 대상을 고르면 그 아래에 판단 카드.
+ * 남은 선택 시간은 스튜디오 위 SLOW 배지에 크게 보인다.
+ */
 export function InterventionPanel({
   view,
   performers,
   staff,
   selected,
-  secondsLeft,
   onSelect,
   onDirect,
   onClose,
+  cardRef,
 }: InterventionPanelProps) {
-  const options = interventionTargets(view.actors, performers, staff)
+  const options = interventionTargets(view, performers, staff)
   const current = options.find(
     (option) => option.target.kind === selected?.kind && option.target.id === selected.id,
   )
   return (
-    <section
-      data-testid="intervention-panel"
-      className="flex flex-col gap-2 rounded border border-red-500 bg-red-950/40 p-3"
-    >
+    <section data-testid="intervention-panel" className="flex min-h-0 flex-1 flex-col gap-2">
       <header className="flex items-center justify-between">
-        <span className="font-bold">개입 · 지시할 대상을 고르세요</span>
-        <span data-testid="intervention-seconds" className="tabular-nums text-red-300">
-          {secondsLeft.toFixed(1)}초
-        </span>
+        <span className="text-sm font-black text-red-300">개입 · 누구에게?</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-xs text-slate-400 hover:text-white"
+        >
+          닫기 (Esc)
+        </button>
       </header>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-wrap gap-1">
         {options.map((option) => {
           const isSelected = option === current
           return (
@@ -52,45 +55,28 @@ export function InterventionPanel({
                 data-testid={`target-${option.target.id}`}
                 aria-pressed={isSelected}
                 onClick={() => onSelect(option.target)}
-                className={`flex w-full items-baseline justify-between rounded px-2 py-1 text-left text-sm ${
-                  isSelected ? 'bg-red-800' : 'bg-neutral-800 hover:bg-neutral-700'
+                className={`rounded-md border-2 px-2 py-0.5 text-xs font-bold ${
+                  isSelected
+                    ? 'border-amber-300 bg-amber-400 text-slate-950'
+                    : 'border-slate-600 bg-slate-800 text-slate-200 hover:border-amber-300'
                 }`}
               >
-                <span>{option.name}</span>
-                <span className="text-xs text-neutral-300">
-                  {option.directivesLeft === null ? '스태프' : toleranceText(option.directivesLeft)}
-                </span>
+                {option.shortName}
+                {option.toleranceLeft !== null && (
+                  <span className="ml-1 font-normal opacity-80">내성 {option.toleranceLeft}</span>
+                )}
               </button>
             </li>
           )
         })}
       </ul>
       {current === undefined ? (
-        <p className="text-xs text-neutral-400">
-          스튜디오의 출연자를 클릭하거나 목록에서 고르면 지시가 나옵니다.
+        <p className="rounded-lg border-2 border-dashed border-slate-700 p-3 text-xs leading-5 text-slate-400">
+          스튜디오의 출연자나 카메라 감독을 누르거나 위에서 고르면 대상 카드가 열립니다.
         </p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {current.directives.map((directive) => (
-            <button
-              key={directive.id}
-              type="button"
-              data-testid={`directive-${directive.id}`}
-              onClick={() => onDirect(directive.input)}
-              className="rounded border border-amber-400 bg-amber-500/20 px-2 py-1.5 text-left text-sm hover:bg-amber-500/40"
-            >
-              “{directive.label}”
-            </button>
-          ))}
-        </div>
+        <TargetCard option={current} onDirect={onDirect} cardRef={cardRef} />
       )}
-      <button
-        type="button"
-        onClick={onClose}
-        className="self-end text-xs text-neutral-400 hover:text-white"
-      >
-        닫기 (Esc)
-      </button>
     </section>
   )
 }

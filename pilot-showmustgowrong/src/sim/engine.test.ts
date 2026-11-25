@@ -11,6 +11,7 @@ import {
   MOTION_CAUSE_SECONDS,
   PHENOMENON_DISPLAY_SECONDS,
   REACTION_COOLDOWN_SECONDS,
+  STAFF_FATIGUE_MISFIRE_PER_POINT,
   STEP_SECONDS,
   WALKOUT_SECONDS,
 } from '@/content/balance'
@@ -1266,6 +1267,7 @@ describe('클로즈업 추적과 스태프 복구', () => {
         cameraId: 'close',
         mode: 'normal',
         recoveryProgress: 1,
+        misfireChance: 0,
         x: 2,
         y: 1,
         z: 4,
@@ -1321,6 +1323,15 @@ describe('클로즈업 추적과 스태프 복구', () => {
   const operatorWith = (aims: StaffDef['directives'][number]['aim'][]): StaffDef => ({
     ...CAMERA_OPERATOR,
     directives: aims.map((aim) => ({ id: aim, label: aim, aim })),
+  })
+
+  it('스태프 view의 엇나감 확률은 스태프 피로를 따른다(판단 카드용)', async () => {
+    const broadcast = await open(
+      quietSetup({ show: TRACKING_SHOW, staff: [operatorWith(['audience', 'default'])] }),
+    )
+    expect(broadcast.view().staff[0].misfireChance).toBe(0)
+    broadcast.step([{ type: 'directStaff', staffId: 'cammy', directiveId: 'audience' }])
+    expect(broadcast.view().staff[0].misfireChance).toBeCloseTo(STAFF_FATIGUE_MISFIRE_PER_POINT)
   })
 
   it("'관객석' 지시 뒤 track을 받으면 지시 방향을 지우고 새 대상을 따라간다(R7)", async () => {

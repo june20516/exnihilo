@@ -1,5 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
+import { LINEUP } from '@/content/lineup'
+import { TALK_SHOW } from '@/content/talkShow'
+import { Broadcast, type BroadcastSetup, type BroadcastView } from '@/sim/engine'
 import { AdPanel } from './AdPanel'
+import { BroadcastStage, type BroadcastStageProps, type StageControls } from './BroadcastScreen'
 import { ErrorScreen } from './ErrorScreen'
 import {
   CHAIN_INDENT_MAX_LEVEL,
@@ -121,5 +126,111 @@ describe('ErrorScreen', () => {
     expect(runtime).toContain('방송 중 오류가 났습니다')
     expect(runtime).not.toContain('방송을 시작할 수 없습니다')
     expect(runtime).toContain('새로고침해 주세요')
+  })
+})
+
+describe('BroadcastStage 생방송 화면', () => {
+  const SETUP: BroadcastSetup = { show: TALK_SHOW, ...LINEUP, seed: 1 }
+  let baseView: BroadcastView
+
+  beforeAll(async () => {
+    const broadcast = await Broadcast.create(SETUP)
+    baseView = broadcast.view()
+    broadcast.dispose()
+  })
+
+  const CONTROLS: StageControls = {
+    slowmo: 'none',
+    interventionOpen: false,
+    interventionSecondsLeft: 0,
+    adPanelOpen: false,
+    adPanelSecondsLeft: null,
+    adBreak: false,
+    adBreakSecondsLeft: 0,
+    send: noop,
+    openIntervention: noop,
+    closeIntervention: noop,
+    startAd: noop,
+    cancelAd: noop,
+    endAd: noop,
+  }
+
+  function render(overrides: Partial<BroadcastStageProps> = {}): string {
+    return renderToStaticMarkup(
+      <BroadcastStage
+        view={baseView}
+        setup={SETUP}
+        controls={CONTROLS}
+        selectedTarget={null}
+        hoverTip={null}
+        onSelectTarget={noop}
+        onDirect={noop}
+        onBeginIntervention={noop}
+        {...overrides}
+      />,
+    )
+  }
+
+  function count(html: string, pattern: RegExp): number {
+    return (html.match(pattern) ?? []).length
+  }
+
+  it('게이지 4개, 시청자 수, 남은 시간, 코너, ON AIR 이름표, 미리보기 2개, 개입·광고 버튼이 있다', () => {
+    const view: BroadcastView = {
+      ...baseView,
+      onAirCameraId: 'close',
+      cameraTargets: { ...baseView.cameraTargets, close: 'rex' },
+    }
+    const html = render({ view })
+    for (const gauge of ['sexual', 'violence', 'drugs', 'language']) {
+      expect(html).toContain(`data-testid="gauge-${gauge}"`)
+    }
+    expect(html).toContain('data-testid="viewers"')
+    expect(html).toContain('data-testid="viewers-trend"')
+    expect(html).toContain('data-testid="broadcast-time"')
+    expect(html).toMatch(/data-testid="corner"[^>]*>[^<]*오프닝 1\/3/)
+    expect(html).toMatch(/data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · 대상 렉스/)
+    expect(count(html, /data-testid="camera-preview"/g)).toBe(2)
+    expect(html).toContain('data-testid="intervene-button"')
+    expect(html).toContain('data-testid="ad-button"')
+    expect(html).toContain('data-testid="event-log"')
+  })
+
+  it('상한의 80%를 넘은 게이지에만 강조 표시가 있다', () => {
+    const limit = baseView.limits.language
+    const view: BroadcastView = {
+      ...baseView,
+      gauges: { ...baseView.gauges, language: limit * (AUTO_SLOWMO_GAUGE_RATIO + 0.05) },
+    }
+    const html = render({ view })
+    expect(count(html, /data-highlighted="true"/g)).toBe(1)
+    expect(html).toMatch(/data-testid="gauge-language"[^>]*data-highlighted="true"/)
+    expect(render()).not.toContain('data-highlighted="true"')
+  })
+
+  it('개입 중에 대상을 고르면 로그 자리에 대상 카드가 뜨고 엇나감 확률은 한 번만 나온다', () => {
+    const view: BroadcastView = {
+      ...baseView,
+      actors: baseView.actors.map((actor) =>
+        actor.id === 'rex' ? { ...actor, misfireChance: 0.3 } : actor,
+      ),
+    }
+    const html = render({
+      view,
+      controls: {
+        ...CONTROLS,
+        slowmo: 'intervention',
+        interventionOpen: true,
+        interventionSecondsLeft: 8.64,
+      },
+      selectedTarget: { kind: 'performer', id: 'rex' },
+    })
+    expect(html).toContain('data-testid="target-card"')
+    expect(html).not.toContain('data-testid="event-log"')
+    expect(count(html, /data-testid="misfire-chance"/g)).toBe(1)
+    expect(count(html, /30%/g)).toBe(1)
+    expect(html).toContain('SLOW ×1/5')
+    expect(html).toContain('8.6')
+    expect(html).toContain('내성 1 소모 · 누적 피로 +1')
   })
 })
