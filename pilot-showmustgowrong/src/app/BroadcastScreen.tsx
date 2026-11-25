@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MouseEvent,
+  type PointerEvent,
   type Ref,
 } from 'react'
 import { INTERVENTION_SPEED } from '@/content/balance'
@@ -25,6 +26,7 @@ import type { Slowmo } from './loopState'
 import { OnAirColumn } from './OnAirColumn'
 import { ResultScreen } from './ResultScreen'
 import { useStudioClick, type StudioClickState } from './studioClick'
+import { useAimDrag } from './useAimDrag'
 import { useBroadcastLoop, type BroadcastLoopControls } from './useBroadcastLoop'
 
 interface BroadcastScreenProps {
@@ -57,6 +59,10 @@ export interface StudioBindings {
   onClick(event: MouseEvent<HTMLDivElement>): void
   onMouseMove(event: MouseEvent<HTMLDivElement>): void
   onMouseLeave(): void
+  /** 스튜디오의 추적 카메라 표시를 누르면 끌어 조준하기를 시작한다. */
+  onPointerDown(event: PointerEvent<HTMLDivElement>): void
+  /** 오른쪽 열의 추적 카메라 화면에서 끌어 조준하기를 시작한다. */
+  onAimDragStart(cameraId: string, event: PointerEvent<HTMLElement>): void
 }
 
 /**
@@ -81,6 +87,10 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const [hoverAnchor, setHoverAnchor] = useState<HoverAnchor | null>(null)
   /** 지금 호버 설명을 띄운 대상("kind:id"). 같은 대상 위의 mousemove는 건너뛴다. */
   const hoverKeyRef = useRef<string | null>(null)
+  /** 출연자·스태프를 클릭해 고정한 정보 설명. 있으면 호버 설명 대신 보인다. */
+  const [pinnedAnchor, setPinnedAnchor] = useState<HoverAnchor | null>(null)
+  /** 마지막 클릭 자리(스튜디오 CSS 좌표). 고정 설명을 그 자리에 띄운다. */
+  const lastClickRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // 렌더러 생명주기. StrictMode 이중 마운트에서는 AbortController로 앞의 생성을 취소한다.
   // 스튜디오 영역 크기가 바뀌면 캔버스를 그 크기로 맞춘다(fitIso로 꽉 채움).
@@ -161,7 +171,13 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       if (point !== null) anchors[actor.id] = [point.x * scaleX, point.y * scaleY]
     }
     host.dataset.actorAnchors = JSON.stringify(anchors)
-  }, [])
+    const cameraAnchors: Record<string, [number, number]> = {}
+    for (const camera of show.cameras) {
+      const point = renderer.cameraAnchor(camera.id)
+      if (point !== null) cameraAnchors[camera.id] = [point.x * scaleX, point.y * scaleY]
+    }
+    host.dataset.cameraAnchors = JSON.stringify(cameraAnchors)
+  }, [show])
 
   const linkedTarget = interventionOpen ? selectedTarget : null
   useEffect(() => {
@@ -175,6 +191,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     setSelectedTarget(null)
     hoverKeyRef.current = null
     setHoverAnchor(null)
+    setPinnedAnchor(null)
     openIntervention()
   }, [openIntervention])
 
@@ -224,18 +241,48 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       phase: viewPhase === 'ended' ? 'ended' : adBreak || viewPhase === 'adBreak' ? 'ad' : 'live',
       interventionOpen,
       activeActorIds,
-      trackingCameraId: show.cameras.find((camera) => camera.tracking === true)?.id ?? null,
     }),
-    [viewPhase, adBreak, interventionOpen, activeActorIds, show],
+    [viewPhase, adBreak, interventionOpen, activeActorIds],
   )
   const selectFromStudio = useCallback(
     (hit: Extract<StudioHit, { kind: 'actor' | 'staff' }>) =>
       setSelectedTarget({ kind: hit.kind === 'actor' ? 'performer' : 'staff', id: hit.id }),
     [],
   )
-  const clickStudio = useStudioClick(clickState, { send, selectTarget: selectFromStudio })
+  const showInfo = useCallback((hit: Extract<StudioHit, { kind: 'actor' | 'staff' }>) => {
+    hoverKeyRef.current = null
+    setHoverAnchor(null)
+    setPinnedAnchor({ hit, ...lastClickRef.current })
+  }, [])
+  const clearInfo = useCallback(() => setPinnedAnchor(null), [])
+  const clickStudio = useStudioClick(clickState, {
+    selectTarget: selectFromStudio,
+    showInfo,
+    clearInfo,
+  })
+  const trackingCameraIds = useMemo(
+    () => new Set(show.cameras.filter((camera) => camera.tracking === true).map((c) => c.id)),
+    [show],
+  )
+  const aimDrag = useAimDrag({
+    rendererRef,
+    hostRef,
+    view,
+    clickState,
+    send,
+    onDragStart: () => {
+      hoverKeyRef.current = null
+      setHoverAnchor(null)
+      setPinnedAnchor(null)
+    },
+  })
+  /** 캔버스 좌표 아래의 추적 카메라 표시 id. 없으면 null */
+  const trackingCameraAt = (x: number, y: number): string | null => {
+    const id = rendererRef.current?.cameraAt(x, y) ?? null
+    return id !== null && trackingCameraIds.has(id) ? id : null
+  }
 
-  /** 스튜디오 위 마우스 위치의 대상과, 스튜디오 영역 안의 CSS 좌표 */
+  /** 스튜디오 위 마우스 위치의 대상, 캔버스 좌표, 스튜디오 영역 안의 CSS 좌표 */
   const studioHitAt = (event: MouseEvent<HTMLDivElement>) => {
     const renderer = rendererRef.current
     const host = hostRef.current
@@ -244,6 +291,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     const point = clientToCanvas(event.clientX, event.clientY, rect, renderer.size)
     return {
       hit: renderer.hitTest(point.x, point.y),
+      canvas: point,
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     }
@@ -255,11 +303,32 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     cardRef,
     linkRef,
     onClick: (event) => {
+      if (aimDrag.consumeClick()) return
       const found = studioHitAt(event)
-      if (found !== null) clickStudio(found.hit)
+      if (found === null) return
+      lastClickRef.current = { x: found.x, y: found.y }
+      clickStudio(found.hit)
+    },
+    onPointerDown: (event) => {
+      if (clickState.phase !== 'live' || event.button !== 0) return
+      const found = studioHitAt(event)
+      const cameraId = found === null ? null : trackingCameraAt(found.canvas.x, found.canvas.y)
+      if (cameraId === null) return
+      event.preventDefault()
+      aimDrag.start(cameraId, event.clientX, event.clientY, true)
+    },
+    onAimDragStart: (cameraId, event) => {
+      if (clickState.phase !== 'live' || event.button !== 0) return
+      aimDrag.start(cameraId, event.clientX, event.clientY, false)
     },
     onMouseMove: (event) => {
+      if (aimDrag.isDragging()) return
       const found = studioHitAt(event)
+      const host = hostRef.current
+      if (host !== null && found !== null) {
+        // 끌 수 있는 카메라 표시 위에서는 잡는 손 모양으로 알린다.
+        host.style.cursor = trackingCameraAt(found.canvas.x, found.canvas.y) === null ? '' : 'grab'
+      }
       // 호버 설명은 개입 밖에서만(개입 중에는 판단 카드가 주인공이다).
       const hit = found === null || view === null || interventionOpen ? null : found.hit
       // 같은 대상 위에서 움직이면 자리를 옮기지 않는다(설명은 처음 올라간 자리에 머문다).
@@ -274,10 +343,11 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     },
   }
 
+  const tipAnchor = pinnedAnchor ?? hoverAnchor
   const hoverTip: HoverTipState | null =
-    hoverAnchor === null || view === null || interventionOpen
+    tipAnchor === null || view === null || interventionOpen
       ? null
-      : resolveHoverTip(hoverAnchor, view, setup)
+      : resolveHoverTip(tipAnchor, view, setup)
 
   const onDirect = (input: BroadcastInput): void => {
     send(input)
@@ -387,6 +457,7 @@ export function BroadcastStage({
             onClick={studio?.onClick}
             onMouseMove={studio?.onMouseMove}
             onMouseLeave={studio?.onMouseLeave}
+            onPointerDown={studio?.onPointerDown}
             className="studio-host absolute inset-0 cursor-pointer"
           />
           {view === null && (
@@ -420,6 +491,7 @@ export function BroadcastStage({
             show={show}
             performers={performers}
             onSwitch={(cameraId) => controls.send({ type: 'switch', cameraId })}
+            onAimDragStart={studio?.onAimDragStart}
             actions={
               <BroadcastButtons
                 view={view}

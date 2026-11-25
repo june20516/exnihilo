@@ -206,7 +206,7 @@ describe('BroadcastStage 생방송 화면', () => {
       cameraTargets: { ...baseView.cameraTargets, close: 'rex' },
       cameraAimModes: { ...baseView.cameraAimModes, close: 'directed' },
     }
-    const label = '대상 렉스 · 지시로 고정 (출연자 클릭 시 추적)'
+    const label = '대상 렉스 · 지시로 고정 (카메라를 출연자에게 끌면 추적)'
     const onAir = render({ view: { ...directed, onAirCameraId: 'close' } })
     expect(onAir).toMatch(
       new RegExp(`data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · ${escapeRegExp(label)}`),

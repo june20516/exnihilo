@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, type PointerEvent, type ReactNode } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engine'
 import type { CameraAimMode } from '@/sim/engineTypes'
@@ -15,6 +15,8 @@ interface OnAirColumnProps {
   show: ShowDef
   performers: ReadonlyMap<string, PerformerDef>
   onSwitch(cameraId: string): void
+  /** 추적 카메라 화면을 누르면 스튜디오의 출연자에게 끌어 대상을 바꾸기 시작한다. 없으면 끌 수 없다. */
+  onAimDragStart?(cameraId: string, event: PointerEvent<HTMLElement>): void
   /** 맨 아래 개입·광고 버튼 */
   actions: ReactNode
   /** 광고 패널처럼 열 위에 띄우는 것 */
@@ -24,13 +26,13 @@ interface OnAirColumnProps {
 /** 조준 상태가 대상 이름 뒤에 붙이는 설명. 대상을 따라가는 중이면 붙이지 않는다. */
 const AIM_NOTES: Record<CameraAimMode, string | null> = {
   tracking: null,
-  directed: '지시로 고정 (출연자 클릭 시 추적)',
+  directed: '지시로 고정 (카메라를 출연자에게 끌면 추적)',
   startled: '스태프가 놀라 휘두름',
   fixed: null,
 }
 
 /**
- * 추적 카메라면 "대상 렉스", 지시로 고정됐으면 "대상 렉스 · 지시로 고정 (출연자 클릭 시 추적)".
+ * 추적 카메라면 "대상 렉스", 지시로 고정됐으면 "대상 렉스 · 지시로 고정 (카메라를 출연자에게 끌면 추적)".
  * 대상이 없으면 null.
  */
 function trackingTarget(
@@ -54,9 +56,15 @@ export function OnAirColumn({
   show,
   performers,
   onSwitch,
+  onAimDragStart,
   actions,
   overlay,
 }: OnAirColumnProps) {
+  /** 추적 카메라면 화면을 눌러 끌기를 시작하는 핸들러. 아니면 undefined */
+  const aimHandler = (camera: CameraDef) =>
+    camera.tracking === true && onAimDragStart !== undefined
+      ? (event: PointerEvent<HTMLElement>) => onAimDragStart(camera.id, event)
+      : undefined
   const onAir = show.cameras.find((camera) => camera.id === view.onAirCameraId) ?? show.cameras[0]
   const others = show.cameras.filter((camera) => camera !== onAir)
   const onAirTarget = trackingTarget(view, onAir, performers)
@@ -71,6 +79,7 @@ export function OnAirColumn({
         data-testid={`switcher-${onAir.id}`}
         data-on-air="true"
         aria-label="송출 중인 카메라"
+        onPointerDown={aimHandler(onAir)}
         className="flex flex-col gap-1.5 rounded-xl border-2 border-red-500 bg-slate-900 p-2 text-left shadow-[0_0_14px_rgba(239,68,68,0.35)]"
       >
         <span className="flex items-center justify-between gap-2">
@@ -108,6 +117,7 @@ export function OnAirColumn({
               data-on-air="false"
               aria-label={`${cameraName(show.cameras, camera)}로 전환`}
               onClick={() => onSwitch(camera.id)}
+              onPointerDown={aimHandler(camera)}
               className="flex flex-1 flex-col gap-1 rounded-xl border-2 border-slate-700 bg-slate-900 p-1.5 text-left hover:border-sky-400 active:translate-y-px"
             >
               <span data-testid="camera-preview" className="overflow-hidden rounded-md opacity-90">
@@ -142,7 +152,9 @@ export function OnAirColumn({
       <p className="mt-auto rounded-lg bg-slate-900/60 px-2 py-1.5 text-[11px] leading-4 text-slate-400">
         미리보기를 누르거나 1·2·3: 카메라 전환
         <br />
-        출연자 클릭: 클로즈업 대상 바꾸기(공짜)
+        클로즈업 카메라(노란 고리)나 화면을 출연자에게 끌기: 대상 바꾸기(공짜)
+        <br />
+        출연자·스태프 클릭: 성향과 스탯 보기
         <br />
         Space: 개입(슬로모션 속 지시)
       </p>

@@ -22,6 +22,8 @@ export const COLORS = {
   cameraOnAirFan: 0xe5252a,
   cameraOnAirStroke: 0xe5252a,
   cameraBody: 0xcfd6e0,
+  /** 끌어 조준하는 카메라의 손잡이와 시야 미리보기 */
+  aimPreview: 0xffc83d,
   actorOutline: 0x000000,
   nameText: 0xffffff,
   tensionTrack: 0x2a2a33,

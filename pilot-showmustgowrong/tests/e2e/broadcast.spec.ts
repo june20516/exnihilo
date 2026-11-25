@@ -88,6 +88,35 @@ async function actorAnchor(page: Page, actorId: string): Promise<{ x: number; y:
   return { x, y }
 }
 
+/** 스튜디오에 그린 카메라 표시의 자리(스튜디오 영역 CSS 좌표) */
+async function cameraAnchor(page: Page, cameraId: string): Promise<{ x: number; y: number }> {
+  const host = page.getByTestId('studio-host')
+  await expect(host).toHaveAttribute('data-camera-anchors', new RegExp(`"${cameraId}"`))
+  const raw = await host.getAttribute('data-camera-anchors')
+  const anchors: Record<string, [number, number]> = JSON.parse(raw ?? '{}')
+  const [x, y] = anchors[cameraId]
+  return { x, y }
+}
+
+/** 페이지 좌표의 from에서 스튜디오의 출연자 actorId까지 마우스로 끌어 놓는다. */
+async function dragTo(page: Page, from: { x: number; y: number }, actorId: string): Promise<void> {
+  const box = await page.getByTestId('studio-host').boundingBox()
+  if (box === null) throw new Error('스튜디오가 보이지 않습니다')
+  const to = await actorAnchor(page, actorId)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(box.x + to.x, box.y + to.y, { steps: 8 })
+  await page.mouse.up()
+}
+
+/** 스튜디오의 클로즈업 카메라 표시에서 출연자까지 끈다. */
+async function dragCloseupTo(page: Page, actorId: string): Promise<void> {
+  const box = await page.getByTestId('studio-host').boundingBox()
+  if (box === null) throw new Error('스튜디오가 보이지 않습니다')
+  const camera = await cameraAnchor(page, 'close')
+  await dragTo(page, { x: box.x + camera.x, y: box.y + camera.y }, actorId)
+}
+
 /** 사고 로그에 보이는 가장 최근 줄 번호. 줄이 없으면 -1 */
 async function newestLogIndex(page: Page): Promise<number> {
   const indexes = await page
@@ -146,13 +175,13 @@ test('광고 효과 2개를 골라 확정하면 남은 광고가 0회가 된다'
   await expect(page.getByTestId('commercial-break')).toBeVisible()
 })
 
-test('개입 밖에서 출연자를 클릭하면 송출 중인 클로즈업의 대상이 바뀐다', async ({ page }) => {
+test('개입 밖에서 클로즈업 카메라를 출연자에게 끌면 송출 중인 클로즈업의 대상이 바뀐다', async ({ page }) => {
   await openBroadcast(page)
   await page.keyboard.press('2')
   const label = page.getByTestId('on-air-label')
   // 첫 코너(오프닝)의 클로즈업 시작 대상은 진행자 렉스다.
   await expect(label).toContainText('대상 렉스')
-  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'priya') })
+  await dragCloseupTo(page, 'priya')
   await expect(label).toContainText('대상 프리야')
   await expect(page.getByTestId('intervention-panel')).toBeHidden()
 })
@@ -194,7 +223,7 @@ test('개입 버튼 → 출연자 클릭 → 카드와 줄어드는 남은 시�
   await expect(page.getByTestId('target-rex')).toContainText('내성 4')
 })
 
-test('창 크기를 바꾼 뒤에도 출연자를 클릭하면 ON AIR와 미리보기의 클로즈업 대상이 바뀐다', async ({
+test('창 크기를 바꾼 뒤에도 클로즈업 카메라를 출연자에게 끌면 ON AIR와 미리보기의 대상이 바뀐다', async ({
   page,
 }) => {
   await openBroadcast(page)
@@ -209,19 +238,51 @@ test('창 크기를 바꾼 뒤에도 출연자를 클릭하면 ON AIR와 미리�
   await page.keyboard.press('2')
   const label = page.getByTestId('on-air-label')
   await expect(label).toContainText('대상 렉스')
-  await host.click({ position: await actorAnchor(page, 'priya') })
+  await dragCloseupTo(page, 'priya')
   await expect(label).toContainText('대상 프리야')
 
-  // 클로즈업이 미리보기일 때도 클릭이 대상을 바꾸고 미리보기 이름표에 보인다.
+  // 클로즈업이 미리보기일 때도 끌기가 대상을 바꾸고 미리보기 이름표에 보인다.
   await page.keyboard.press('1')
   const preview = page.getByTestId('switcher-close').getByTestId('preview-target')
   await expect(preview).toContainText('대상 프리야')
-  await host.click({ position: await actorAnchor(page, 'okafor') })
+  await dragCloseupTo(page, 'okafor')
   await expect(preview).toContainText('대상 오카포')
   await expect(page.getByTestId('intervention-panel')).toBeHidden()
+  // 끌어 놓아도 미리보기 버튼의 카메라 전환은 일어나지 않는다.
+  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
 })
 
-test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 출연자 클릭으로 추적이 돌아온다", async ({
+test('클로즈업 미리보기 화면에서 출연자에게 끌어도 대상이 바뀌고, 그냥 누르면 전환된다', async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  const previewButton = page.getByTestId('switcher-close')
+  const previewTarget = previewButton.getByTestId('preview-target')
+  await expect(previewTarget).toContainText('대상 렉스')
+  const box = await previewButton.boundingBox()
+  if (box === null) throw new Error('클로즈업 미리보기가 보이지 않습니다')
+  await dragTo(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, 'mo')
+  await expect(previewTarget).toContainText('대상 모')
+
+  await previewButton.click()
+  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
+})
+
+test('출연자를 클릭하면 클로즈업은 그대로 두고 성향과 스탯 설명을 고정해 띄운다', async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  await host.click({ position: await actorAnchor(page, 'mo') })
+  const tip = page.getByTestId('hover-tip')
+  await expect(tip).toContainText('레슬러')
+  await expect(tip).toContainText('존재감 2')
+  await expect(page.getByTestId('switcher-close').getByTestId('preview-target')).toContainText(
+    '대상 렉스',
+  )
+})
+
+test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 카메라를 끌어 추적이 돌아온다", async ({
   page,
 }) => {
   await openBroadcast(page)
@@ -235,10 +296,10 @@ test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 �
   await panel.getByTestId('target-card').getByTestId('directive-aimAudience').click()
   await expect(panel).toBeHidden()
   await expect(label).toHaveAttribute('data-aim-mode', 'directed')
-  await expect(label).toContainText('대상 렉스 · 지시로 고정 (출연자 클릭 시 추적)')
+  await expect(label).toContainText('대상 렉스 · 지시로 고정 (카메라를 출연자에게 끌면 추적)')
   await expectInViewport(page, 'on-air-label')
 
-  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'rex') })
+  await dragCloseupTo(page, 'rex')
   await expect(label).toHaveAttribute('data-aim-mode', 'tracking')
   await expect(label).not.toContainText('지시로 고정')
 })

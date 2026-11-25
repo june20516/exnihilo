@@ -12,6 +12,7 @@ import {
   projectIso,
   rotateByQuaternion,
   screenTilt,
+  unprojectFloor,
   visibleBoxFaces,
   type IsoTransform,
 } from './geometry'
@@ -226,5 +227,20 @@ describe('clipToFloor', () => {
     expect(clipToFloor(inside, bounds)).toHaveLength(3)
     const outside = inside.map((point) => ({ ...point, x: point.x + 20 }))
     expect(clipToFloor(outside, bounds)).toEqual([])
+  })
+})
+
+describe('unprojectFloor', () => {
+  it('바닥 점을 투영했다가 되돌리면 같은 점이다', () => {
+    const transform = fitIso(1000, 600, 20)
+    for (const point of [
+      { x: 0, z: 0 },
+      { x: 12.5, z: 4 },
+      { x: 3.3, z: 9.1 },
+    ]) {
+      const back = unprojectFloor(projectIso({ ...point, y: 0 }, transform), transform)
+      expect(back.x).toBeCloseTo(point.x)
+      expect(back.z).toBeCloseTo(point.z)
+    }
   })
 })

@@ -18,11 +18,12 @@ import type {
   RecentPhenomenon,
   StaffView,
 } from '@/sim/engineTypes'
-import type { Vec3 } from '@/sim/vec'
+import { type FloorPoint, type Vec3, yawBetween } from '@/sim/vec'
 import { COLORS, POSE_COLORS, POSE_SYMBOLS } from './colors'
 import {
   ISO_VIEW_HEIGHT,
   cameraFanFloorPoints,
+  unprojectFloor,
   clipToFloor,
   depthKey,
   fitIso,
@@ -63,6 +64,19 @@ const FAN_ON_AIR_LINE_WIDTH = 2
 const FAN_IDLE_LINE_WIDTH = 1.5
 const FAN_IDLE_LINE_ALPHA = 0.4
 const CAMERA_MARK_RADIUS = 5
+/** 대상을 따라가는 카메라(끌어서 대상을 바꿀 수 있다)에 두르는 손잡이 고리 */
+const CAMERA_HANDLE_RADIUS = 10
+const CAMERA_HANDLE_LINE_WIDTH = 2
+/** 카메라 표시를 잡았다고 보는 반경(px). 손잡이보다 조금 넉넉하다. */
+const CAMERA_GRAB_RADIUS = 16
+const AIM_PREVIEW_FILL_ALPHA = 0.25
+const AIM_PREVIEW_LINE_WIDTH = 2.5
+
+/** 카메라를 끌어 조준하는 중의 미리보기. 카메라가 floorPoint를 향한 시야를 그린다. */
+export interface AimPreview {
+  cameraId: string
+  floorPoint: FloorPoint
+}
 const STUDIO_FLOOR = { minX: 0, maxX: STUDIO_WIDTH, minZ: 0, maxZ: STUDIO_DEPTH }
 
 // 몸
@@ -208,6 +222,9 @@ export class StudioRenderer {
   private mode: StudioMode = 'live'
   private lastView: BroadcastView | null = null
   private hits: HitShapes = { actors: [], staff: [], equipment: [], phenomena: [] }
+  /** 마지막 draw에서 그린 카메라 표시의 캔버스 논리 좌표 */
+  private cameraMarks = new Map<string, Point>()
+  private aimPreview: AimPreview | null = null
   private destroyed = false
 
   private constructor(app: Application, show: ShowDef, width: number, height: number) {
@@ -272,6 +289,33 @@ export class StudioRenderer {
    */
   hitTest(px: number, py: number): StudioHit | null {
     return pickHit({ x: px, y: py }, this.hits)
+  }
+
+  /** (px, py)에서 CAMERA_GRAB_RADIUS 안에 있는 가장 가까운 카메라 표시의 id. 없으면 null. */
+  cameraAt(px: number, py: number): string | null {
+    let best: { id: string; distance: number } | null = null
+    for (const [id, mark] of this.cameraMarks) {
+      const distance = Math.hypot(px - mark.x, py - mark.y)
+      if (distance > CAMERA_GRAB_RADIUS) continue
+      if (best === null || distance < best.distance) best = { id, distance }
+    }
+    return best?.id ?? null
+  }
+
+  /** 캔버스 논리 좌표의 한 점 아래 바닥(y=0) 위치 */
+  floorAt(px: number, py: number): FloorPoint {
+    return unprojectFloor({ x: px, y: py }, this.transform)
+  }
+
+  /** 마지막 draw에서 그린 카메라 표시의 캔버스 논리 좌표. 없으면 null. */
+  cameraAnchor(id: string): Point | null {
+    return this.cameraMarks.get(id) ?? null
+  }
+
+  /** 끌어 조준하는 중의 시야 미리보기를 바꾸고 바로 다시 그린다. null이면 지운다. */
+  setAimPreview(preview: AimPreview | null): void {
+    this.aimPreview = preview
+    if (!this.destroyed && this.lastView !== null) this.draw(this.lastView, this.mode)
   }
 
   /**
@@ -461,9 +505,14 @@ export class StudioRenderer {
     const cameras = [...this.show.cameras].sort(
       (a, b) => Number(a.id === view.onAirCameraId) - Number(b.id === view.onAirCameraId),
     )
+    this.cameraMarks.clear()
     for (const camera of cameras) {
       const onAir = camera.id === view.onAirCameraId
-      const yaw = view.cameraAngles[camera.id] ?? camera.defaultAngle
+      const aiming = this.aimPreview?.cameraId === camera.id ? this.aimPreview : null
+      const yaw =
+        aiming === null
+          ? (view.cameraAngles[camera.id] ?? camera.defaultAngle)
+          : yawBetween(camera.position, aiming.floorPoint)
       const fan = cameraFanFloorPoints(
         camera.position,
         yaw,
@@ -473,9 +522,30 @@ export class StudioRenderer {
       )
       const points = clipToFloor(fan, STUDIO_FLOOR).map((point) => this.project(point))
       const mark = this.project(fan[0])
+      this.cameraMarks.set(camera.id, mark)
       floor
         .circle(mark.x, mark.y, CAMERA_MARK_RADIUS)
         .fill(onAir ? COLORS.cameraOnAirStroke : COLORS.cameraBody)
+      if (camera.tracking === true) {
+        floor
+          .circle(mark.x, mark.y, CAMERA_HANDLE_RADIUS)
+          .stroke({ color: COLORS.aimPreview, width: CAMERA_HANDLE_LINE_WIDTH })
+      }
+      if (aiming !== null) {
+        const to = this.project({ x: aiming.floorPoint.x, y: 0, z: aiming.floorPoint.z })
+        floor
+          .moveTo(mark.x, mark.y)
+          .lineTo(to.x, to.y)
+          .stroke({ color: COLORS.aimPreview, width: AIM_PREVIEW_LINE_WIDTH })
+        if (points.length >= 3) {
+          floor
+            .poly(points)
+            .fill({ color: COLORS.aimPreview, alpha: AIM_PREVIEW_FILL_ALPHA })
+            .poly(points)
+            .stroke({ color: COLORS.aimPreview, width: AIM_PREVIEW_LINE_WIDTH })
+        }
+        continue
+      }
       if (points.length < 3) continue
       if (onAir) {
         floor

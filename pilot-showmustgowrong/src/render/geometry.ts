@@ -1,5 +1,5 @@
 import { STUDIO_DEPTH, STUDIO_WIDTH } from '@/content/balance'
-import type { Vec3 } from '@/sim/vec'
+import type { FloorPoint, Vec3 } from '@/sim/vec'
 
 /**
  * 쿼터뷰(아이소메트릭) 투영. 화면은 x가 오른쪽, y가 아래다.
@@ -31,6 +31,14 @@ export function projectIso(point: Vec3, transform: IsoTransform): Point {
     x: originX + (point.x - point.z) * COS_30 * scale,
     y: originY + (point.x + point.z) * SIN_30 * scale - point.y * scale,
   }
+}
+
+/** projectIso의 역. 화면 점을 바닥(y=0) 위의 점으로 되돌린다(드래그 조준용). */
+export function unprojectFloor(point: Point, transform: IsoTransform): FloorPoint {
+  const { scale, originX, originY } = transform
+  const xMinusZ = (point.x - originX) / (COS_30 * scale)
+  const xPlusZ = (point.y - originY) / (SIN_30 * scale)
+  return { x: (xPlusZ + xMinusZ) / 2, z: (xPlusZ - xMinusZ) / 2 }
 }
 
 /** 그리는 순서의 기준. 클수록 앞이라 나중에 그린다. */
