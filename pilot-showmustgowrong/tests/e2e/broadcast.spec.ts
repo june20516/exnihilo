@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { INTERVENTION_REAL_SECONDS } from '../../src/content/balance'
 
 const SCREENSHOT_PATH = 'tests/screens/broadcast-1280x720.png'
 const INTERVENTION_SCREENSHOT_PATH = 'tests/screens/broadcast-intervention-1280x720.png'
@@ -38,8 +39,12 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
     await expect(page.getByTestId(id)).toBeVisible()
     await expectInViewport(page, id)
   }
-  const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight)
-  expect(scrollHeight).toBeLessThanOrEqual(720)
+  const scroll = await page.evaluate(() => ({
+    width: document.documentElement.scrollWidth,
+    height: document.documentElement.scrollHeight,
+  }))
+  expect(scroll.height).toBeLessThanOrEqual(720)
+  expect(scroll.width).toBeLessThanOrEqual(1280)
   // 캔버스가 실제로 붙었는지(렌더러 생성 완료)
   await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
   await page.screenshot({ path: SCREENSHOT_PATH })
@@ -51,6 +56,17 @@ test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', asy
   await page.keyboard.press('2')
   await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
   await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'false')
+})
+
+test('미리보기를 누르면 그 카메라가 송출되고 ON AIR 이름표가 바뀐다', async ({ page }) => {
+  await openBroadcast(page)
+  const label = page.getByTestId('on-air-label')
+  await expect(label).toContainText('CAM 1 무대 와이드')
+  await page.getByTestId('switcher-close').click()
+  await expect(label).toContainText('CAM 2 클로즈업')
+  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
+  await page.getByTestId('switcher-audienceCam').click()
+  await expect(label).toContainText('CAM 3 관객석')
 })
 
 /**
@@ -65,9 +81,6 @@ async function actorAnchor(page: Page, actorId: string): Promise<{ x: number; y:
   const [x, y] = anchors[actorId]
   return { x, y }
 }
-
-/** src/content/balance.ts의 INTERVENTION_REAL_SECONDS(초). e2e는 앱 경로 별칭을 못 읽어 값을 옮겨 적는다. */
-const INTERVENTION_REAL_SECONDS = 10
 
 test('Space를 누르면 개입 패널이 열리고 개입 시간이 지나면 닫힌다', async ({ page }) => {
   await openBroadcast(page)
@@ -104,14 +117,28 @@ test('광고 효과 2개를 골라 확정하면 남은 광고가 0회가 된다'
   await expect(page.getByTestId('commercial-break')).toBeVisible()
 })
 
-test('개입 중에 스튜디오의 출연자를 클릭하면 대상 카드가 열리고, 지시하면 패널이 닫히며 내성이 준다', async ({
+test('개입 밖에서 출연자를 클릭하면 송출 중인 클로즈업의 대상이 바뀐다', async ({ page }) => {
+  await openBroadcast(page)
+  await page.keyboard.press('2')
+  const label = page.getByTestId('on-air-label')
+  // 첫 코너(오프닝)의 클로즈업 시작 대상은 진행자 렉스다.
+  await expect(label).toContainText('대상 렉스')
+  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'priya') })
+  await expect(label).toContainText('대상 프리야')
+  await expect(page.getByTestId('intervention-panel')).toBeHidden()
+})
+
+test('개입 버튼 → 출연자 클릭 → 카드와 줄어드는 남은 시간 → 지시하면 닫히고 로그에 결과가 남는다', async ({
   page,
 }) => {
   await openBroadcast(page)
   const studio = page.getByTestId('studio')
   await expect(studio.locator('canvas')).toHaveCount(1)
-  // 개입 밖에서 출연자를 누르면 클로즈업 대상 바꾸기(track)이므로 먼저 Space로 개입을 연다.
-  await page.keyboard.press('Space')
+  const noiseLines = page.getByTestId('event-log').getByText('렉스 쪽에서 소리가 난다')
+  // 첫 코너 시작 때 렉스가 내는 소음 한 줄(lineup.ts의 corner 반응)
+  await expect(noiseLines).toHaveCount(1)
+
+  await page.getByTestId('intervene-button').click()
   const panel = page.getByTestId('intervention-panel')
   await expect(panel).toBeVisible()
   await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'rex') })
@@ -119,10 +146,21 @@ test('개입 중에 스튜디오의 출연자를 클릭하면 대상 카드가 �
   const card = panel.getByTestId('target-card')
   await expect(card).toContainText('남은 내성 5')
   await expect(card.getByTestId('misfire-chance')).toHaveCount(1)
+
+  // 남은 선택 시간은 개입 시간에서 시작해 줄어든다.
+  const seconds = page.getByTestId('intervention-seconds')
+  const readSeconds = async (): Promise<number> => parseFloat((await seconds.textContent()) ?? '')
+  const first = await readSeconds()
+  expect(first).toBeLessThanOrEqual(INTERVENTION_REAL_SECONDS)
+  expect(first).toBeGreaterThan(INTERVENTION_REAL_SECONDS - 2)
+  await expect.poll(readSeconds, { timeout: 3_000 }).toBeLessThan(first - 0.5)
   await page.screenshot({ path: INTERVENTION_SCREENSHOT_PATH })
 
+  // stepUp: 카메라로 돌진하며 소음 1을 낸다(lineup.ts). 로그에 그 소음 줄이 하나 더 남는다.
   await card.getByTestId('directive-stepUp').click()
   await expect(panel).toBeHidden()
+  await expect(page.getByTestId('event-log')).toBeVisible()
+  await expect(noiseLines).toHaveCount(2)
   await page.keyboard.press('Space')
   await expect(page.getByTestId('target-rex')).toContainText('내성 4')
 })
