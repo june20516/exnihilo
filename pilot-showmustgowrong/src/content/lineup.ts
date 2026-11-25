@@ -50,7 +50,7 @@ const REX: PerformerDef = {
       label: '카메라 앞으로 나오세요',
       action: {
         pose: 'idle',
-        move: { type: 'dash', toward: 'onAirCamera', speed: 9 },
+        move: { type: 'dash', toward: 'onAirCamera', speed: 5 },
         emits: [{ kind: 'noise', intensity: 1, target: 'none' }],
       },
     },
@@ -210,7 +210,7 @@ const JUNE: PerformerDef = {
       label: '카메라 앞으로 나오세요',
       action: {
         pose: 'idle',
-        move: { type: 'dash', toward: 'onAirCamera', speed: 9 },
+        move: { type: 'dash', toward: 'onAirCamera', speed: 3 },
         emits: [],
       },
     },

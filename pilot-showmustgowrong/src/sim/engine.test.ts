@@ -771,6 +771,22 @@ describe('관객(Ruling 17)', () => {
     expect(fromAudience(broadcast, 'noise')).toHaveLength(2)
   })
 
+  it('광고의 reset은 관객석 연속 송출 시간을 처음부터 다시 센다', async () => {
+    const broadcast = await open(quietSetup())
+    broadcast.step([{ type: 'switch', cameraId: 'audienceCam' }])
+    const adStep = 2 * STEPS_PER_SECOND
+    run(broadcast, adStep - 1)
+    run(
+      broadcast,
+      NOISE_STEPS + 1,
+      new Map([[adStep, [{ type: 'ad', effects: ['reset', 'relief'] }]]]),
+    )
+    // reset이 없었다면 첫 소음은 NOISE_STEPS - 1 스텝에 난다
+    expect(fromAudience(broadcast, 'noise').map((event) => event.step)).toEqual([
+      adStep + NOISE_STEPS - 1,
+    ])
+  })
+
   it('송출 화면이 관객석을 잡지 않으면 소음을 내지 않는다', async () => {
     const broadcast = await open(quietSetup())
     run(broadcast, 2 * NOISE_STEPS)
@@ -805,15 +821,21 @@ describe('관객(Ruling 17)', () => {
       }),
     ])
 
-    // 쿨다운 안의 웃음에는 다시 웃지 않는다(자기 웃음에도 반응하지 않는다)
+    // 쿨다운 끝 직전(첫 전염 뒤 COOLDOWN_STEPS - 1 스텝)에 판정하는 웃음은 막힌다.
+    // 자기 웃음에도 반응하지 않는다.
+    const contagionStep = 1
+    run(broadcast, contagionStep + COOLDOWN_STEPS - 2 - broadcast.currentStep)
     broadcast.step([laugh])
-    run(broadcast, COOLDOWN_STEPS - 3)
+    broadcast.step([laugh])
+    expect(broadcast.currentStep).toBe(contagionStep + COOLDOWN_STEPS)
     expect(fromAudience(broadcast, 'laughter')).toHaveLength(1)
 
-    // 쿨다운이 지나면 다시 전염된다
-    broadcast.step([laugh])
+    // 정확히 COOLDOWN_STEPS 뒤에 판정하는 웃음에는 다시 전염된다
     broadcast.step([])
-    expect(fromAudience(broadcast, 'laughter')).toHaveLength(2)
+    expect(fromAudience(broadcast, 'laughter')).toEqual([
+      expect.objectContaining({ step: contagionStep }),
+      expect.objectContaining({ step: contagionStep + COOLDOWN_STEPS }),
+    ])
   })
 
   it('시야 밖의 웃음에는 반응하지 않는다', async () => {

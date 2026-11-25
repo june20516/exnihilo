@@ -422,6 +422,8 @@ export class Broadcast {
     }
     this.cooldowns.clear()
     this.director.resetFatigue()
+    // 관객의 흥분도 가라앉아 관객석 연속 송출 시간을 처음부터 다시 센다.
+    this.audienceOnAirSteps = 0
     // Ruling 22: 감정을 초기화하므로 광고 전 사고에 대한 반응도 남기지 않는다.
     this.pendingEvents = []
   }
