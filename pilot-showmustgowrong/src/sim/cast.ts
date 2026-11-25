@@ -28,6 +28,8 @@ export interface CastMember {
   departedAt: Placement | null
   /** 지금 이 출연자를 움직이게 한 원인 이벤트(마지막 행동의 원인 또는 자신을 친 충격) */
   motionCause: PhenomenonEvent | null
+  /** motionCause를 받은 스텝. MOTION_CAUSE_SECONDS가 지나면 원인으로 잇지 않는다. */
+  motionCauseStep: number
   /** 직전 스텝에 송출 화면 안에 있었는지 */
   wasOnAir: boolean
   /** 송출 화면 밖에 연속으로 있었던 스텝 수 */
@@ -53,6 +55,7 @@ export class Cast {
       walkoutStep: null,
       departedAt: null,
       motionCause: null,
+      motionCauseStep: 0,
       wasOnAir: false,
       absentSteps: 0,
     }

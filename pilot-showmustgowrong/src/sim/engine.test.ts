@@ -3,6 +3,9 @@ import {
   AD_GAUGE_RELIEF,
   AUDIENCE_NOISE_SECONDS,
   CORNER_STEPS,
+  GRAVITY,
+  LEAP_VERTICAL_RATIO,
+  MOTION_CAUSE_SECONDS,
   REACTION_COOLDOWN_SECONDS,
   STEP_SECONDS,
 } from '@/content/balance'
@@ -828,5 +831,50 @@ describe('관객(Ruling 17)', () => {
     broadcast.step([{ type: 'direct', actorId: 'far', directiveId: 'laugh' }])
     run(broadcast, 2)
     expect(fromAudience(broadcast, 'laughter')).toEqual([])
+  })
+})
+
+describe('움직임 원인 만료(Ruling 29)', () => {
+  const NOISE = directive('noise', {
+    pose: 'angry',
+    emits: [{ kind: 'noise', intensity: 1, target: 'none' }],
+  })
+  /** 소음에 놀라 수직으로 뛰는 출연자. 체공 시간 = 2 × 수직 속도 / g */
+  const jumper = (speed: number) =>
+    performer({
+      id: 'mo',
+      tags: ['guest'],
+      reactions: [
+        reaction(
+          { kind: 'noise', min: 1, scope: 'perceived' },
+          { pose: 'panic', move: { type: 'leap', toward: 'none', speed }, emits: [] },
+        ),
+      ],
+    })
+  const airSeconds = (speed: number) => (2 * speed * LEAP_VERTICAL_RATIO) / -GRAVITY.y
+
+  async function landingImpact(speed: number) {
+    const shouter = performer({ id: 'rex', tags: ['host'], directives: [NOISE, CALM] })
+    const broadcast = await open(quietSetup({ performers: [shouter, jumper(speed)] }))
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'noise' }])
+    const noise = broadcast.events()[0]
+    const landing = runUntil(
+      broadcast,
+      4 * STEPS_PER_SECOND,
+      (event) => event.kind === 'impact' && event.sourceId === 'mo',
+    )
+    return { noise, landing }
+  }
+
+  it(`원인을 받은 지 ${MOTION_CAUSE_SECONDS}초 안의 충돌은 그 원인을 잇는다`, async () => {
+    expect(airSeconds(10)).toBeLessThan(MOTION_CAUSE_SECONDS)
+    const { noise, landing } = await landingImpact(10)
+    expect(landing).toMatchObject({ causeId: noise.id, depth: 2 })
+  })
+
+  it(`${MOTION_CAUSE_SECONDS}초가 지난 뒤의 충돌은 그 원인을 잇지 않는다`, async () => {
+    expect(airSeconds(18)).toBeGreaterThan(MOTION_CAUSE_SECONDS)
+    const { landing } = await landingImpact(18)
+    expect(landing).toMatchObject({ causeId: null, depth: 1 })
   })
 })

@@ -239,8 +239,9 @@ const OVERHEATED_LIGHT: EquipmentDef = {
   id: 'overheatedLight',
   name: '과열된 조명',
   kind: 'hangingLight',
-  // 조명의 position은 중심이다(Ruling 12).
-  position: { x: 8, y: 6 },
+  // 조명의 position은 중심이다(Ruling 12). 아래면 2.3m: 서 있는 출연자(머리 1.7m)는 지나가고,
+  // 모의 바디슬램(leap 8, 머리가 약 2.9m까지 오름)이나 날아간 출연자는 닿는다(Ruling 28).
+  position: { x: 8, y: 2.5 },
   breakAt: 2,
   onBreak: [
     { kind: 'impact', intensity: 3, target: 'none' },

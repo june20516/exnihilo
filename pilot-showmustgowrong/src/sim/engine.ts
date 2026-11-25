@@ -7,6 +7,7 @@ import {
   CORNER_STEPS,
   LEAP_VERTICAL_RATIO,
   LIGHT_DARKNESS_INTENSITY,
+  MOTION_CAUSE_SECONDS,
   RATING_LIMITS,
   SILENCE_SECONDS,
   STEP_SECONDS,
@@ -76,6 +77,7 @@ function secondsToSteps(seconds: number): number {
 }
 
 const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
+const MOTION_CAUSE_STEPS = secondsToSteps(MOTION_CAUSE_SECONDS)
 
 /** 관객은 고정 환경이라 콘텐츠가 아니라 balance 수치로 반응한다(spec 7.4, Ruling 17). */
 const AUDIENCE_REACTIONS: ReactionDef[] = [
@@ -416,7 +418,7 @@ export class Broadcast {
     }
     for (const member of members) {
       member.pose = 'idle'
-      member.motionCause = null
+      this.setMotionCause(member, null)
     }
     this.cooldowns.clear()
     this.director.resetFatigue()
@@ -445,7 +447,7 @@ export class Broadcast {
     member.walkedOut = true
     member.walkoutStep = this.stepCount
     member.pose = 'angry'
-    member.motionCause = null
+    this.setMotionCause(member, null)
     const position = this.cast.position(member)
     this.addLine(`${withSubject(member.def.shortName)} 방송을 박차고 나간다!`, 1, null, position)
     for (const kind of ['anger', 'noise'] as const) {
@@ -525,7 +527,7 @@ export class Broadcast {
     })
     // 맞은 출연자는 이제 이 충격 때문에 움직인다(날아간 출연자가 다음 충돌의 원인을 잇는다).
     const hit = targetId === null ? undefined : this.cast.get(targetId)
-    if (hit !== undefined) hit.motionCause = impact
+    if (hit !== undefined) this.setMotionCause(hit, impact)
     return impact
   }
 
@@ -766,7 +768,7 @@ export class Broadcast {
     cause: PhenomenonEvent | null,
   ): void {
     member.pose = action.pose
-    member.motionCause = cause
+    this.setMotionCause(member, cause)
     const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
     if (action.move !== undefined) this.move(member, emitter, action.move, cause)
     this.emitAll(emitter, action.emits, cause)
@@ -819,8 +821,22 @@ export class Broadcast {
     }
   }
 
+  private setMotionCause(member: CastMember, cause: PhenomenonEvent | null): void {
+    member.motionCause = cause
+    member.motionCauseStep = this.stepCount
+  }
+
+  /**
+   * 출연자의 움직임 원인은 받은 뒤 MOTION_CAUSE_SECONDS까지만 잇는다(Ruling 29). 한참 전 반응의
+   * 원인이 나중 충돌에 붙어 연쇄 깊이를 부풀리지 않게 한다. 떨어지는 장비는 파손 충격을 계속 잇는다.
+   */
   private motionCauseOf(id: string): PhenomenonEvent | null {
-    return this.cast.get(id)?.motionCause ?? this.brokenEquipment.get(id) ?? null
+    const member = this.cast.get(id)
+    if (member !== undefined) {
+      const expired = this.stepCount - member.motionCauseStep > MOTION_CAUSE_STEPS
+      return expired ? null : member.motionCause
+    }
+    return this.brokenEquipment.get(id) ?? null
   }
 
   // ── 공통 ──────────────────────────────────────────────

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { STEP_SECONDS } from './balance'
 import { inFrame } from '@/sim/broadcast'
 import { STANDING_Y } from '@/sim/cast'
+import { Broadcast } from '@/sim/engine'
 import { LINEUP } from './lineup'
 import { TALK_SHOW } from './talkShow'
-import type { ActionDef, PhenomenonKind, Trigger } from './types'
+import type { ActionDef, PerformerDef, PhenomenonKind, Trigger } from './types'
 import { validateShow } from './validate'
 
 const BASIC_PHENOMENA: readonly PhenomenonKind[] = [
@@ -118,5 +120,70 @@ describe('토크쇼 콘텐츠', () => {
       expect(frames('audienceCam', audienceCenter)).toBe(true)
       for (const x of homeXs) expect(frames('audienceCam', x), `x ${x}`).toBe(false)
     })
+  })
+})
+
+describe('토크쇼 장비(Ruling 28)', () => {
+  const opened: Broadcast[] = []
+  afterEach(() => {
+    for (const broadcast of opened.splice(0)) broadcast.dispose()
+  })
+
+  const performerById = (id: string): PerformerDef => {
+    const found = allPerformers.find((performer) => performer.id === id)
+    if (found === undefined) throw new Error(`출연자가 없습니다: ${id}`)
+    return found
+  }
+
+  // 모를 도발해 바디슬램(leap toward cause)을 끌어내는 시험용 출연자
+  const HECKLER: PerformerDef = {
+    ...performerById('okafor'),
+    id: 'heckler',
+    shortName: '야유꾼',
+    // 모의 지시가 host 태그를 가리키므로 검증을 통과하게 host를 단다
+    tags: ['host'],
+    reactions: [],
+    directives: [
+      {
+        id: 'taunt',
+        label: '도발',
+        action: {
+          pose: 'angry',
+          emits: [{ kind: 'anger', intensity: 2, target: { tag: 'athlete' } }],
+        },
+      },
+      { id: 'calm', label: '진정', action: { pose: 'idle', emits: [] } },
+    ],
+  }
+
+  it('라인업의 모가 조명 쪽으로 바디슬램하면 조명이 깨지고 어둠이 생긴다', async () => {
+    // 조명(x 8)을 사이에 두고 야유꾼(6.5)과 모(9.5)를 세운다
+    const broadcast = await Broadcast.create({
+      show: { ...TALK_SHOW, homeSpots: [{ x: 6.5 }, { x: 9.5 }] },
+      performers: [HECKLER, performerById('mo')],
+      bench: [],
+      staff: [],
+      equipment: LINEUP.equipment,
+      seed: 1,
+    })
+    opened.push(broadcast)
+    broadcast.step([{ type: 'direct', actorId: 'heckler', directiveId: 'taunt' }])
+    for (let i = 0; i < Math.round(1 / STEP_SECONDS); i++) broadcast.step([])
+
+    const events = broadcast.events()
+    const breakImpact = events.find(
+      (event) => event.kind === 'impact' && event.targetId === 'overheatedLight',
+    )
+    expect(breakImpact).toMatchObject({ sourceId: 'mo' })
+    expect(breakImpact?.intensity).toBeGreaterThanOrEqual(2)
+    const light = broadcast.view().equipment.find((piece) => piece.id === 'overheatedLight')
+    expect(light?.released).toBe(true)
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'darkness',
+        sourceId: 'overheatedLight',
+        causeId: breakImpact?.id,
+      }),
+    )
   })
 })
