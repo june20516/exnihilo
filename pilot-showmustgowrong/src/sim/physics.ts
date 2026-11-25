@@ -350,9 +350,10 @@ export class PhysicsWorld {
 
   /**
    * from에서 to까지 장비가 시선을 가리지 않으면 true. 출연자, 바닥, 벽은 무시한다.
+   * ignoreEquipmentId는 to가 그 장비 자신일 때 자기 collider를 시선에서 뺀다.
    * 직전 step()에서 갱신된 collider 위치 기준이며, addEquipment/releaseEquipment 직후엔 step 이후에 호출할 것.
    */
-  lineOfSight(from: Vec3, to: Vec3): boolean {
+  lineOfSight(from: Vec3, to: Vec3, ignoreEquipmentId?: string): boolean {
     this.assertAlive()
     const dx = to.x - from.x
     const dy = to.y - from.y
@@ -368,7 +369,10 @@ export class PhysicsWorld {
       undefined,
       undefined,
       undefined,
-      (collider) => this.owners.get(collider.handle)?.kind === 'equipment',
+      (collider) => {
+        const owner = this.owners.get(collider.handle)
+        return owner?.kind === 'equipment' && owner.id !== ignoreEquipmentId
+      },
     )
     return blocked === null
   }

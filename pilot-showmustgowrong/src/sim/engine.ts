@@ -140,6 +140,8 @@ export class Broadcast {
 
   private rng: RngState
   private stepCount = 0
+  /** cameraSubjects 캐시. step()이 시작될 때 비운다. */
+  private subjectsCache: Record<string, string[]> | null = null
   private currentPhase: Phase = 'live'
   /** 시작한 코너 수. 코너 경계 스텝이 광고 스텝이면 재개 뒤 첫 스텝에 시작한다(Ruling 36). */
   private cornersStarted = 0
@@ -249,6 +251,7 @@ export class Broadcast {
    */
   step(inputs: readonly BroadcastInput[] = []): void {
     if (this.currentPhase !== 'live') return
+    this.subjectsCache = null
 
     // 1. 입력(전부 검증한 뒤 적용한다)
     validateInputs(inputs, {
@@ -321,7 +324,7 @@ export class Broadcast {
       onAirCameraId: this.onAirCameraId,
       cameraAngles: this.rig.angles(),
       cameraTargets: this.rig.targets(),
-      cameraSubjects: this.cameraSubjects(),
+      cameraSubjects: structuredClone(this.cameraSubjects()),
       staff: this.rig.staffViews().map((view) => this.staffView(view)),
       actors: this.cast.all().map((member) => this.actorView(member, recentEvents)),
       equipment: [...this.equipment.keys()].map((id) => this.equipmentView(id)),
@@ -1001,35 +1004,42 @@ export class Broadcast {
    * 생성 직후(첫 step 전) view와 wasOnAir 초기값은 장비 가림을 반영하지 않는다.
    */
   private isOnAir(point: Vec3): boolean {
-    const camera = this.onAirCamera()
+    return this.isInSight(this.onAirCamera(), point)
+  }
+
+  /**
+   * 카메라 시야 안이고 장비가 시선을 가리지 않는지. 송출 판정과 피드 대상이 함께 쓴다.
+   * point가 장비 자신이면 ignoreEquipmentId로 자기 collider를 뺀다.
+   */
+  private isInSight(camera: CameraDef, point: Vec3, ignoreEquipmentId?: string): boolean {
     return (
       inFrame(camera, this.rig.angle(camera.id), point) &&
-      this.physics.lineOfSight(camera.position, point)
+      this.physics.lineOfSight(camera.position, point, ignoreEquipmentId)
     )
   }
 
   /**
-   * 카메라마다 지금 시야에 잡힌 출연자와 장비 id. 출연자는 송출 판정(isOnAir)과 같은 기준이다.
-   * 장비는 자기 collider가 시선을 막으므로 시야(inFrame)만 본다. 이탈한 출연자는 없다.
+   * 카메라마다 지금 시야에 잡힌 출연자와 장비 id(이탈한 출연자는 없다). 송출 판정과 같은
+   * 기준이며 장비는 다른 장비에 가려도 빠진다. 위치는 step 안에서만 바뀌므로 step마다 한 번 계산한다.
    */
   private cameraSubjects(): Record<string, string[]> {
+    if (this.subjectsCache !== null) return this.subjectsCache
     const subjects: Record<string, string[]> = {}
     for (const camera of this.cameras.values()) {
-      const yaw = this.rig.angle(camera.id)
       const actors = this.cast
         .all()
-        .filter((member) => {
-          if (member.departedAt !== null) return false
-          const position = this.cast.position(member)
-          return inFrame(camera, yaw, position) && this.physics.lineOfSight(camera.position, position)
-        })
+        .filter(
+          (member) =>
+            member.departedAt === null && this.isInSight(camera, this.cast.position(member)),
+        )
         .map((member) => member.def.id)
       const equipment = [...this.equipment.keys()].filter((id) => {
         const state = this.physics.equipmentState(id)
-        return state !== undefined && inFrame(camera, yaw, state.position)
+        return state !== undefined && this.isInSight(camera, state.position, id)
       })
       subjects[camera.id] = [...actors, ...equipment]
     }
+    this.subjectsCache = subjects
     return subjects
   }
 

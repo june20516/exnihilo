@@ -1526,4 +1526,28 @@ describe('카메라별 잡힌 대상', () => {
     expect(cameraSubjects.wide).toContain('wall')
     expect(cameraSubjects.audienceCam).toEqual([])
   })
+
+  it('세트 벽 뒤의 장비는 가려져 피드에서 빠진다', async () => {
+    // 와이드(8, 6, 9.5)에서 벽(z 5.5, 높이 3m) 너머 바닥에 선 장비(중심 8, 1.5, 4)
+    const behind: EquipmentDef = {
+      ...WALL_BETWEEN,
+      id: 'prop',
+      position: { x: 8, y: 0, z: 4 },
+    }
+    const blocked = await open(quietSetup({ show: wallShow, equipment: [WALL_BETWEEN, behind] }))
+    run(blocked, 2)
+    expect(blocked.view().cameraSubjects.wide).toContain('wall')
+    expect(blocked.view().cameraSubjects.wide).not.toContain('prop')
+
+    const unblocked = await open(quietSetup({ show: wallShow, equipment: [behind] }))
+    run(unblocked, 2)
+    expect(unblocked.view().cameraSubjects.wide).toContain('prop')
+  })
+
+  it('view가 돌려주는 목록을 바꿔도 엔진 캐시는 그대로다', async () => {
+    const broadcast = await open(quietSetup({ show: wallShow, equipment: [WALL_BETWEEN] }))
+    run(broadcast, 2)
+    broadcast.view().cameraSubjects.wide?.push('mutated')
+    expect(broadcast.view().cameraSubjects.wide).not.toContain('mutated')
+  })
 })

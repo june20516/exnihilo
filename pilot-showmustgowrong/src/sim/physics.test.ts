@@ -251,6 +251,16 @@ describe('PhysicsWorld 3D', () => {
     expect(blocked.lineOfSight(camera, target)).toBe(false)
   })
 
+  it('lineOfSight는 ignoreEquipmentId 장비 자신의 collider를 시선에서 뺀다', () => {
+    const camera = { x: 8, y: 1.5, z: 9.5 }
+    const world = new PhysicsWorld()
+    world.addEquipment({ ...SET_WALL, position: { x: 8, y: 0, z: 6 } })
+    stepMany(world, SETTLE_STEPS)
+    const center = { x: 8, y: 1.5, z: 6 }
+    expect(world.lineOfSight(camera, center)).toBe(false)
+    expect(world.lineOfSight(camera, center, SET_WALL.id)).toBe(true)
+  })
+
   it('같은 id를 다시 추가하면 오류를 던진다', () => {
     const world = new PhysicsWorld()
     world.addActor('dup', { x: 4, z: 5 }, 'normal')
