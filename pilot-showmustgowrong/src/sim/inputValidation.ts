@@ -1,6 +1,6 @@
 import { AD_EFFECT_PICKS, TOLERANCE_COUNT } from '@/content/balance'
 import type { CameraDef, StaffDef } from '@/content/types'
-import type { Cast } from './cast'
+import type { Cast, CastMember } from './cast'
 import type { Director } from './director'
 import type { BroadcastInput } from './engineTypes'
 
@@ -11,6 +11,20 @@ interface InputValidationDeps {
   cameras: ReadonlyMap<string, CameraDef>
   /** 아직 투입하지 않은 대기 출연자 수 */
   benchLeft: number
+}
+
+/**
+ * 이 입력 앞에서 이미 이탈했는지. 이전 스텝에 이탈했거나, 같은 묶음의 앞선 지시까지 더해
+ * 내성을 넘는 지시를 받았으면(그 지시가 이탈을 부른다) 이탈한 것이다.
+ */
+function isGoneBeforeInput(
+  member: CastMember,
+  directedInBatch: ReadonlyMap<string, number>,
+  director: Director,
+): boolean {
+  const id = member.def.id
+  const usedBefore = director.directivesUsed(id) + (directedInBatch.get(id) ?? 0)
+  return member.walkedOut || usedBefore > TOLERANCE_COUNT[member.def.tolerance]
 }
 
 /**
@@ -37,13 +51,10 @@ export function validateInputs(inputs: readonly BroadcastInput[], deps: InputVal
         if (!member.def.directives.some(({ id }) => id === input.directiveId)) {
           throw new Error(`출연자 ${input.actorId}에게 없는 지시입니다: ${input.directiveId}`)
         }
-        // 내성을 넘는 지시가 이탈을 부르므로, 그보다 더 받은 출연자는 이미 이탈한 것이다.
-        const directedInBatch = directed.get(input.actorId) ?? 0
-        const usedBefore = deps.director.directivesUsed(input.actorId) + directedInBatch
-        if (usedBefore > TOLERANCE_COUNT[member.def.tolerance]) {
+        if (isGoneBeforeInput(member, directed, deps.director)) {
           throw new Error(`이미 이탈한 출연자에게 지시했습니다: ${input.actorId}`)
         }
-        directed.set(input.actorId, directedInBatch + 1)
+        directed.set(input.actorId, (directed.get(input.actorId) ?? 0) + 1)
         break
       }
       case 'track': {
@@ -52,9 +63,7 @@ export function validateInputs(inputs: readonly BroadcastInput[], deps: InputVal
         if (camera.tracking !== true) throw new Error(`추적 카메라가 아닙니다: ${input.cameraId}`)
         const member = deps.cast.get(input.actorId)
         if (member === undefined) throw new Error(`무대에 없는 출연자입니다: ${input.actorId}`)
-        // 같은 묶음의 앞선 지시로 내성을 넘겼으면 이미 이탈한 것이다.
-        const usedBefore = deps.director.directivesUsed(input.actorId) + (directed.get(input.actorId) ?? 0)
-        if (member.walkedOut || usedBefore > TOLERANCE_COUNT[member.def.tolerance]) {
+        if (isGoneBeforeInput(member, directed, deps.director)) {
           throw new Error(`이탈한 출연자를 추적할 수 없습니다: ${input.actorId}`)
         }
         break

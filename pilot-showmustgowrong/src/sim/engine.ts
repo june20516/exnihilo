@@ -191,6 +191,8 @@ export class Broadcast {
       this.addToStage(performer, setup.show.homeSpots[index])
     })
     // 클로즈업이 시작 대상을 보게 한 뒤 처음부터 화면에 있던 출연자를 다시 센다.
+    const starters = this.cast.active().map((member) => member.def)
+    this.rig.startTracking(starters, setup.show.corners[0].startTag)
     this.updateCameraRig()
     for (const member of this.cast.active()) {
       member.wasOnAir = this.isOnAir(this.cast.position(member))
@@ -395,9 +397,9 @@ export class Broadcast {
     const member = this.requireStaff(staffId)
     const [result, rng] = this.director.directStaff(staffId, directiveId, this.rng)
     this.rng = rng
-    // 엇나간 지시는 놀람과 같다(무작위 방향, 유지 뒤 자동 복구).
+    // 엇나간 지시는 놀람과 같다(무작위 방향, 놀람 로그, 유지 뒤 자동 복구, R8).
     if (result.aim === 'random') {
-      this.rig.panic(staffId, this.randomAngle())
+      this.panicCamera(member, null)
       return
     }
     this.rig.direct(staffId, this.directedAim(member.cameraId, result.aim))
@@ -462,6 +464,8 @@ export class Broadcast {
     }
     this.cooldowns.clear()
     this.director.resetFatigue()
+    // 스태프도 놀람을 끝내고 자리로 돌아온다(R12). 광고가 끝내므로 복구 완료 로그는 없다.
+    this.rig.calmAllStaff()
     // 관객의 흥분도 가라앉아 관객석 연속 송출 시간을 처음부터 다시 센다.
     this.audienceOnAirSteps = 0
     // Ruling 22: 감정을 초기화하므로 광고 전 사고에 대한 반응도 남기지 않는다.
@@ -695,10 +699,13 @@ export class Broadcast {
     )
   }
 
-  /** 이탈한 추적 대상을 다시 고르고 리그를 한 스텝 진행한다. 복구를 마친 스태프는 로그를 남긴다. */
+  /**
+   * 이탈한 추적 대상을 다시 고르고 리그를 한 스텝 진행한다. 복구를 마친 스태프는 로그를 남긴다.
+   * 반응 단계 뒤에 부르므로, 이번 스텝의 반응(또는 입력)으로 생긴 놀람도 같은 스텝의 이 update에서
+   * 경과 1이 된다. 즉 놀란 스텝이 유지 시간의 첫 스텝이다(리그 단위 테스트의 panic 직후 update 1회와 같다).
+   */
   private updateCameraRig(): void {
-    const active = this.cast.active()
-    this.rig.retarget(active.map((member) => member.def), this.setup.show.corners[0].startTag)
+    this.rig.retarget(this.cast.active().map((member) => member.def))
     this.rig.update((actorId) => {
       const member = this.cast.get(actorId)
       return member === undefined ? null : this.cast.position(member)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CameraDef, StaffDef } from '@/content/types'
-import { CameraRig, chooseTrackTarget } from './cameraRig'
+import { CameraRig, choosePresenceTarget, chooseStartTarget } from './cameraRig'
 import { type FloorPoint, normalizeDegrees, yawBetween } from './vec'
 
 const CLOSE: CameraDef = {
@@ -192,36 +192,73 @@ describe('CameraRig 놀람과 복구', () => {
   })
 })
 
-describe('chooseTrackTarget', () => {
+describe('추적 대상 고르기', () => {
   const def = (id: string, presence: 1 | 2 | 3, tags: string[] = []) => ({ id, presence, tags })
 
-  it('시작 태그를 가진 첫 출연자를 고른다', () => {
-    expect(chooseTrackTarget([def('a', 3), def('b', 1, ['host'])], 'host')).toBe('b')
+  it('chooseStartTarget은 시작 태그를 가진 첫 출연자를 고른다', () => {
+    expect(chooseStartTarget([def('a', 3), def('b', 1, ['host'])], 'host')).toBe('b')
   })
 
-  it('태그를 가진 출연자가 없으면 존재감이 가장 높은 출연자, 같으면 먼저 오른 출연자', () => {
-    expect(chooseTrackTarget([def('a', 2), def('b', 3), def('c', 3)], 'host')).toBe('b')
+  it('chooseStartTarget은 태그를 가진 출연자가 없으면 존재감 규칙을 쓴다', () => {
+    expect(chooseStartTarget([def('a', 2), def('b', 3), def('c', 3)], 'host')).toBe('b')
+  })
+
+  it('choosePresenceTarget은 태그와 관계없이 존재감이 가장 높은 출연자, 같으면 먼저 오른 출연자', () => {
+    expect(choosePresenceTarget([def('h', 1, ['host']), def('b', 3), def('c', 3)])).toBe('b')
   })
 
   it('아무도 없으면 null', () => {
-    expect(chooseTrackTarget([], 'host')).toBeNull()
+    expect(chooseStartTarget([], 'host')).toBeNull()
+    expect(choosePresenceTarget([])).toBeNull()
   })
 })
 
 describe('CameraRig 대상 재선택과 복구 완료', () => {
   const def = (id: string, presence: 1 | 2 | 3, tags: string[] = []) => ({ id, presence, tags })
 
-  it('retarget은 대상이 없거나 active에 없을 때만 다시 고르고, 추적 카메라만 대상을 갖는다', () => {
+  it('startTracking은 시작 태그 규칙, retarget은 대상이 없거나 이탈했을 때 존재감 규칙만 쓴다', () => {
     const rig = new CameraRig([CLOSE, SIDE], [])
-    rig.retarget([def('rex', 1, ['host']), def('mo', 3)], 'host')
+    const rex = def('rex', 1, ['host'])
+    const host2 = def('host2', 1, ['host'])
+    const mo = def('mo', 3)
+    rig.startTracking([rex, host2, mo], 'host')
     expect(rig.targets()).toEqual({ close: 'rex', side: null })
-    rig.setTarget('close', 'mo')
-    rig.retarget([def('rex', 1, ['host']), def('mo', 3)], 'host')
-    expect(rig.target('close')).toBe('mo')
-    rig.retarget([def('rex', 1, ['host'])], 'host')
+    rig.retarget([rex, host2, mo])
     expect(rig.target('close')).toBe('rex')
-    rig.retarget([], 'host')
+    rig.retarget([host2, mo])
+    expect(rig.target('close')).toBe('mo')
+    rig.retarget([host2])
+    expect(rig.target('close')).toBe('host2')
+    rig.retarget([])
     expect(rig.target('close')).toBeNull()
+  })
+
+  it('setTarget은 지시 방향을 지우고 대상 추적으로 돌아간다(R7)', () => {
+    const rig = new CameraRig([CLOSE], [staffOn('close')])
+    const rex: FloorPoint = { x: 10, z: 4 }
+    rig.direct('op', { kind: 'yaw', yaw: 170 })
+    rig.update(() => rex)
+    expect(rig.angle('close')).toBe(170)
+    rig.setTarget('close', 'rex')
+    rig.update(() => rex)
+    expect(rig.angle('close')).toBeCloseTo(yawBetween(CLOSE.position, rex), 6)
+  })
+
+  it('calmAllStaff는 놀람을 끝내 평상시로 되돌리고 복구 완료로 치지 않는다(R12)', () => {
+    const rig = new CameraRig([SIDE], [staffOn('side')])
+    rig.panic('op', 123)
+    runSteps(rig, 100)
+    rig.calmAllStaff()
+    expect(rig.angle('side')).toBe(30)
+    expect(rig.staffViews()[0]).toMatchObject({ mode: 'normal', recoveryProgress: 1 })
+    runSteps(rig, 1)
+    expect(rig.settledStaffIds()).toEqual([])
+  })
+
+  it('복귀가 한 스텝도 안 걸리는 recovery는 생성자에서 거부한다', () => {
+    expect(
+      () => new CameraRig([SIDE], [staffOn('side', { holdSeconds: 1, returnSeconds: 0 })]),
+    ).toThrow('복구 시간 범위 오류')
   })
 
   it('settledStaffIds는 복귀를 마친 update에서만 스태프 id를 준다', () => {

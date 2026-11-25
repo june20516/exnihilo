@@ -1184,10 +1184,11 @@ describe('클로즈업 추적과 스태프 복구', () => {
     expect(broadcast.inputLog()).toEqual([{ step: 0, input: track('mo') }])
   })
 
-  it('대상이 이탈하면 존재감이 가장 높은 남은 출연자로, 모두 이탈하면 null로 바뀐다', async () => {
+  it('대상이 이탈하면 startTag가 아니라 존재감이 가장 높은 남은 출연자로, 모두 이탈하면 null로 바뀐다(R11)', async () => {
+    // ann도 host 태그지만 재선택은 존재감 규칙만 쓰므로 bo(존재감 3)가 먼저다.
     const performers = [
       lowPerformer('rex', 1, ['host']),
-      lowPerformer('ann', 1),
+      lowPerformer('ann', 1, ['host']),
       lowPerformer('bo', 3),
     ]
     const broadcast = await open(quietSetup({ show: TRACKING_SHOW, performers }))
@@ -1301,5 +1302,78 @@ describe('클로즈업 추적과 스태프 복구', () => {
     run(second, 600, byStep)
     expect(second.summary()).toEqual(first.summary())
     expect(second.view()).toEqual(view)
+  })
+
+  const operatorWith = (aims: StaffDef['directives'][number]['aim'][]): StaffDef => ({
+    ...CAMERA_OPERATOR,
+    directives: aims.map((aim) => ({ id: aim, label: aim, aim })),
+  })
+
+  it("'관객석' 지시 뒤 track을 받으면 지시 방향을 지우고 새 대상을 따라간다(R7)", async () => {
+    const broadcast = await open(
+      quietSetup({ show: TRACKING_SHOW, staff: [operatorWith(['audience', 'default'])] }),
+    )
+    broadcast.step([{ type: 'directStaff', staffId: 'cammy', directiveId: 'audience' }])
+    const rex = broadcast.view().actors[0]
+    expect(broadcast.view().cameraAngles.close).not.toBeCloseTo(yawBetween(CLOSE_POSITION, rex), 1)
+
+    broadcast.step([track('mo')])
+    const view = broadcast.view()
+    const mo = view.actors.find((actor) => actor.id === 'mo')
+    expect(mo).toBeDefined()
+    if (mo === undefined) return
+    expect(view.cameraAngles.close).toBeCloseTo(yawBetween(CLOSE_POSITION, mo), 3)
+  })
+
+  it('엇나간 스태프 지시로 생긴 놀람도 놀람 로그를 남긴다(R8)', async () => {
+    const broadcast = await open(quietSetup({ staff: [operatorWith(['default'])] }))
+    const calmStaff: BroadcastInput = { type: 'directStaff', staffId: 'cammy', directiveId: 'default' }
+    let panicStep: number | null = null
+    for (let i = 0; i < 60 && panicStep === null; i++) {
+      const step = broadcast.currentStep
+      broadcast.step([calmStaff])
+      // 조용한 무대라 반응 놀람이 없다. startled는 엇나간 지시에서만 나온다.
+      if (broadcast.view().staff[0].mode === 'startled') panicStep = step
+    }
+    expect(panicStep).not.toBeNull()
+    expect(broadcast.view().log.filter((line) => line.step === panicStep)).toEqual([
+      expect.objectContaining({ text: '카메라 감독이 놀라 카메라를 휘둘렀다', depth: 1 }),
+    ])
+  })
+
+  it('광고 reset은 스태프 놀람을 평상시로 되돌린다(R12)', async () => {
+    const shouter = performer({
+      id: 'rex',
+      tags: ['host'],
+      reactions: [
+        reaction(
+          { kind: 'corner', tag: 'host' },
+          { pose: 'angry', emits: [{ kind: 'noise', intensity: 2, target: 'none' }] },
+        ),
+      ],
+    })
+    const broadcast = await open(setup({ performers: [shouter, MO], equipment: [] }))
+    run(broadcast, 2)
+    expect(broadcast.view().staff[0].mode).toBe('startled')
+
+    run(broadcast, 1, new Map([[2, [{ type: 'ad', effects: ['relief', 'reset'] }]]]))
+    expect(broadcast.view().staff[0]).toMatchObject({ mode: 'normal', recoveryProgress: 1 })
+    expect(broadcast.view().cameraAngles.close).toBe(0)
+  })
+
+  it("'가장 가까운 출연자' 지시를 받았는데 남은 출연자가 없으면 놀람을 끝내고 기준 방향으로 돌아온다", async () => {
+    const performers = [lowPerformer('rex', 1, ['host']), lowPerformer('mo', 1)]
+    const broadcast = await open(
+      setup({ performers, staff: [operatorWith(['nearestPerformer'])], equipment: [] }),
+    )
+    // 둘 다 이탈한다. 이탈의 소음(강도 2)에 카메라 감독이 놀란다.
+    broadcast.step([calm('rex'), calm('rex'), calm('rex'), calm('mo'), calm('mo'), calm('mo')])
+    broadcast.step([])
+    expect(broadcast.view().staff[0].mode).toBe('startled')
+    expect(broadcast.view().cameraAngles.close).not.toBe(0)
+
+    broadcast.step([{ type: 'directStaff', staffId: 'cammy', directiveId: 'nearestPerformer' }])
+    expect(broadcast.view().staff[0].mode).toBe('normal')
+    expect(broadcast.view().cameraAngles.close).toBe(0)
   })
 })

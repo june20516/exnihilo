@@ -33,20 +33,24 @@ function secondsToSteps(seconds: number): number {
 }
 
 /**
- * 클로즈업 대상 고르기(spec 3.1): startTag를 가진 첫 출연자, 없으면 존재감이 가장 높은 출연자
- * (같으면 먼저 오른 출연자). 후보는 무대에 오른 순서여야 한다. 아무도 없으면 null.
+ * 대상 이탈 뒤 재선택(spec 3.1): 존재감이 가장 높은 출연자, 같으면 먼저 오른 출연자.
+ * 후보는 무대에 오른 순서여야 한다. 아무도 없으면 null.
  */
-export function chooseTrackTarget(
-  candidates: readonly TrackCandidate[],
-  startTag: string,
-): string | null {
-  const tagged = candidates.find((candidate) => candidate.tags.includes(startTag))
-  if (tagged !== undefined) return tagged.id
+export function choosePresenceTarget(candidates: readonly TrackCandidate[]): string | null {
   let best: TrackCandidate | null = null
   for (const candidate of candidates) {
     if (best === null || candidate.presence > best.presence) best = candidate
   }
   return best?.id ?? null
+}
+
+/** 시작 대상(spec 3.1): 첫 코너 startTag를 가진 첫 출연자, 없으면 choosePresenceTarget. */
+export function chooseStartTarget(
+  candidates: readonly TrackCandidate[],
+  startTag: string,
+): string | null {
+  const tagged = candidates.find((candidate) => candidate.tags.includes(startTag))
+  return tagged?.id ?? choosePresenceTarget(candidates)
 }
 
 /**
@@ -74,10 +78,15 @@ export class CameraRig {
       }
       const recovery = def.recovery ?? STAFF_RECOVERY
       const holdSteps = secondsToSteps(recovery.holdSeconds)
+      const returnSteps = secondsToSteps(recovery.returnSeconds)
+      // 복귀가 한 스텝도 안 걸리면 복귀 보간(t = 경과/복귀 스텝)이 0으로 나누기가 된다.
+      if (holdSteps < 0 || returnSteps < 1) {
+        throw new Error(`스태프 ${def.id}의 복구 시간 범위 오류: 유지 ${holdSteps}스텝, 복귀 ${returnSteps}스텝`)
+      }
       const state: StaffState = {
         def,
         holdSteps,
-        totalSteps: holdSteps + secondsToSteps(recovery.returnSeconds),
+        totalSteps: holdSteps + returnSteps,
         panicYaw: null,
         elapsedSteps: 0,
       }
@@ -102,10 +111,12 @@ export class CameraRig {
     return this.requireCamera(cameraId).target
   }
 
+  /** PD의 대상 바꾸기(track). 스태프 지시 방향을 지우고 대상 추적으로 돌아간다(R7). */
   setTarget(cameraId: string, actorId: string | null): void {
     const camera = this.requireCamera(cameraId)
     if (camera.def.tracking !== true) throw new Error(`추적 카메라가 아닙니다: ${cameraId}`)
     camera.target = actorId
+    camera.directedYaw = null
   }
 
   /** 카메라별 실제 방향 */
@@ -118,15 +129,29 @@ export class CameraRig {
     return Object.fromEntries([...this.cameras.keys()].map((id) => [id, this.target(id)]))
   }
 
+  /** 방송 시작 때 추적 카메라마다 시작 대상을 정한다(chooseStartTarget). */
+  startTracking(candidates: readonly TrackCandidate[], startTag: string): void {
+    for (const camera of this.trackingCameras()) {
+      camera.target = chooseStartTarget(candidates, startTag)
+    }
+  }
+
   /**
    * 대상이 없거나 active(무대에 오른 순서의 이탈하지 않은 출연자)에 없는 추적 카메라는
-   * chooseTrackTarget으로 대상을 다시 고른다(spec 3.1).
+   * 존재감 규칙(choosePresenceTarget)으로만 다시 고른다. 코너 startTag는 다시 쓰지 않는다(R11).
    */
-  retarget(active: readonly TrackCandidate[], startTag: string): void {
-    for (const camera of this.cameras.values()) {
-      if (camera.def.tracking !== true) continue
+  retarget(active: readonly TrackCandidate[]): void {
+    for (const camera of this.trackingCameras()) {
       if (active.some((candidate) => candidate.id === camera.target)) continue
-      camera.target = chooseTrackTarget(active, startTag)
+      camera.target = choosePresenceTarget(active)
+    }
+  }
+
+  /** 광고 reset: 모든 스태프의 놀람을 끝내 평상시로 되돌린다(R12). 지시 방향은 그대로 둔다. */
+  calmAllStaff(): void {
+    for (const member of this.staff.values()) {
+      member.panicYaw = null
+      member.elapsedSteps = 0
     }
   }
 
@@ -182,6 +207,10 @@ export class CameraRig {
   private modeOf(member: StaffState): StaffMode {
     if (member.panicYaw === null) return 'normal'
     return member.elapsedSteps < member.holdSteps ? 'startled' : 'recovering'
+  }
+
+  private trackingCameras(): CameraState[] {
+    return [...this.cameras.values()].filter((camera) => camera.def.tracking === true)
   }
 
   private baseAngle(camera: CameraState): number {
