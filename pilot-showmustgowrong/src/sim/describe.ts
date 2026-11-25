@@ -1,0 +1,86 @@
+import type { PhenomenonEvent } from './phenomena'
+
+const HANGUL_FIRST = 0xac00
+const HANGUL_LAST = 0xd7a3
+const FINAL_CONSONANT_COUNT = 28
+
+/** 고정 환경 source의 이름. shortNames에 같은 id가 있으면 그쪽이 우선한다. */
+const BUILT_IN_NAMES: Record<string, string> = {
+  audience: '관객',
+  broadcast: '방송',
+}
+
+/** 끝 글자의 받침 유무. 한글이 아니면 null. */
+function hasFinalConsonant(word: string): boolean | null {
+  const code = word.charCodeAt(word.length - 1)
+  if (Number.isNaN(code) || code < HANGUL_FIRST || code > HANGUL_LAST) return null
+  return (code - HANGUL_FIRST) % FINAL_CONSONANT_COUNT !== 0
+}
+
+function attach(word: string, withFinal: string, withoutFinal: string): string {
+  const final = hasFinalConsonant(word)
+  if (final === null) return `${word}${withFinal}(${withoutFinal})`
+  return `${word}${final ? withFinal : withoutFinal}`
+}
+
+/** 주격 조사 이/가 */
+export function withSubject(word: string): string {
+  return attach(word, '이', '가')
+}
+
+/** 목적격 조사 을/를 */
+export function withObject(word: string): string {
+  return attach(word, '을', '를')
+}
+
+/** 접속 조사 와/과 */
+export function withPartner(word: string): string {
+  return attach(word, '과', '와')
+}
+
+/** 사고 로그 한 줄. 이름은 shortNames(출연자·스태프 shortName, 장비 name, 카메라 label)에서 찾는다. */
+export function describeEvent(event: PhenomenonEvent, shortNames: Record<string, string>): string {
+  const nameOf = (id: string): string => shortNames[id] ?? BUILT_IN_NAMES[id] ?? id
+  const source = nameOf(event.sourceId)
+  const target = event.targetId === null ? null : nameOf(event.targetId)
+
+  switch (event.kind) {
+    case 'impact':
+      return target === null
+        ? `${withSubject(source)} 쾅 하고 부딪혔다!`
+        : `${withSubject(source)} ${withPartner(target)} 부딪혔다!`
+    case 'laughter':
+      if (target !== null) return `${withSubject(source)} ${withObject(target)} 보고 웃는다`
+      return event.intensity === 3
+        ? `${withSubject(source)} 배를 잡고 웃는다`
+        : `${withSubject(source)} 웃음을 터뜨린다`
+    case 'anger': {
+      if (event.intensity === 3) return `${withSubject(source)} 욕설을 했다! (삐—)`
+      const outburst = event.intensity === 2 ? '버럭 화를 낸다' : '투덜댄다'
+      return target === null
+        ? `${withSubject(source)} ${outburst}`
+        : `${withSubject(source)} ${target}에게 ${outburst}`
+    }
+    case 'noise': {
+      const sound = { 1: '소리가 난다', 2: '큰 소리가 난다!', 3: '굉음이 울린다!' }[event.intensity]
+      return `${source} 쪽에서 ${sound}`
+    }
+    case 'darkness':
+      return `${withSubject(source)} 꺼지고 주위가 어두워졌다!`
+    case 'exposure':
+      return target === null
+        ? `${source} 쪽에서 보여선 안 될 것이 드러났다!`
+        : `${withSubject(target)} 민망한 모습을 드러냈다!`
+    case 'silence':
+      return {
+        1: '방송에 정적이 흐른다…',
+        2: '방송에 어색한 정적이 이어진다…',
+        3: '방송이 얼어붙었다…',
+      }[event.intensity]
+    case 'gaze':
+      if (target === null) return `${withSubject(source)} 화면을 비춘다`
+      return event.sourceId === 'broadcast'
+        ? `${withSubject(target)} 한동안 화면에 잡히지 않았다`
+        : `${withSubject(source)} ${withObject(target)} 잡았다`
+  }
+}
