@@ -70,8 +70,9 @@ const actorItem = (v: FeedView, id: string) => feedOf(v).find((item) => item.id 
 describe('screenX', () => {
   it('카메라 정면은 0, 화각 끝은 왼쪽 -1과 오른쪽 1이다', () => {
     const center = polar(0, 10)
-    const left = polar(30, 10)
-    const right = polar(-30, 10)
+    // 위에서 내려다보면 yaw는 +x(0°)에서 +z(90°)로 시계 방향으로 커지므로 카메라의 오른쪽이다.
+    const left = polar(-30, 10)
+    const right = polar(30, 10)
     const v = view([
       actor('c', center.x, center.z),
       actor('l', left.x, left.z),
@@ -82,9 +83,24 @@ describe('screenX', () => {
     expect(actorItem(v, 'r')?.screenX).toBeCloseTo(1)
   })
 
-  it('yaw가 커지는 쪽이 화면 왼쪽이다', () => {
+  it('yaw가 커지는 쪽이 화면 오른쪽이다', () => {
     const point = polar(10, 10)
-    expect(actorItem(view([actor('a', point.x, point.z)]), 'a')?.screenX).toBeLessThan(0)
+    expect(actorItem(view([actor('a', point.x, point.z)]), 'a')?.screenX).toBeGreaterThan(0)
+  })
+
+  it('무대 와이드 피드의 좌우 순서가 스튜디오 쿼터뷰와 같다(x가 큰 출연자가 오른쪽)', async () => {
+    const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed: 1 })
+    try {
+      const wide = TALK_SHOW.cameras.find((camera) => camera.id === 'wide')
+      if (wide === undefined) throw new Error('wide 카메라가 없습니다')
+      const items = cameraFeed(broadcast.view(), wide, TALK_SHOW.audienceZone)
+      const xOf = (id: string) => items.find((item) => item.id === id)?.screenX
+      expect(xOf('rex')).toBeLessThan(xOf('priya') ?? Number.NaN)
+      expect(xOf('priya')).toBeLessThan(xOf('okafor') ?? Number.NaN)
+      expect(xOf('okafor')).toBeLessThan(xOf('mo') ?? Number.NaN)
+    } finally {
+      broadcast.dispose()
+    }
   })
 
   it('카메라의 현재 yaw를 기준으로 한다', () => {
@@ -173,7 +189,7 @@ describe('목록', () => {
   it('화각 밖으로 걸친 대상의 screenX는 -1~1로 자른다', () => {
     const outside = polar(45, 10)
     const v = view([actor('wide', outside.x, outside.z)])
-    expect(actorItem(v, 'wide')?.screenX).toBe(-1)
+    expect(actorItem(v, 'wide')?.screenX).toBe(1)
   })
 
   it('카메라에 붙은 대상의 size는 MIN_DISTANCE에서 멈춘다', () => {

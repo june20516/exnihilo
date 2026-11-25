@@ -14,7 +14,7 @@ export interface FeedItem {
   kind: FeedKind
   id: string
   label: string
-  /** -1(화면 왼쪽 끝) ~ 1(오른쪽 끝). yaw가 커지는 쪽이 왼쪽이다. */
+  /** -1(화면 왼쪽 끝) ~ 1(오른쪽 끝). 위에서 보면 yaw는 시계 방향으로 커지므로 yaw가 커지는 쪽이 오른쪽이다. */
   screenX: number
   /** 거리에 반비례하는 상대 크기 */
   size: number
@@ -86,7 +86,7 @@ export function cameraFeed(
       kind,
       id,
       label,
-      screenX: Math.max(-1, Math.min(1, -offset / (camera.fovDegrees / 2))),
+      screenX: Math.max(-1, Math.min(1, offset / (camera.fovDegrees / 2))),
       size,
       heightOffset: at.y * size,
       equipmentKind,
