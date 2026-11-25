@@ -127,6 +127,11 @@ function isInsideStudio(point: FloorPoint): boolean {
   return clamped.x === point.x && clamped.z === point.z
 }
 
+/** 서 있는 actor의 회전을 모두 잠근다. */
+function lockRotations(body: RAPIER.RigidBody, wakeUp: boolean): void {
+  body.setEnabledRotations(false, false, false, wakeUp)
+}
+
 function speedOf(velocity: Vec3): number {
   return Math.hypot(velocity.x, velocity.y, velocity.z)
 }
@@ -221,7 +226,7 @@ export class PhysicsWorld {
         .setCcdEnabled(true)
         .setCanSleep(false),
     )
-    body.setEnabledRotations(false, false, false, false)
+    lockRotations(body, false)
     const collider = this.world.createCollider(
       RAPIER.ColliderDesc.capsule(CAPSULE.halfHeight, CAPSULE.radius)
         .setDensity(MASS_DENSITY[weight])
@@ -353,7 +358,10 @@ export class PhysicsWorld {
     }
   }
 
-  /** from에서 to까지 장비가 시선을 가리지 않으면 true. 출연자, 바닥, 벽은 무시한다. */
+  /**
+   * from에서 to까지 장비가 시선을 가리지 않으면 true. 출연자, 바닥, 벽은 무시한다.
+   * 직전 step()에서 갱신된 collider 위치 기준이며, addEquipment/releaseEquipment 직후엔 step 이후에 호출할 것.
+   */
   lineOfSight(from: Vec3, to: Vec3): boolean {
     this.assertAlive()
     const dx = to.x - from.x
@@ -409,7 +417,7 @@ export class PhysicsWorld {
     body.setRotation(IDENTITY_ROTATION, true)
     body.setLinvel(ZERO, true)
     body.setAngvel(ZERO, true)
-    body.setEnabledRotations(false, false, false, true)
+    lockRotations(body, true)
     // collider 위치를 바로 맞춰서 query가 옛 위치의 collider를 장애물로 보지 않게 한다.
     this.world.propagateModifiedBodyPositionsToColliders()
     this.standSpotsSinceStep.set(entry.collider.handle, spot)
@@ -428,10 +436,9 @@ export class PhysicsWorld {
       return owner?.kind === 'actor' || owner?.kind === 'equipment'
     }
     const minGap = 2 * (CAPSULE.radius + STAND_UP_CLEARANCE)
+    const newSpots = [...this.standSpotsSinceStep].filter(([handle]) => handle !== self.handle)
     const clearOfNewSpots = (candidate: FloorPoint): boolean =>
-      [...this.standSpotsSinceStep].every(
-        ([handle, spot]) => handle === self.handle || floorDistance(spot, candidate) >= minGap,
-      )
+      newSpots.every(([, spot]) => floorDistance(spot, candidate) >= minGap)
     const isFree = (candidate: FloorPoint): boolean =>
       clearOfNewSpots(candidate) &&
       this.world.intersectionWithShape(
@@ -496,7 +503,6 @@ export class PhysicsWorld {
     const owner2 = this.owners.get(handle2)
     if (owner1 === undefined || owner2 === undefined) return undefined
     if (owner1.kind === 'boundary' || owner2.kind === 'boundary') return undefined
-    if (owner1.kind === 'floor' && owner2.kind === 'floor') return undefined
 
     // actor를 a에 둔다. 바닥은 항상 b다.
     const swap = owner2.kind === 'actor' && owner1.kind !== 'actor'

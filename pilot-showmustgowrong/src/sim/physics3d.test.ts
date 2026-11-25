@@ -1,4 +1,4 @@
-import { CAPSULE, STAND_UP_SECONDS, STEP_SECONDS, STUDIO_DEPTH } from '@/content/balance'
+import { CAPSULE, STAND_UP_SECONDS, STEP_SECONDS, STUDIO_DEPTH, STUDIO_HEIGHT, STUDIO_WIDTH } from '@/content/balance'
 import { type Contact, type EquipmentDef3, initPhysics, PhysicsWorld } from './physics3d'
 import { type FloorPoint, floorDistance } from './vec'
 
@@ -80,7 +80,11 @@ describe('PhysicsWorld 3D', () => {
         if (i === 150) world.impulse('b', { x: 3, y: 9, z: -2 })
         world.step()
       }
-      return ['a', 'b', 'c'].map((id) => world.actorState(id)?.position)
+      return ['a', 'b', 'c'].map((id) => {
+        const state = world.actorState(id)
+        if (state === undefined) throw new Error(`actor 없음: ${id}`)
+        return state
+      })
     }
     expect(run()).toEqual(run())
   })
@@ -264,7 +268,9 @@ describe('PhysicsWorld 3D', () => {
       { x: 0, y: 5, z: -30 },
       { x: 0, y: 30, z: 0 },
     ]
-    launches.forEach((_, index) => world.addActor(`a${index}`, { x: 8, z: 5 + index * 0.001 }, 'light'))
+    launches.forEach((_, index) =>
+      world.addActor(`a${index}`, { x: 2 + index * 3, z: 5 }, 'light'),
+    )
     stepMany(world, SETTLE_STEPS)
     launches.forEach((velocity, index) => world.impulse(`a${index}`, velocity))
     for (let i = 0; i < 300; i += 1) {
@@ -272,12 +278,56 @@ describe('PhysicsWorld 3D', () => {
       launches.forEach((_, index) => {
         const position = world.actorState(`a${index}`)?.position
         expect(position?.x).toBeGreaterThan(0)
-        expect(position?.x).toBeLessThan(16)
+        expect(position?.x).toBeLessThan(STUDIO_WIDTH)
         expect(position?.z).toBeGreaterThan(0)
         expect(position?.z).toBeLessThan(STUDIO_DEPTH)
-        expect(position?.y).toBeLessThan(9)
+        expect(position?.y).toBeLessThan(STUDIO_HEIGHT)
       })
     }
+  })
+
+  it('removeActor 뒤에는 상태가 없고 그 actor의 접촉도 나오지 않는다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('left', { x: 7.4, z: 5 }, 'normal')
+    world.addActor('right', { x: 8.6, z: 5 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.removeActor('right')
+    expect(world.actorState('right')).toBeUndefined()
+    const contacts: Contact[] = []
+    for (let i = 0; i < 60; i += 1) {
+      world.impulse('left', { x: 6, y: 0, z: 0 })
+      contacts.push(...world.step())
+    }
+    expect(contacts).toEqual([])
+  })
+
+  it('releaseEquipment를 두 번 불러도 두 번째는 무시한다', () => {
+    const world = new PhysicsWorld()
+    world.addEquipment(SET_WALL)
+    world.releaseEquipment('wall')
+    stepMany(world, 30)
+    const before = world.equipmentState('wall')
+    world.releaseEquipment('wall')
+    world.step()
+    const after = world.equipmentState('wall')
+    expect(after?.rotation.x).not.toBeCloseTo(0, 5)
+    // 각속도가 다시 설정되었다면 회전 진행이 달라진다. 한 스텝 진행량이 이전 속도의 연장선인지 본다.
+    const reference = new PhysicsWorld()
+    reference.addEquipment(SET_WALL)
+    reference.releaseEquipment('wall')
+    stepMany(reference, 31)
+    expect(after).toEqual(reference.equipmentState('wall'))
+    expect(before?.released).toBe(true)
+  })
+
+  it('없는 id로 impulse, teleport, removeActor를 불러도 오류 없이 무시한다', () => {
+    const world = new PhysicsWorld()
+    expect(() => {
+      world.impulse('ghost', { x: 1, y: 1, z: 1 })
+      world.teleport('ghost', { x: 1, z: 1 })
+      world.removeActor('ghost')
+      world.releaseEquipment('ghost')
+    }).not.toThrow()
   })
 
   it('dispose 뒤 메서드를 부르면 명시적 오류를 던진다', () => {
