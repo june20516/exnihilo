@@ -10,7 +10,13 @@ import {
   type BroadcastView,
   type ChainLine,
 } from '@/sim/engine'
+import type { BroadcastErrorKind } from './ErrorScreen'
 import { BroadcastLoop, type LoopSnapshot, type Slowmo } from './loopState'
+
+export interface BroadcastError {
+  kind: BroadcastErrorKind
+  message: string
+}
 
 export interface BroadcastResult {
   summary: BroadcastSummary
@@ -21,8 +27,8 @@ export interface BroadcastResult {
 
 export interface BroadcastLoopControls {
   view: BroadcastView | null
-  /** Broadcast.create 실패나 루프 오류. 있으면 오류 화면을 띄운다(spec 9.6). */
-  error: string | null
+  /** Broadcast.create 실패(create)나 방송 중 예외(runtime). 있으면 오류 화면을 띄운다(spec 9.6). */
+  error: BroadcastError | null
   /** 방송이 끝나면(완료 또는 중단) 채워진다. */
   result: BroadcastResult | null
   slowmo: Slowmo
@@ -66,7 +72,7 @@ export function useBroadcastLoop(setup: BroadcastSetup): BroadcastLoopControls {
   const loopRef = useRef<BroadcastLoop<BroadcastView> | null>(null)
   const [view, setView] = useState<BroadcastView | null>(null)
   const [snapshot, setSnapshot] = useState<LoopSnapshot>(INITIAL_SNAPSHOT)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<BroadcastError | null>(null)
   const [result, setResult] = useState<BroadcastResult | null>(null)
 
   useEffect(() => {
@@ -89,7 +95,7 @@ export function useBroadcastLoop(setup: BroadcastSetup): BroadcastLoopControls {
       try {
         loop.frame(seconds)
       } catch (frameError) {
-        setError(errorMessage(frameError))
+        setError({ kind: 'runtime', message: errorMessage(frameError) })
         return
       }
       publish(loop)
@@ -119,7 +125,7 @@ export function useBroadcastLoop(setup: BroadcastSetup): BroadcastLoopControls {
         frameId = requestAnimationFrame(onFrame)
       },
       (createError: unknown) => {
-        if (!disposed) setError(errorMessage(createError))
+        if (!disposed) setError({ kind: 'create', message: errorMessage(createError) })
       },
     )
 

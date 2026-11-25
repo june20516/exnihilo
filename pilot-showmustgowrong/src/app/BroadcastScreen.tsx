@@ -12,6 +12,7 @@ import { StudioRenderer } from '@/render/StudioRenderer'
 import { clientToCanvas } from '@/render/geometry'
 import type { BroadcastInput, BroadcastSetup } from '@/sim/engine'
 import { AdPanel } from './AdPanel'
+import { ErrorScreen } from './ErrorScreen'
 import { CameraSwitcher, EventLog, GaugeMeters, ViewerBoard } from './Hud'
 import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
@@ -50,6 +51,8 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<StudioRenderer | null>(null)
   const [rendererError, setRendererError] = useState<string | null>(null)
+  // 결과·오류 화면에서는 스튜디오가 없으므로 렌더러를 정리한다(다시 하기 때 새로 만든다).
+  const studioVisible = loop.error === null && rendererError === null && loop.result === null
   const [selectedTarget, setSelectedTarget] = useState<InterventionTarget | null>(null)
 
   const performers = useMemo(
@@ -63,7 +66,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   // 렌더러 생명주기. StrictMode 이중 마운트에서는 AbortController로 앞의 생성을 취소한다.
   useEffect(() => {
     const host = hostRef.current
-    if (host === null) return
+    if (!studioVisible || host === null) return
     const controller = new AbortController()
     let renderer: StudioRenderer | null = null
     StudioRenderer.create(host, show, controller.signal).then(
@@ -80,7 +83,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       renderer?.destroy()
       rendererRef.current = null
     }
-  }, [show])
+  }, [show, studioVisible])
 
   useEffect(() => {
     if (view !== null) rendererRef.current?.draw(view, slowmo !== 'none')
@@ -138,8 +141,10 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     setSelectedTarget(null)
   }
 
-  const error = loop.error ?? rendererError
-  if (error !== null) return <ErrorScreen message={error} />
+  if (loop.error !== null) {
+    return <ErrorScreen kind={loop.error.kind} message={loop.error.message} />
+  }
+  if (rendererError !== null) return <ErrorScreen kind="create" message={rendererError} />
   if (loop.result !== null) return <ResultScreen result={loop.result} onRestart={onRestart} />
 
   const highlightedEventId = slowmo === 'auto' ? (view?.autoSlowmo?.eventId ?? null) : null
@@ -263,27 +268,5 @@ function CommercialBreak({ secondsLeft }: { secondsLeft: number }) {
         광고 중 · {Math.ceil(secondsLeft)}초 뒤 방송으로 돌아갑니다
       </div>
     </div>
-  )
-}
-
-function ErrorScreen({ message }: { message: string }) {
-  return (
-    <main
-      data-testid="error-screen"
-      className="flex h-screen flex-col items-center justify-center gap-4 overflow-hidden bg-neutral-950 p-8 text-white"
-    >
-      <h1 className="text-2xl font-bold text-red-400">방송을 시작할 수 없습니다</h1>
-      <pre className="max-h-[400px] max-w-[900px] overflow-hidden whitespace-pre-wrap text-sm text-neutral-300">
-        {message}
-      </pre>
-      <p>새로고침해 주세요.</p>
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="rounded bg-neutral-700 px-4 py-2 hover:bg-neutral-600"
-      >
-        새로고침
-      </button>
-    </main>
   )
 }

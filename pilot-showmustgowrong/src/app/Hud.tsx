@@ -28,7 +28,7 @@ export function ViewerBoard({ view, show }: HudProps) {
           남은 시간 <b className="text-lg">{formatRemaining(view.step)}</b>
         </span>
         <span data-testid="corner" className="text-neutral-300">
-          코너 {view.cornerIndex + 1}/3 · {corner.label}
+          코너 {view.cornerIndex + 1}/{show.corners.length} · {corner.label}
         </span>
       </div>
     </section>
