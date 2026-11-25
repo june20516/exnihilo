@@ -65,7 +65,7 @@ import {
   type StaffView,
 } from './engineTypes'
 import { updateGaze } from './gaze'
-import { validateInputs } from './inputValidation'
+import { dropGoneActorInputs, validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
 import { TENSION_WINDOW_STEPS, tensionOf, viewersTrendOf } from './tension'
 import { StageLocator, type Emitter } from './targeting'
@@ -342,6 +342,15 @@ export class Broadcast {
       benchLeft: this.benchQueue.length,
       fatigue: this.director.fatigue,
     }
+  }
+
+  /**
+   * Ruling 35: 실시간 루프가 쌓아 둔 입력 중 이미 이탈했거나 같은 묶음의 앞선 지시로 이탈할
+   * 출연자를 가리키는 direct·track을 뺀다. step의 검증과 같은 기준이라 남은 묶음은 그 이유로
+   * throw하지 않는다. 상태는 바꾸지 않는다.
+   */
+  dropInvalidQueuedInputs(inputs: readonly BroadcastInput[]): BroadcastInput[] {
+    return dropGoneActorInputs(inputs, { cast: this.cast, director: this.director })
   }
 
   inputLog(): InputRecord[] {

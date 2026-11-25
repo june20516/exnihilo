@@ -1237,6 +1237,21 @@ describe('클로즈업 추적과 스태프 복구', () => {
     )
   })
 
+  it('dropInvalidQueuedInputs는 검증과 같은 기준으로 이탈한(묶음 안에서 이탈할) 출연자 입력만 뺀다', async () => {
+    const performers = [lowPerformer('rex', 1, ['host']), lowPerformer('mo', 1)]
+    const broadcast = await open(quietSetup({ show: TRACKING_SHOW, performers }))
+    const batch = [calm('rex'), calm('rex'), calm('rex'), track('rex'), calm('rex'), track('mo')]
+    const kept = broadcast.dropInvalidQueuedInputs(batch)
+    expect(kept).toEqual([calm('rex'), calm('rex'), calm('rex'), track('mo')])
+    // 무대에 없는 id처럼 다른 이유로 틀린 입력은 남겨 검증이 잡게 한다
+    expect(broadcast.dropInvalidQueuedInputs([track('ghost')])).toEqual([track('ghost')])
+    // 상태를 바꾸지 않고, 남은 묶음은 throw하지 않는다
+    expect(broadcast.inputLog()).toEqual([])
+    expect(() => broadcast.step(kept)).not.toThrow()
+    expect(broadcast.view().cameraTargets.close).toBe('mo')
+    expect(broadcast.dropInvalidQueuedInputs([calm('rex'), track('rex')])).toEqual([])
+  })
+
   it('스태프 view는 놀람, 복구 중, 평상시를 보이고 복구가 끝나면 자리를 잡았다는 로그가 남는다', async () => {
     const shouter = performer({
       id: 'rex',

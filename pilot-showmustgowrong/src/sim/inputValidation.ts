@@ -28,6 +28,28 @@ function isGoneBeforeInput(
 }
 
 /**
+ * Ruling 35: 입력 묶음에서 이미 이탈한(또는 같은 묶음의 앞선 지시로 이탈할) 출연자를 가리키는
+ * direct와 track을 뺀다. validateInputs와 같은 기준(isGoneBeforeInput)이라 남은 묶음은 이 이유로
+ * throw하지 않는다. 무대에 없는 id처럼 다른 이유로 틀린 입력은 그대로 두어 검증이 잡게 한다.
+ */
+export function dropGoneActorInputs(
+  inputs: readonly BroadcastInput[],
+  deps: Pick<InputValidationDeps, 'cast' | 'director'>,
+): BroadcastInput[] {
+  const directed = new Map<string, number>()
+  return inputs.filter((input) => {
+    if (input.type !== 'direct' && input.type !== 'track') return true
+    const member = deps.cast.get(input.actorId)
+    if (member === undefined) return true
+    if (isGoneBeforeInput(member, directed, deps.director)) return false
+    if (input.type === 'direct') {
+      directed.set(input.actorId, (directed.get(input.actorId) ?? 0) + 1)
+    }
+    return true
+  })
+}
+
+/**
  * Ruling 20: 입력 묶음 전체를 적용 전에 검증한다. 하나라도 틀리면 throw하므로
  * 엔진은 아무것도 바꾸지 않은 채로 남는다. 같은 묶음 안에서 앞선 지시로 이탈하거나
  * 광고를 쓰는 것도 센다.

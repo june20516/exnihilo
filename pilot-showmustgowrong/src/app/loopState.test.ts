@@ -4,7 +4,11 @@ import {
   INTERVENTION_REAL_SECONDS,
   MAX_STEPS_PER_FRAME,
   STEP_SECONDS,
+  TOLERANCE_COUNT,
 } from '@/content/balance'
+import { LINEUP } from '@/content/lineup'
+import { TALK_SHOW } from '@/content/talkShow'
+import { Broadcast } from '@/sim/engine'
 import type {
   ActorView,
   AutoSlowmo,
@@ -55,6 +59,16 @@ class FakeBroadcast implements LoopBroadcast<FakeView> {
   resumeFromAd(): void {
     this.phase = 'live'
     this.resumeCount += 1
+  }
+
+  /** 가짜는 지금 이탈한 출연자를 가리키는 direct·track만 뺀다(묶음 안 이탈은 실제 엔진 테스트에서 본다). */
+  dropInvalidQueuedInputs(inputs: readonly BroadcastInput[]): BroadcastInput[] {
+    const gone = new Set(
+      this.actors.filter((entry) => entry.walkedOut || entry.departed).map((entry) => entry.id),
+    )
+    return inputs.filter(
+      (input) => (input.type !== 'direct' && input.type !== 'track') || !gone.has(input.actorId),
+    )
   }
 
   view(): FakeView {
@@ -224,6 +238,31 @@ describe('BroadcastLoop 입력 재검증(Ruling 35)', () => {
     runFrames(loop, 1)
     expect(broadcast.steps[0]).toEqual([trackPriya])
     expect(loop.snapshot().interventionsIssued).toBe(0)
+  })
+})
+
+describe('BroadcastLoop 입력 재검증과 실제 엔진', () => {
+  it('같은 스텝에 이탈을 부르는 지시와 그 출연자로의 track이 쌓여도 track만 버리고 방송은 이어진다', async () => {
+    const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed: 1 })
+    try {
+      const loop = new BroadcastLoop(broadcast)
+      const rebut: BroadcastInput = { type: 'direct', actorId: 'okafor', directiveId: 'rebut' }
+      const track: BroadcastInput = { type: 'track', cameraId: 'close', actorId: 'okafor' }
+      // 내성 low(지시 2회)를 넘는 세 번째 지시가 이탈을 부른다
+      for (let count = 0; count <= TOLERANCE_COUNT.low; count++) loop.send(rebut)
+      loop.send(track)
+      expect(() => loop.frame(FRAME)).not.toThrow()
+
+      const okafor = loop.view.actors.find((entry) => entry.id === 'okafor')
+      expect(okafor?.walkedOut).toBe(true)
+      expect(loop.view.cameraTargets.close).not.toBe('okafor')
+      expect(broadcast.inputLog().map(({ input }) => input)).toEqual(
+        Array.from({ length: TOLERANCE_COUNT.low + 1 }, () => rebut),
+      )
+      expect(loop.snapshot().interventionsIssued).toBe(TOLERANCE_COUNT.low + 1)
+    } finally {
+      broadcast.dispose()
+    }
   })
 })
 

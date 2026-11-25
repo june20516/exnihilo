@@ -7,24 +7,17 @@ import {
 } from '@/content/balance'
 import { Clock } from '@/sim/clock'
 import type { AdEffect } from '@/sim/director'
-import type { ActorView, AutoSlowmo, BroadcastInput, Phase } from '@/sim/engineTypes'
+import type { AutoSlowmo, BroadcastInput, Phase } from '@/sim/engineTypes'
 
 /** 개입으로 세는 입력. 스위처와 클로즈업 대상 바꾸기(track)는 공짜다(spec 3.1). */
 function isDirective(input: BroadcastInput): boolean {
   return input.type === 'direct' || input.type === 'directStaff'
 }
 
-type ActorInput = Extract<BroadcastInput, { type: 'direct' | 'track' }>
-
-function targetsActor(input: BroadcastInput): input is ActorInput {
-  return input.type === 'direct' || input.type === 'track'
-}
-
 /** 루프가 view에서 읽는 필드. */
 export interface LoopViewFields {
   phase: Phase
   autoSlowmo: AutoSlowmo | null
-  actors: readonly Pick<ActorView, 'id' | 'walkedOut' | 'departed'>[]
 }
 
 /** 루프가 돌리는 방송. 실제로는 Broadcast이고, 테스트에서는 가짜로 바꾼다. */
@@ -33,6 +26,8 @@ export interface LoopBroadcast<V extends LoopViewFields> {
   step(inputs?: readonly BroadcastInput[]): void
   resumeFromAd(): void
   view(): V
+  /** 큐에 쌓인 입력 중 그사이 이탈한 출연자를 가리키는 것을 뺀다(엔진의 검증과 같은 기준). */
+  dropInvalidQueuedInputs(inputs: readonly BroadcastInput[]): BroadcastInput[]
 }
 
 export type Slowmo = 'none' | 'auto' | 'intervention'
@@ -152,7 +147,8 @@ export class BroadcastLoop<V extends LoopViewFields> {
     this.clock.speed = this.isSlowed() ? INTERVENTION_SPEED : 1
     const steps = this.clock.advance(seconds)
     for (let index = 0; index < steps && this.broadcast.phase === 'live'; index++) {
-      const inputs = this.stillValid(this.queuedInputs)
+      // Ruling 35: 그사이 이탈한 출연자에게 간 지시·track은 넘기기 전에 버린다.
+      const inputs = this.broadcast.dropInvalidQueuedInputs(this.queuedInputs)
       this.queuedInputs = []
       this.broadcast.step(inputs)
       this.interventionsIssued += inputs.filter(isDirective).length
@@ -173,22 +169,6 @@ export class BroadcastLoop<V extends LoopViewFields> {
       adBreakSecondsLeft: this.adBreakSecondsLeft,
       ended: this.ended,
     }
-  }
-
-  /**
-   * Ruling 35: 큐에 쌓인 지시나 클로즈업 대상 바꾸기(track)가 그사이 이탈한(출구로 걸어가거나 빠진)
-   * 출연자를 가리키면 넘기기 전에 버린다. 그런 입력이 있을 때만 방송의 최신 view를 읽는다.
-   * 엔진은 그런 입력에 그대로 throw한다.
-   */
-  private stillValid(inputs: BroadcastInput[]): BroadcastInput[] {
-    if (!inputs.some(targetsActor)) return inputs
-    const gone = new Set(
-      this.broadcast
-        .view()
-        .actors.filter((actor) => actor.walkedOut || actor.departed)
-        .map((actor) => actor.id),
-    )
-    return inputs.filter((input) => !targetsActor(input) || !gone.has(input.actorId))
   }
 
   private slowmo(): Slowmo {
