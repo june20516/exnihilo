@@ -14,6 +14,13 @@ export interface HoverTipState extends HoverTipContent {
   y: number
 }
 
+/** 호버 설명을 붙인 대상과 그 자리(스튜디오 영역 안의 CSS 좌표). 내용은 매 view마다 다시 구한다. */
+export interface HoverAnchor {
+  hit: StudioHit
+  x: number
+  y: number
+}
+
 /** 현상의 원인·대상 id 가운데 출연자·장비·스태프가 아닌 것의 이름 */
 const SPECIAL_SOURCE_NAMES: Record<string, string> = {
   broadcast: '방송',
@@ -70,4 +77,17 @@ export function hoverTipContent(
     }
   }
   return null
+}
+
+/**
+ * 고정된 자리에 띄울 호버 설명을 지금 view로 다시 만든다. 장비 상태가 바뀌면 내용이 바뀌고,
+ * 현상이 사라졌거나 설명할 대상이 아니면 null(설명을 닫는다).
+ */
+export function resolveHoverTip(
+  anchor: HoverAnchor,
+  view: Pick<BroadcastView, 'equipment' | 'recentPhenomena'>,
+  setup: HoverSetup,
+): HoverTipState | null {
+  const content = hoverTipContent(anchor.hit, view, setup)
+  return content === null ? null : { ...content, x: anchor.x, y: anchor.y }
 }

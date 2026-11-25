@@ -16,7 +16,7 @@ import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine
 import { AdPanel } from './AdPanel'
 import { ErrorScreen } from './ErrorScreen'
 import { HoverTip } from './HoverTip'
-import { hoverTipContent, type HoverTipState } from './hoverTipContent'
+import { resolveHoverTip, type HoverAnchor, type HoverTipState } from './hoverTipContent'
 import { EventLog, TopBand } from './Hud'
 import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
@@ -77,7 +77,8 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   // 결과·오류 화면에서는 스튜디오가 없으므로 렌더러를 정리한다(다시 하기 때 새로 만든다).
   const studioVisible = loop.error === null && rendererError === null && loop.result === null
   const [selectedTarget, setSelectedTarget] = useState<InterventionTarget | null>(null)
-  const [hoverTip, setHoverTip] = useState<HoverTipState | null>(null)
+  /** 호버 설명의 대상과 자리. 내용은 렌더마다 지금 view로 다시 구한다(resolveHoverTip). */
+  const [hoverAnchor, setHoverAnchor] = useState<HoverAnchor | null>(null)
   /** 지금 호버 설명을 띄운 대상("kind:id"). 같은 대상 위의 mousemove는 건너뛴다. */
   const hoverKeyRef = useRef<string | null>(null)
 
@@ -173,7 +174,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const beginIntervention = useCallback(() => {
     setSelectedTarget(null)
     hoverKeyRef.current = null
-    setHoverTip(null)
+    setHoverAnchor(null)
     openIntervention()
   }, [openIntervention])
 
@@ -261,19 +262,22 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       const found = studioHitAt(event)
       // 호버 설명은 개입 밖에서만(개입 중에는 판단 카드가 주인공이다).
       const hit = found === null || view === null || interventionOpen ? null : found.hit
-      // 같은 대상 위에서 움직이면 다시 계산하지 않는다(설명은 처음 올라간 자리에 머문다).
+      // 같은 대상 위에서 움직이면 자리를 옮기지 않는다(설명은 처음 올라간 자리에 머문다).
       const key = hit === null ? null : `${hit.kind}:${hit.id}`
       if (key === hoverKeyRef.current) return
       hoverKeyRef.current = key
-      const content = hit === null || view === null ? null : hoverTipContent(hit, view, setup)
-      const tip = content === null || found === null ? null : { ...content, x: found.x, y: found.y }
-      setHoverTip(tip)
+      setHoverAnchor(hit === null || found === null ? null : { hit, x: found.x, y: found.y })
     },
     onMouseLeave: () => {
       hoverKeyRef.current = null
-      setHoverTip(null)
+      setHoverAnchor(null)
     },
   }
+
+  const hoverTip: HoverTipState | null =
+    hoverAnchor === null || view === null || interventionOpen
+      ? null
+      : resolveHoverTip(hoverAnchor, view, setup)
 
   const onDirect = (input: BroadcastInput): void => {
     send(input)
@@ -292,7 +296,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       setup={setup}
       controls={loop}
       selectedTarget={selectedTarget}
-      hoverTip={interventionOpen ? null : hoverTip}
+      hoverTip={hoverTip}
       onSelectTarget={setSelectedTarget}
       onDirect={onDirect}
       onBeginIntervention={beginIntervention}

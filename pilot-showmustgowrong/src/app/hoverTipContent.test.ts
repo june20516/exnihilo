@@ -1,6 +1,6 @@
 import { LINEUP } from '@/content/lineup'
 import type { EquipmentView, RecentPhenomenon } from '@/sim/engineTypes'
-import { hoverTipContent } from './hoverTipContent'
+import { hoverTipContent, resolveHoverTip } from './hoverTipContent'
 
 const LIGHT: EquipmentView = {
   id: 'overheatedLight',
@@ -68,5 +68,25 @@ describe('hoverTipContent', () => {
     expect(hoverTipContent({ kind: 'actor', id: 'rex' }, VIEW, LINEUP)).toBeNull()
     expect(hoverTipContent(null, VIEW, LINEUP)).toBeNull()
     expect(hoverTipContent({ kind: 'phenomenon', id: 99 }, VIEW, LINEUP)).toBeNull()
+  })
+})
+
+describe('resolveHoverTip', () => {
+  it('자리는 그대로 두고 내용은 지금 view로 다시 만든다(장비가 부서지면 바뀐다)', () => {
+    const anchor = { hit: { kind: 'equipment', id: LIGHT.id } as const, x: 40, y: 50 }
+    const before = resolveHoverTip(anchor, VIEW, LINEUP)
+    const after = resolveHoverTip(
+      anchor,
+      { ...VIEW, equipment: [{ ...LIGHT, released: true }] },
+      LINEUP,
+    )
+    expect(before).toMatchObject({ x: 40, y: 50, lines: ['상태: 멀쩡함', '충격 2 이상에 부서짐'] })
+    expect(after).toMatchObject({ x: 40, y: 50, lines: ['상태: 부서짐', '충격 2 이상에 부서짐'] })
+  })
+
+  it('현상이 사라지면 설명을 닫는다(null)', () => {
+    const anchor = { hit: { kind: 'phenomenon', id: NOISE.id } as const, x: 10, y: 20 }
+    expect(resolveHoverTip(anchor, VIEW, LINEUP)?.title).toBe(NOISE.text)
+    expect(resolveHoverTip(anchor, { ...VIEW, recentPhenomena: [] }, LINEUP)).toBeNull()
   })
 })
