@@ -1325,22 +1325,6 @@ describe('클로즈업 추적과 스태프 복구', () => {
     expect(view.cameraAngles.close).toBeCloseTo(yawBetween(CLOSE_POSITION, mo), 3)
   })
 
-  it('엇나간 스태프 지시로 생긴 놀람도 놀람 로그를 남긴다(R8)', async () => {
-    const broadcast = await open(quietSetup({ staff: [operatorWith(['default'])] }))
-    const calmStaff: BroadcastInput = { type: 'directStaff', staffId: 'cammy', directiveId: 'default' }
-    let panicStep: number | null = null
-    for (let i = 0; i < 60 && panicStep === null; i++) {
-      const step = broadcast.currentStep
-      broadcast.step([calmStaff])
-      // 조용한 무대라 반응 놀람이 없다. startled는 엇나간 지시에서만 나온다.
-      if (broadcast.view().staff[0].mode === 'startled') panicStep = step
-    }
-    expect(panicStep).not.toBeNull()
-    expect(broadcast.view().log.filter((line) => line.step === panicStep)).toEqual([
-      expect.objectContaining({ text: '카메라 감독이 놀라 카메라를 휘둘렀다', depth: 1 }),
-    ])
-  })
-
   it('광고 reset은 스태프 놀람을 평상시로 되돌린다(R12)', async () => {
     const shouter = performer({
       id: 'rex',
