@@ -180,7 +180,9 @@ describe('PhysicsWorld', () => {
       }
     }
     expect(contacts).toEqual([])
-    const gap = Math.abs((world.actorState('mover')?.x ?? 0) - (world.actorState('standing')?.x ?? 0))
+    const moverX = world.actorState('mover')?.x ?? 0
+    const standingX = world.actorState('standing')?.x ?? 0
+    const gap = Math.abs(moverX - standingX)
     expect(gap).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
   })
 

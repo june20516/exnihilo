@@ -29,6 +29,8 @@ export function validateInputs(inputs: readonly BroadcastInput[], deps: InputVal
         }
         break
       case 'direct': {
+        // 지금 무대에 있는 출연자만 받는다. 같은 묶음의 광고 setup으로 들어올 대기 출연자에게
+        // 내리는 지시도 여기서 거부한다(검증을 적용 전에 한 번에 끝내 원자성을 지키기 위함).
         const member = deps.cast.get(input.actorId)
         if (member === undefined) throw new Error(`무대에 없는 출연자입니다: ${input.actorId}`)
         if (!member.def.directives.some(({ id }) => id === input.directiveId)) {
