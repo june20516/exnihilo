@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engine'
 import { CameraFeedCanvas } from './CameraFeedCanvas'
-import { SWITCHER_KEYS } from './labels'
+import { SWITCHER_KEYS, cameraName } from './labels'
 
-const MONITOR_WIDTH = 276
-const MONITOR_HEIGHT = 155
+const MONITOR_WIDTH = 264
+const MONITOR_HEIGHT = 149
 const PREVIEW_WIDTH = 122
 const PREVIEW_HEIGHT = 69
 
@@ -18,11 +18,6 @@ interface OnAirColumnProps {
   actions: ReactNode
   /** 광고 패널처럼 열 위에 띄우는 것 */
   overlay: ReactNode
-}
-
-/** "CAM 2 클로즈업"처럼 스위처 번호와 카메라 이름 */
-function cameraName(show: ShowDef, camera: CameraDef): string {
-  return `CAM ${show.cameras.indexOf(camera) + 1} ${camera.label}`
 }
 
 /** 추적 카메라면 "대상 렉스", 아니면 null */
@@ -53,15 +48,15 @@ export function OnAirColumn({
   const onAirTarget = trackingTarget(view, onAir, performers)
   return (
     <aside className="relative flex w-[300px] shrink-0 flex-col gap-2 py-1 pr-3">
-      <button
-        type="button"
+      <section
         data-testid={`switcher-${onAir.id}`}
-        aria-pressed
-        className="flex cursor-default flex-col gap-1.5 rounded-xl border-2 border-red-500 bg-slate-900 p-2 text-left shadow-[0_0_14px_rgba(239,68,68,0.35)]"
+        data-on-air="true"
+        aria-label="송출 중인 카메라"
+        className="flex flex-col gap-1.5 rounded-xl border-2 border-red-500 bg-slate-900 p-2 text-left shadow-[0_0_14px_rgba(239,68,68,0.35)]"
       >
         <span className="flex items-center justify-between gap-2">
           <span data-testid="on-air-label" className="truncate text-sm font-bold text-slate-100">
-            {cameraName(show, onAir)}
+            {cameraName(show.cameras, onAir)}
             {onAirTarget !== null && ` · ${onAirTarget}`}
           </span>
           <span className="flex shrink-0 items-center gap-1 rounded-full border-2 border-red-400 bg-red-600 px-2 text-[11px] font-black text-white">
@@ -78,7 +73,7 @@ export function OnAirColumn({
             height={MONITOR_HEIGHT}
           />
         </span>
-      </button>
+      </section>
       <div className="flex gap-2">
         {others.map((camera) => {
           const target = trackingTarget(view, camera, performers)
@@ -87,8 +82,8 @@ export function OnAirColumn({
               key={camera.id}
               type="button"
               data-testid={`switcher-${camera.id}`}
-              data-preview
-              aria-pressed={false}
+              data-on-air="false"
+              aria-label={`${cameraName(show.cameras, camera)}로 전환`}
               onClick={() => onSwitch(camera.id)}
               className="flex flex-1 flex-col gap-1 rounded-xl border-2 border-slate-700 bg-slate-900 p-1.5 text-left hover:border-sky-400 active:translate-y-px"
             >
@@ -105,7 +100,7 @@ export function OnAirColumn({
                 <kbd className="rounded bg-slate-950 px-1 text-[10px] text-slate-400">
                   {SWITCHER_KEYS[show.cameras.indexOf(camera)]}
                 </kbd>
-                <span className="truncate">{cameraName(show, camera)}</span>
+                <span className="truncate">{cameraName(show.cameras, camera)}</span>
               </span>
               {target !== null && <span className="text-[11px] text-amber-300">{target}</span>}
             </button>

@@ -233,4 +233,32 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toContain('8.6')
     expect(html).toContain('내성 1 소모 · 누적 피로 +1')
   })
+
+  it('ON AIR 모니터는 버튼이 아니고, 미리보기 2개만 전환 버튼이다', () => {
+    const html = render()
+    expect(html).toMatch(/<section[^>]*data-testid="switcher-wide"[^>]*data-on-air="true"/)
+    expect(count(html, /<button[^>]*data-on-air="false"/g)).toBe(2)
+  })
+
+  it('스태프 카드는 콘텐츠의 역할과 담당 카메라를 보여 준다', () => {
+    const html = render({
+      controls: { ...CONTROLS, slowmo: 'intervention', interventionOpen: true },
+      selectedTarget: { kind: 'staff', id: 'cameraOperator' },
+    })
+    const operator = LINEUP.staff[0]
+    expect(html).toContain('담당 CAM 2 클로즈업')
+    expect(html).toContain(operator.role)
+    expect(html).toContain(operator.tendency)
+    for (const directive of operator.directives) expect(html).toContain(directive.expect)
+  })
+
+  it('개입 중에 연 광고 패널이면 배지가 광고 효과 선택 시간을 말한다', () => {
+    const intervening = { ...CONTROLS, slowmo: 'intervention' as const }
+    expect(render({ controls: { ...intervening, interventionOpen: true } })).toContain('안에 지시')
+    const adHtml = render({
+      controls: { ...intervening, adPanelOpen: true, adPanelSecondsLeft: 4.2 },
+    })
+    expect(adHtml).toContain('안에 광고 효과 선택')
+    expect(adHtml).not.toContain('안에 지시')
+  })
 })

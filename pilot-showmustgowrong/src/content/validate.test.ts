@@ -34,6 +34,8 @@ function makeStaff(overrides: Partial<StaffDef> = {}): StaffDef {
     id: 'staff1',
     name: '카메라 감독',
     shortName: '감독',
+    role: '카메라 감독',
+    tendency: '성향',
     cameraId: 'cam1',
     reactions: [],
     directives: [],
@@ -181,6 +183,19 @@ describe('validateShow', () => {
     ['tendency', { tendency: '' }, '빈 성향: a'],
   ])('출연자의 %s가 비어 있으면 오류다', (_name, overrides, message) => {
     const errors = validateShow(show, [makePerformer('a', overrides)], [makeStaff()], equipment)
+    expect(errors).toContain(message)
+  })
+
+  it.each([
+    ['role', { role: '' }, '빈 역할: staff1'],
+    ['tendency', { tendency: ' ' }, '빈 성향: staff1'],
+    [
+      'directive expect',
+      { directives: [{ id: 's1', label: '지시', expect: '', aim: 'default' as const }] },
+      '빈 예상 결과: s1 (staff1)',
+    ],
+  ])('스태프의 %s가 비어 있으면 오류다', (_name, overrides, message) => {
+    const errors = validateShow(show, [makePerformer('a')], [makeStaff(overrides)], equipment)
     expect(errors).toContain(message)
   })
 

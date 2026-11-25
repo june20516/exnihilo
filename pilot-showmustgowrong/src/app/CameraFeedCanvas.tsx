@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { CameraDef, ShowDef } from '@/content/types'
 import { COLORS, POSE_COLORS, POSE_SYMBOLS } from '@/render/colors'
 import { cameraFeed, type FeedItem, type FeedView } from '@/render/cameraFeed'
+import { layoutFeedLabels } from '@/render/feedLabels'
 
 /** 피드 픽셀 상수 */
 const HORIZON_RATIO = 0.35
@@ -25,6 +26,20 @@ const AUDIENCE_FLATTEN = 0.4
 /** 이름표와 몸 사이 간격(px) */
 const LABEL_GAP_PX = 2
 const FONT_FAMILY = 'sans-serif'
+/** 이름표 줄 높이(글자 크기 대비) */
+const LABEL_LINE_RATIO = 1.25
+/** 이름표가 피드 가장자리에서 떨어지는 거리(px) */
+const LABEL_EDGE_PADDING_PX = 2
+/** 이름표 뒤 반투명 바탕 */
+const LABEL_BACKGROUND = 'rgba(0, 0, 0, 0.55)'
+const LABEL_BACKGROUND_PADDING_PX = 2
+
+/** 몸 위에 붙일 이름표. 다 그린 뒤 한꺼번에 겹치지 않게 놓는다. */
+interface PendingLabel {
+  text: string
+  x: number
+  top: number
+}
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`
 
@@ -82,12 +97,18 @@ function drawFeed(
   context.lineTo(width, horizonY)
   context.stroke()
 
+  const labels: PendingLabel[] = []
   for (const item of items) {
     const x = ((item.screenX + 1) / 2) * width
-    if (item.kind === 'audience') drawAudience(context, item, x, horizonY, width, height)
-    else if (item.kind === 'equipment') drawEquipment(context, item, x, floorY, height)
-    else drawActor(context, item, x, floorY, height)
+    if (item.kind === 'audience') {
+      labels.push(drawAudience(context, item, x, horizonY, width, height))
+    } else if (item.kind === 'equipment') {
+      labels.push(drawEquipment(context, item, x, floorY, height))
+    } else {
+      labels.push(drawActor(context, item, x, floorY, height))
+    }
   }
+  drawLabels(context, labels, width, height)
 }
 
 function drawActor(
@@ -96,7 +117,7 @@ function drawActor(
   x: number,
   floorY: number,
   height: number,
-): void {
+): PendingLabel {
   const bodyHeight = height * BODY_HEIGHT_RATIO * item.size
   const bodyWidth = bodyHeight * BODY_ASPECT
   const bottom = floorY - item.heightOffset * height * BODY_HEIGHT_RATIO
@@ -106,7 +127,7 @@ function drawActor(
   context.lineWidth = item.highlighted ? HIGHLIGHT_WIDTH : OUTLINE_WIDTH
   context.strokeStyle = item.highlighted ? hex(COLORS.trackingIcon) : hex(COLORS.actorOutline)
   context.strokeRect(x - bodyWidth / 2, bottom - bodyHeight, bodyWidth, bodyHeight)
-  drawLabel(context, `${item.label}${POSE_SYMBOLS[pose]}`, x, bottom - bodyHeight, height)
+  return { text: `${item.label}${POSE_SYMBOLS[pose]}`, x, top: bottom - bodyHeight }
 }
 
 function drawEquipment(
@@ -115,7 +136,7 @@ function drawEquipment(
   x: number,
   floorY: number,
   height: number,
-): void {
+): PendingLabel {
   const side = height * EQUIPMENT_SIZE_RATIO * item.size
   const bottom = floorY - item.heightOffset * height * BODY_HEIGHT_RATIO
   context.fillStyle = hex(item.equipmentKind === 'hangingLight' ? COLORS.light : COLORS.setWall)
@@ -123,7 +144,7 @@ function drawEquipment(
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = hex(COLORS.actorOutline)
   context.strokeRect(x - side / 2, bottom - side, side, side)
-  drawLabel(context, item.label, x, bottom - side, height)
+  return { text: item.label, x, top: bottom - side }
 }
 
 function drawAudience(
@@ -133,7 +154,7 @@ function drawAudience(
   horizonY: number,
   width: number,
   height: number,
-): void {
+): PendingLabel {
   const spread = width * AUDIENCE_SPREAD_RATIO * item.size
   const radius = height * AUDIENCE_DOT_RADIUS_RATIO * item.size
   context.fillStyle = hex(COLORS.audienceZoneLine)
@@ -150,26 +171,43 @@ function drawAudience(
     context.arc(dotX, dotY, radius, 0, Math.PI * 2)
     context.fill()
   }
-  drawLabel(
-    context,
-    item.label,
+  return {
+    text: item.label,
     x,
-    horizonY + height * AUDIENCE_DROP_RATIO - spread * AUDIENCE_FLATTEN,
-    height,
-  )
+    top: horizonY + height * AUDIENCE_DROP_RATIO - spread * AUDIENCE_FLATTEN,
+  }
 }
 
-function drawLabel(
+/** 이름표를 피드 폭 안에, 서로 겹치지 않게(layoutFeedLabels) 반투명 바탕 위에 쓴다. */
+function drawLabels(
   context: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  top: number,
+  labels: readonly PendingLabel[],
+  width: number,
   height: number,
 ): void {
   const fontSize = Math.max(MIN_FONT_PX, height * NAME_FONT_RATIO)
+  const lineHeight = fontSize * LABEL_LINE_RATIO
   context.font = `${fontSize}px ${FONT_FAMILY}`
   context.textAlign = 'center'
   context.textBaseline = 'bottom'
-  context.fillStyle = hex(COLORS.nameText)
-  context.fillText(text, x, top - LABEL_GAP_PX)
+  const widths = labels.map((label) => context.measureText(label.text).width)
+  const placements = layoutFeedLabels(
+    labels.map((label, index) => ({
+      x: label.x,
+      bottom: label.top - LABEL_GAP_PX,
+      width: widths[index] + LABEL_BACKGROUND_PADDING_PX * 2,
+    })),
+    width,
+    height,
+    lineHeight,
+    LABEL_EDGE_PADDING_PX,
+  )
+  labels.forEach((label, index) => {
+    const { x, y } = placements[index]
+    const boxWidth = widths[index] + LABEL_BACKGROUND_PADDING_PX * 2
+    context.fillStyle = LABEL_BACKGROUND
+    context.fillRect(x - boxWidth / 2, y - lineHeight, boxWidth, lineHeight)
+    context.fillStyle = hex(COLORS.nameText)
+    context.fillText(label.text, x, y)
+  })
 }

@@ -1,6 +1,6 @@
-import type { PerformerDef, ReactionDef, StaffDef, Weight } from '@/content/types'
+import type { CameraDef, PerformerDef, StaffDef, Weight } from '@/content/types'
 import type { BroadcastInput, BroadcastView } from '@/sim/engineTypes'
-import { PHENOMENON_LABELS, STAFF_AIM_EXPECT } from './labels'
+import { cameraName } from './labels'
 
 export type InterventionTarget = { kind: 'performer'; id: string } | { kind: 'staff'; id: string }
 
@@ -17,8 +17,10 @@ export interface TargetOption {
   target: InterventionTarget
   name: string
   shortName: string
-  /** 출연자의 연쇄 역할, 스태프는 '스태프' */
+  /** 연쇄 역할(출연자) 또는 맡은 일(스태프) 한 단어 */
   role: string
+  /** 스태프가 맡은 카메라("CAM 2 클로즈업"). 출연자는 null */
+  cameraLabel: string | null
   /** 무엇을 받으면 무엇을 일으키는지 한 줄 */
   tendency: string
   /** 출연자만. 스태프는 null */
@@ -37,23 +39,16 @@ export interface TargetOption {
 export const PERFORMER_COST = '내성 1 소모 · 누적 피로 +1'
 export const STAFF_COST = '스태프 피로 +1'
 
-/** 스태프 반응 데이터로 성향 한 줄을 만든다(출연자처럼 따로 적어 둔 문구가 없다). */
-function staffTendency(reactions: readonly ReactionDef[]): string {
-  const triggers = reactions.flatMap(({ trigger }) =>
-    'min' in trigger ? [`${PHENOMENON_LABELS[trigger.kind]} ${trigger.min}↑`] : [],
-  )
-  if (triggers.length === 0) return '놀라지 않는다'
-  return `${triggers.join(', ')} 인지하면 놀라 카메라를 돌림 → 잠시 뒤 스스로 복구`
-}
-
 /**
  * 개입 대상 목록과 카드 정보. 이탈했거나 출구로 걸어가는 출연자는 지시하면 엔진이 throw하므로
  * 빼고(Ruling 16a, 30), 스태프는 setup의 정의와 view의 상태를 합쳐 뒤에 붙인다.
+ * 카드 문구(역할, 성향, 예상 결과)는 모두 콘텐츠 데이터에서 읽는다.
  */
 export function interventionTargets(
   view: Pick<BroadcastView, 'actors' | 'staff'>,
   performers: ReadonlyMap<string, PerformerDef>,
   staff: readonly StaffDef[],
+  cameras: readonly CameraDef[],
 ): TargetOption[] {
   const options: TargetOption[] = []
   for (const actor of view.actors) {
@@ -65,6 +60,7 @@ export function interventionTargets(
       name: actor.name,
       shortName: def.shortName,
       role: def.role,
+      cameraLabel: null,
       tendency: def.tendency,
       presence: def.presence,
       toleranceLeft: actor.directivesLeft,
@@ -81,12 +77,14 @@ export function interventionTargets(
   }
   for (const member of staff) {
     const state = view.staff.find((candidate) => candidate.id === member.id)
+    const camera = cameras.find((candidate) => candidate.id === member.cameraId)
     options.push({
       target: { kind: 'staff', id: member.id },
       name: member.name,
       shortName: member.shortName,
-      role: '스태프',
-      tendency: staffTendency(member.reactions),
+      role: member.role,
+      cameraLabel: camera === undefined ? null : cameraName(cameras, camera),
+      tendency: member.tendency,
       presence: null,
       toleranceLeft: null,
       weight: null,
@@ -95,7 +93,7 @@ export function interventionTargets(
       directives: member.directives.map((directive) => ({
         id: directive.id,
         label: directive.label,
-        expect: STAFF_AIM_EXPECT[directive.aim],
+        expect: directive.expect,
         input: { type: 'directStaff', staffId: member.id, directiveId: directive.id },
       })),
     })

@@ -47,11 +47,24 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
 
 test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', async ({ page }) => {
   await openBroadcast(page)
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
   await page.keyboard.press('2')
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'false')
 })
+
+/**
+ * 출연자 몸 중심의 화면 좌표(스튜디오 host 기준 CSS px). 앱이 매 프레임 host의
+ * data-actor-anchors에 싣는 값을 읽는다(투영 좌표를 하드코딩하지 않는다).
+ */
+async function actorAnchor(page: Page, actorId: string): Promise<{ x: number; y: number }> {
+  const host = page.getByTestId('studio-host')
+  await expect(host).toHaveAttribute('data-actor-anchors', new RegExp(`"${actorId}"`))
+  const raw = await host.getAttribute('data-actor-anchors')
+  const anchors: Record<string, [number, number]> = JSON.parse(raw ?? '{}')
+  const [x, y] = anchors[actorId]
+  return { x, y }
+}
 
 /** src/content/balance.ts의 INTERVENTION_REAL_SECONDS(초). e2e는 앱 경로 별칭을 못 읽어 값을 옮겨 적는다. */
 const INTERVENTION_REAL_SECONDS = 10
@@ -95,16 +108,13 @@ test('개입 중에 스튜디오의 출연자를 클릭하면 대상 카드가 �
   page,
 }) => {
   await openBroadcast(page)
-  // 렉스는 첫 home spot(4.5, 4)에 서 있다(몸 중심 높이 약 0.85m). Task 7 배치(스튜디오 영역 약
-  // 700×608)에서 fitIso로 투영한 몸 중심은 스튜디오 기준 약 (285, 247)이다.
-  // 페이지에서 투영 좌표를 읽을 공개 API가 아직 없어 하드코딩한다(Task 8에서 정리).
   const studio = page.getByTestId('studio')
   await expect(studio.locator('canvas')).toHaveCount(1)
   // 개입 밖에서 출연자를 누르면 클로즈업 대상 바꾸기(track)이므로 먼저 Space로 개입을 연다.
   await page.keyboard.press('Space')
   const panel = page.getByTestId('intervention-panel')
   await expect(panel).toBeVisible()
-  await studio.click({ position: { x: 285, y: 247 } })
+  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'rex') })
   await expect(panel.getByTestId('target-rex')).toHaveAttribute('aria-pressed', 'true')
   const card = panel.getByTestId('target-card')
   await expect(card).toContainText('남은 내성 5')

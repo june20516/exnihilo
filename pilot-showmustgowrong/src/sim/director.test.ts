@@ -40,9 +40,11 @@ const STAFF: StaffDef[] = [
     id: 'cam',
     name: 'cam',
     shortName: 'cam',
+    role: '카메라 감독',
+    tendency: '성향',
     cameraId: 'c1',
     reactions: [],
-    directives: [{ id: 'audience', label: '관객', aim: 'audience' }],
+    directives: [{ id: 'audience', label: '관객', expect: '관객석', aim: 'audience' }],
   },
 ]
 

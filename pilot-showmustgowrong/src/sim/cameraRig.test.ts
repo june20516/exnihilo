@@ -28,6 +28,8 @@ const staffOn = (cameraId: string, recovery?: StaffDef['recovery']): StaffDef =>
   id: 'op',
   name: '카메라 감독',
   shortName: '감독',
+  role: '카메라 감독',
+  tendency: '성향',
   cameraId,
   reactions: [],
   directives: [],

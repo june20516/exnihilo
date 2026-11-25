@@ -1,4 +1,5 @@
 import { LINEUP } from '@/content/lineup'
+import { TALK_SHOW } from '@/content/talkShow'
 import type { PerformerDef } from '@/content/types'
 import type { ActorView, StaffView } from '@/sim/engineTypes'
 import { interventionTargets } from './interventionTargets'
@@ -48,6 +49,7 @@ describe('interventionTargets', () => {
       { actors: [actor('rex')], staff: [staffView()] },
       PERFORMERS,
       LINEUP.staff,
+      TALK_SHOW.cameras,
     )
     expect(options.map((option) => option.target)).toEqual([
       { kind: 'performer', id: 'rex' },
@@ -68,6 +70,7 @@ describe('interventionTargets', () => {
       { actors: [actor('rex', { misfireChance: 0.3, directivesLeft: 4 })], staff: [] },
       PERFORMERS,
       [],
+      TALK_SHOW.cameras,
     )
     const def = PERFORMERS.get('rex')
     expect(rex.role).toBe(def?.role)
@@ -82,16 +85,32 @@ describe('interventionTargets', () => {
     )
   })
 
-  it('스태프 카드는 view의 엇나감 확률과 스태프 피로 비용을 쓴다', () => {
+  it('스태프 카드는 콘텐츠의 역할·성향·예상 결과, 담당 카메라, view의 엇나감 확률을 쓴다', () => {
     const [operator] = interventionTargets(
       { actors: [], staff: [staffView({ misfireChance: 0.15 })] },
       PERFORMERS,
       LINEUP.staff,
+      TALK_SHOW.cameras,
     )
+    const def = LINEUP.staff[0]
+    expect(operator.role).toBe(def.role)
+    expect(operator.tendency).toBe(def.tendency)
+    expect(operator.directives.map((directive) => directive.expect)).toEqual(
+      def.directives.map((directive) => directive.expect),
+    )
+    expect(operator.cameraLabel).toBe('CAM 2 클로즈업')
     expect(operator.misfireChance).toBe(0.15)
     expect(operator.cost).toBe('스태프 피로 +1')
-    expect(operator.tendency.length).toBeGreaterThan(0)
-    for (const directive of operator.directives) expect(directive.expect.length).toBeGreaterThan(0)
+  })
+
+  it('출연자 카드에는 담당 카메라가 없다', () => {
+    const [rex] = interventionTargets(
+      { actors: [actor('rex')], staff: [] },
+      PERFORMERS,
+      [],
+      TALK_SHOW.cameras,
+    )
+    expect(rex.cameraLabel).toBeNull()
   })
 
   it('이탈했거나 출구로 걸어가는 출연자는 목록에 없다', () => {
@@ -106,6 +125,7 @@ describe('interventionTargets', () => {
       },
       PERFORMERS,
       [],
+      TALK_SHOW.cameras,
     )
     expect(options.map((option) => option.target.id)).toEqual(['mo'])
   })

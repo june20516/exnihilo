@@ -171,13 +171,15 @@ const CAMERA_OPERATOR: StaffDef = {
   id: 'cammy',
   name: '겁쟁이 카메라 감독',
   shortName: '카메라 감독',
+  role: '카메라 감독',
+  tendency: '소음 2↑에 놀람',
   cameraId: 'close',
   reactions: [
     reaction({ kind: 'noise', min: 2, scope: 'perceived' }, { pose: 'panic', emits: [] }),
   ],
   directives: [
-    { id: 'audience', label: '관객석 비춰 주세요', aim: 'audience' },
-    { id: 'calm', label: '침착하세요', aim: 'default' },
+    { id: 'audience', label: '관객석 비춰 주세요', expect: '관객석', aim: 'audience' },
+    { id: 'calm', label: '침착하세요', expect: '기본 방향', aim: 'default' },
   ],
 }
 
@@ -1322,7 +1324,7 @@ describe('클로즈업 추적과 스태프 복구', () => {
 
   const operatorWith = (aims: StaffDef['directives'][number]['aim'][]): StaffDef => ({
     ...CAMERA_OPERATOR,
-    directives: aims.map((aim) => ({ id: aim, label: aim, aim })),
+    directives: aims.map((aim) => ({ id: aim, label: aim, expect: aim, aim })),
   })
 
   it('스태프 view의 엇나감 확률은 스태프 피로를 따른다(판단 카드용)', async () => {

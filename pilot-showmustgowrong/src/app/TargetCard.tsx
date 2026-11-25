@@ -29,6 +29,7 @@ export function TargetCard({ option, onDirect, cardRef }: TargetCardProps) {
         <div className="min-w-0">
           <div className="truncate text-base font-black text-slate-50">{option.name}</div>
           <div className="mt-0.5 flex flex-wrap gap-1 text-[11px]">
+            {option.cameraLabel !== null && <StatChip>담당 {option.cameraLabel}</StatChip>}
             {option.presence !== null && <StatChip>존재감 {option.presence}</StatChip>}
             {option.toleranceLeft !== null && (
               <StatChip warn={option.toleranceLeft === 0}>

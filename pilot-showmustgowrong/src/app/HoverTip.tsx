@@ -9,8 +9,8 @@ export function HoverTip({ tip }: { tip: HoverTipState }) {
       style={{ left: tip.x + 14, top: tip.y + 14 }}
     >
       <div className="font-bold text-slate-50">{tip.title}</div>
-      {tip.lines.map((line) => (
-        <div key={line} className="text-slate-300">
+      {tip.lines.map((line, index) => (
+        <div key={`${index}:${line}`} className="text-slate-300">
           {line}
         </div>
       ))}

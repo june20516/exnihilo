@@ -1,9 +1,9 @@
 import { BROADCAST_STEPS, STEP_SECONDS } from '@/content/balance'
 import type {
+  CameraDef,
   GaugeKind,
   Intensity,
   PhenomenonKind,
-  StaffDirectiveDef,
   Weight,
 } from '@/content/types'
 import type { AdEffect } from '@/sim/director'
@@ -32,11 +32,9 @@ export const WEIGHT_LABELS: Record<Weight, string> = {
   heavy: '무거움',
 }
 
-/** 스태프 지시의 예상 결과. 스태프 지시는 방향(aim)만 정하므로 방향마다 한 줄로 쓴다. */
-export const STAFF_AIM_EXPECT: Record<StaffDirectiveDef['aim'], string> = {
-  default: '카메라를 기본 방향으로 되돌림',
-  audience: '카메라를 관객석으로 돌림',
-  nearestPerformer: '카메라를 가까운 출연자에게 돌림',
+/** "CAM 2 클로즈업"처럼 스위처 번호와 카메라 이름 */
+export function cameraName(cameras: readonly CameraDef[], camera: CameraDef): string {
+  return `CAM ${cameras.indexOf(camera) + 1} ${camera.label}`
 }
 
 /** 강도 1~3을 "강도 2"처럼 쓴다. */

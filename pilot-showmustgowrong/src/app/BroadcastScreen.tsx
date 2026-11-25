@@ -78,6 +78,8 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const studioVisible = loop.error === null && rendererError === null && loop.result === null
   const [selectedTarget, setSelectedTarget] = useState<InterventionTarget | null>(null)
   const [hoverTip, setHoverTip] = useState<HoverTipState | null>(null)
+  /** 지금 호버 설명을 띄운 대상("kind:id"). 같은 대상 위의 mousemove는 건너뛴다. */
+  const hoverKeyRef = useRef<string | null>(null)
 
   // 렌더러 생명주기. StrictMode 이중 마운트에서는 AbortController로 앞의 생성을 취소한다.
   // 스튜디오 영역 크기가 바뀌면 캔버스를 그 크기로 맞춘다(fitIso로 꽉 채움).
@@ -142,15 +144,35 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     link.setAttribute('visibility', 'visible')
   }, [])
 
+  /**
+   * 출연자 몸 중심의 화면 좌표(스튜디오 영역 기준 CSS px)를 host의 data-actor-anchors에 JSON으로 싣는다.
+   * e2e가 투영 좌표를 하드코딩하지 않고 읽어 클릭할 수 있게 하는 공개 표면이다.
+   */
+  const publishActorAnchors = useCallback((current: BroadcastView): void => {
+    const renderer = rendererRef.current
+    const host = hostRef.current
+    if (renderer === null || host === null) return
+    const scaleX = host.clientWidth / renderer.size.width
+    const scaleY = host.clientHeight / renderer.size.height
+    const anchors: Record<string, [number, number]> = {}
+    for (const actor of current.actors) {
+      const point = renderer.anchorOf('actor', actor.id)
+      if (point !== null) anchors[actor.id] = [point.x * scaleX, point.y * scaleY]
+    }
+    host.dataset.actorAnchors = JSON.stringify(anchors)
+  }, [])
+
   const linkedTarget = interventionOpen ? selectedTarget : null
   useEffect(() => {
     if (view === null) return
     rendererRef.current?.draw(view, STUDIO_MODES[slowmo])
     updateLink(linkedTarget)
-  }, [view, slowmo, linkedTarget, updateLink])
+    publishActorAnchors(view)
+  }, [view, slowmo, linkedTarget, updateLink, publishActorAnchors])
 
   const beginIntervention = useCallback(() => {
     setSelectedTarget(null)
+    hoverKeyRef.current = null
     setHoverTip(null)
     openIntervention()
   }, [openIntervention])
@@ -238,14 +260,19 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     onMouseMove: (event) => {
       const found = studioHitAt(event)
       // 호버 설명은 개입 밖에서만(개입 중에는 판단 카드가 주인공이다).
-      const content =
-        found === null || view === null || interventionOpen
-          ? null
-          : hoverTipContent(found.hit, view, setup.equipment)
+      const hit = found === null || view === null || interventionOpen ? null : found.hit
+      // 같은 대상 위에서 움직이면 다시 계산하지 않는다(설명은 처음 올라간 자리에 머문다).
+      const key = hit === null ? null : `${hit.kind}:${hit.id}`
+      if (key === hoverKeyRef.current) return
+      hoverKeyRef.current = key
+      const content = hit === null || view === null ? null : hoverTipContent(hit, view, setup)
       const tip = content === null || found === null ? null : { ...content, x: found.x, y: found.y }
       setHoverTip(tip)
     },
-    onMouseLeave: () => setHoverTip(null),
+    onMouseLeave: () => {
+      hoverKeyRef.current = null
+      setHoverTip(null)
+    },
   }
 
   const onDirect = (input: BroadcastInput): void => {
@@ -330,6 +357,7 @@ export function BroadcastStage({
                 view={view}
                 performers={performers}
                 staff={setup.staff}
+                cameras={show.cameras}
                 selected={selectedTarget}
                 onSelect={onSelectTarget}
                 onDirect={onDirect}
@@ -351,6 +379,7 @@ export function BroadcastStage({
         >
           <div
             ref={studio?.hostRef}
+            data-testid="studio-host"
             onClick={studio?.onClick}
             onMouseMove={studio?.onMouseMove}
             onMouseLeave={studio?.onMouseLeave}
@@ -366,6 +395,7 @@ export function BroadcastStage({
               secondsLeft={
                 adPanelOpen ? (controls.adPanelSecondsLeft ?? 0) : controls.interventionSecondsLeft
               }
+              purpose={adPanelOpen ? '안에 광고 효과 선택' : '안에 지시'}
             />
           )}
           {view !== null && slowmo === 'auto' && !adBreak && (
@@ -456,7 +486,13 @@ function BroadcastButtons({ view, controls, onBeginIntervention }: BroadcastButt
 }
 
 /** 개입 중 스튜디오 위: 느려진 배율과 남은 선택 시간을 크게(spec 8.2) */
-function InterventionBadge({ secondsLeft }: { secondsLeft: number }) {
+interface InterventionBadgeProps {
+  secondsLeft: number
+  /** 남은 시간 안에 할 일(개입 중 "안에 지시", 개입에서 연 광고 패널이면 "안에 광고 효과 선택") */
+  purpose: string
+}
+
+function InterventionBadge({ secondsLeft, purpose }: InterventionBadgeProps) {
   return (
     <div
       data-testid="slowmo-badge"
@@ -471,7 +507,7 @@ function InterventionBadge({ secondsLeft }: { secondsLeft: number }) {
       >
         {secondsLeft.toFixed(1)}초
       </span>
-      <span className="text-xs text-slate-300">안에 지시</span>
+      <span className="text-xs text-slate-300">{purpose}</span>
     </div>
   )
 }

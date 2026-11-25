@@ -1,5 +1,5 @@
 import type { Ref } from 'react'
-import type { PerformerDef, StaffDef } from '@/content/types'
+import type { CameraDef, PerformerDef, StaffDef } from '@/content/types'
 import type { BroadcastInput, BroadcastView } from '@/sim/engine'
 import { interventionTargets, type InterventionTarget } from './interventionTargets'
 import { TargetCard } from './TargetCard'
@@ -8,6 +8,7 @@ interface InterventionPanelProps {
   view: BroadcastView
   performers: ReadonlyMap<string, PerformerDef>
   staff: readonly StaffDef[]
+  cameras: readonly CameraDef[]
   selected: InterventionTarget | null
   onSelect(target: InterventionTarget): void
   onDirect(input: BroadcastInput): void
@@ -23,13 +24,14 @@ export function InterventionPanel({
   view,
   performers,
   staff,
+  cameras,
   selected,
   onSelect,
   onDirect,
   onClose,
   cardRef,
 }: InterventionPanelProps) {
-  const options = interventionTargets(view, performers, staff)
+  const options = interventionTargets(view, performers, staff, cameras)
   const current = options.find(
     (option) => option.target.kind === selected?.kind && option.target.id === selected.id,
   )

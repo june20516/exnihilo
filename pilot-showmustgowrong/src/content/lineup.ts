@@ -242,6 +242,8 @@ const COWARD_CAMERA_OPERATOR: StaffDef = {
   id: 'cameraOperator',
   name: '겁쟁이 카메라 감독',
   shortName: '카메라 감독',
+  role: '카메라 감독',
+  tendency: '소음 2↑ 인지하면 놀라 카메라를 휘두름 → 잠시 뒤 스스로 기준 방향으로 복구',
   cameraId: 'close',
   reactions: [
     {
@@ -250,8 +252,13 @@ const COWARD_CAMERA_OPERATOR: StaffDef = {
     },
   ],
   directives: [
-    { id: 'aimAudience', label: '관객석 비춰 주세요', aim: 'audience' },
-    { id: 'calmDown', label: '침착하세요', aim: 'default' },
+    {
+      id: 'aimAudience',
+      label: '관객석 비춰 주세요',
+      expect: '카메라를 관객석으로 돌려 유지',
+      aim: 'audience',
+    },
+    { id: 'calmDown', label: '침착하세요', expect: '카메라를 기본 방향으로 되돌림', aim: 'default' },
   ],
 }
 

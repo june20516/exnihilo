@@ -91,6 +91,13 @@ export function validateShow(
 
   const operatedCameraIds = new Set<string>()
   for (const member of staff) {
+    if (member.role.trim() === '') errors.push(`빈 역할: ${member.id}`)
+    if (member.tendency.trim() === '') errors.push(`빈 성향: ${member.id}`)
+    for (const directive of member.directives) {
+      if (directive.expect.trim() === '') {
+        errors.push(`빈 예상 결과: ${directive.id} (${member.id})`)
+      }
+    }
     if (!knownCameraIds.has(member.cameraId)) {
       errors.push(`알 수 없는 카메라: ${member.cameraId} (${member.id})`)
     }
