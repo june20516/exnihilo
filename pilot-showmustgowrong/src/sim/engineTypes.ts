@@ -1,7 +1,9 @@
 import type {
   EquipmentDef,
   GaugeKind,
+  Intensity,
   PerformerDef,
+  PhenomenonKind,
   Pose,
   ShowDef,
   StaffDef,
@@ -42,6 +44,12 @@ export interface ActorView {
   /** 이탈 뒤 물리 월드에서 빠졌다. walkedOut이지만 departed가 아니면 아직 출구로 걸어가는 중이다. */
   departed: boolean
   directivesLeft: number
+  /** 다음 반응에 얼마나 가까운지 0~1(spec 8.2) */
+  tension: number
+  /** tension이 BURST_WARNING_TENSION 이상이라 "곧 터짐!"을 붙인다. */
+  aboutToBurst: boolean
+  /** 지금 지시하면 엇나갈 확률(0~1) */
+  misfireChance: number
 }
 
 export interface EquipmentView {
@@ -83,6 +91,19 @@ export interface LogLine {
   z: number
 }
 
+/** 공간에 잠깐 그리는 최근 현상. gaze와 silence는 싣지 않는다. */
+export interface RecentPhenomenon {
+  id: number
+  kind: PhenomenonKind
+  intensity: Intensity
+  x: number
+  y: number
+  z: number
+  ageSeconds: number
+  /** 사고 로그와 같은 문구 */
+  text: string
+}
+
 /** 가장 최근의 자동 슬로모션 계기. step으로 새 계기인지 구분한다. */
 export interface AutoSlowmo {
   gauge: GaugeKind | null
@@ -103,6 +124,10 @@ export interface BroadcastView {
   actors: ActorView[]
   equipment: EquipmentView[]
   viewers: number
+  /** 1초 전보다 늘었으면 1, 줄었으면 -1, 비슷하면 0 */
+  viewersTrend: -1 | 0 | 1
+  /** 최근 PHENOMENON_DISPLAY_SECONDS초의 현상 */
+  recentPhenomena: RecentPhenomenon[]
   gauges: Record<GaugeKind, number>
   limits: Record<GaugeKind, number>
   haltedBy: GaugeKind | null

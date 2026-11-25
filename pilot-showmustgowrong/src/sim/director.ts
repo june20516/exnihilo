@@ -106,6 +106,19 @@ export class Director {
     return this.walkedOut.has(performerId)
   }
 
+  /** 지금 지시하면 엇나갈 확률. 상태와 rng를 건드리지 않는다. */
+  previewMisfireChance(performerId: string): number {
+    const performer = this.requirePerformer(performerId)
+    if (performer.misfire === 'never') return 0
+    return misfireChance(this.currentFatigue, FATIGUE_MISFIRE_PER_POINT)
+  }
+
+  /** 지금 스태프에게 지시하면 엇나갈 확률. 상태와 rng를 건드리지 않는다. */
+  previewStaffMisfireChance(staffId: string): number {
+    if (!this.staff.has(staffId)) throw new Error(`알 수 없는 스태프입니다: ${staffId}`)
+    return misfireChance(this.currentStaffFatigue, STAFF_FATIGUE_MISFIRE_PER_POINT)
+  }
+
   directPerformer(
     performerId: string,
     directiveId: string,

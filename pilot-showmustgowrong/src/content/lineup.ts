@@ -21,6 +21,8 @@ const REX: PerformerDef = {
   id: 'rex',
   name: '렉스 캘러웨이',
   shortName: '렉스',
+  role: 'MC',
+  tendency: '카메라 시선을 8초 못 받으면 카메라로 돌진. 웃음 2↑ 받으면 → 분노 3(욕설)',
   presence: 3,
   tolerance: 'high',
   weight: 'normal',
@@ -48,6 +50,7 @@ const REX: PerformerDef = {
     {
       id: 'stepUp',
       label: '카메라 앞으로 나오세요',
+      expect: '카메라로 돌진해 소음 1',
       action: {
         pose: 'idle',
         move: { type: 'dash', toward: 'onAirCamera', speed: 5 },
@@ -57,6 +60,7 @@ const REX: PerformerDef = {
     {
       id: 'pressGuest',
       label: '게스트를 몰아붙이세요',
+      expect: '게스트에게 분노 2',
       action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 2, target: { tag: 'guest' } }] },
     },
   ],
@@ -67,6 +71,8 @@ const PRIYA: PerformerDef = {
   id: 'priya',
   name: '프리야 네어',
   shortName: '프리야',
+  role: '패널',
+  tendency: '웃음 1↑ 인지하면 웃음 +1로 키움. 소음 3이면 웃음 2',
   presence: 2,
   tolerance: 'normal',
   weight: 'light',
@@ -89,11 +95,13 @@ const PRIYA: PerformerDef = {
     {
       id: 'laughBig',
       label: '크게 웃어 주세요',
+      expect: '웃음 2',
       action: { pose: 'laugh', emits: [{ kind: 'laughter', intensity: 2, target: 'none' }] },
     },
     {
       id: 'cutHost',
       label: 'MC 한 번 끊어 주세요',
+      expect: 'MC에게 웃음 2 → 렉스가 분노 3로 받을 수 있음',
       action: {
         pose: 'laugh',
         emits: [{ kind: 'laughter', intensity: 2, target: { tag: 'host' } }],
@@ -107,6 +115,8 @@ const OKAFOR: PerformerDef = {
   id: 'okafor',
   name: '제럴드 오카포 박사',
   shortName: '오카포',
+  role: '게스트',
+  tendency: '자신을 향한 분노·웃음을 받으면 → 상대에게 분노 2',
   presence: 1,
   tolerance: 'low',
   weight: 'normal',
@@ -124,11 +134,13 @@ const OKAFOR: PerformerDef = {
     {
       id: 'rebut',
       label: '반박하세요',
+      expect: 'MC에게 분노 2',
       action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 2, target: { tag: 'host' } }] },
     },
     {
       id: 'approachHost',
       label: 'MC한테 가 보세요',
+      expect: 'MC에게 돌진, 소음 1',
       action: {
         pose: 'idle',
         move: { type: 'dash', toward: { tag: 'host' }, speed: 4 },
@@ -143,6 +155,8 @@ const MO: PerformerDef = {
   id: 'mo',
   name: '"마운틴" 모 타비타',
   shortName: '모',
+  role: '레슬러',
+  tendency: '분노 2↑ 인지하거나 충돌을 받으면 → 바디슬램',
   presence: 2,
   tolerance: 'normal',
   weight: 'heavy',
@@ -160,6 +174,7 @@ const MO: PerformerDef = {
     {
       id: 'flex',
       label: '힘 자랑 해 주세요',
+      expect: '도약하며 소음 2',
       action: {
         pose: 'angry',
         move: { type: 'leap', toward: 'none', speed: 6 },
@@ -169,6 +184,7 @@ const MO: PerformerDef = {
     {
       id: 'approachHost',
       label: 'MC한테 가 보세요',
+      expect: 'MC에게 돌진(충돌 위험)',
       action: {
         pose: 'idle',
         move: { type: 'dash', toward: { tag: 'host' }, speed: 6 },
@@ -183,6 +199,8 @@ const JUNE: PerformerDef = {
   id: 'june',
   name: '준 휘태커 할머니',
   shortName: '준',
+  role: '시청자',
+  tendency: '정적이면 옛날이야기로 웃음 1. 소음 3이면 놀라 넘어짐',
   presence: 3,
   tolerance: 'max',
   weight: 'light',
@@ -203,11 +221,13 @@ const JUNE: PerformerDef = {
     {
       id: 'story',
       label: '옛날이야기 해 주세요',
+      expect: '웃음 1로 정적을 깸',
       action: { pose: 'laugh', emits: [{ kind: 'laughter', intensity: 1, target: 'none' }] },
     },
     {
       id: 'stepUp',
       label: '카메라 앞으로 나오세요',
+      expect: '카메라 앞으로 천천히 이동',
       action: {
         pose: 'idle',
         move: { type: 'dash', toward: 'onAirCamera', speed: 3 },

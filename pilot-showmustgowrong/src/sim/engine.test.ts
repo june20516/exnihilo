@@ -5,9 +5,11 @@ import {
   AUDIENCE_NOISE_SECONDS,
   BROADCAST_STEPS,
   CORNER_STEPS,
+  FATIGUE_MISFIRE_PER_POINT,
   GRAVITY,
   LEAP_VERTICAL_RATIO,
   MOTION_CAUSE_SECONDS,
+  PHENOMENON_DISPLAY_SECONDS,
   REACTION_COOLDOWN_SECONDS,
   STEP_SECONDS,
   WALKOUT_SECONDS,
@@ -90,7 +92,7 @@ const SHOW: ShowDef = {
   audienceZone: { minX: 0, maxX: 3, minZ: 1, maxZ: 7 },
 }
 
-const directive = (id: string, action: ActionDef): DirectiveDef => ({ id, label: id, action })
+const directive = (id: string, action: ActionDef): DirectiveDef => ({ id, label: id, expect: id, action })
 
 const CALM = directive('calm', { pose: 'idle', emits: [] })
 const SHOUT = directive('shout', {
@@ -107,6 +109,8 @@ const CHARGE = directive('charge', {
 const performer = (overrides: Partial<PerformerDef> & { id: string }): PerformerDef => ({
   name: overrides.id,
   shortName: overrides.id,
+  role: '역할',
+  tendency: '성향',
   presence: 1,
   tolerance: 'max',
   weight: 'normal',
@@ -1359,5 +1363,104 @@ describe('클로즈업 추적과 스태프 복구', () => {
     broadcast.step([{ type: 'directStaff', staffId: 'cammy', directiveId: 'nearestPerformer' }])
     expect(broadcast.view().staff[0].mode).toBe('normal')
     expect(broadcast.view().cameraAngles.close).toBe(0)
+  })
+})
+
+describe('판단 정보 view', () => {
+  const NOISE = directive('noise', {
+    pose: 'idle',
+    emits: [{ kind: 'noise', intensity: 1, target: 'none' }],
+  })
+  const FLASH3 = directive('flash3', {
+    pose: 'laugh',
+    emits: [{ kind: 'exposure', intensity: 3, target: 'self' }],
+  })
+  const directRex = (directiveId: string): BroadcastInput => ({
+    type: 'direct',
+    actorId: 'rex',
+    directiveId,
+  })
+  const infoSetup = (overrides: Partial<BroadcastSetup> = {}) =>
+    quietSetup({
+      show: { ...SHOW, rating: 'TV-MA' },
+      performers: [
+        performer({
+          id: 'rex',
+          shortName: '렉스',
+          tags: ['host'],
+          tolerance: 'max',
+          misfire: 'overdo',
+          directives: [CALM, NOISE, FLASH3],
+        }),
+        performer({ id: 'mo', shortName: '모', tags: ['guest'] }),
+      ],
+      ...overrides,
+    })
+  const rexView = (broadcast: Broadcast) => {
+    const found = broadcast.view().actors.find((actor) => actor.id === 'rex')
+    if (found === undefined) throw new Error('rex가 없습니다.')
+    return found
+  }
+
+  it('엇나감 확률은 개입한 만큼 오르고 misfire never는 0이다', async () => {
+    const broadcast = await open(infoSetup())
+    expect(rexView(broadcast).misfireChance).toBe(0)
+    broadcast.step([directRex('calm')])
+    broadcast.step([directRex('calm')])
+    expect(rexView(broadcast).misfireChance).toBeCloseTo(2 * FATIGUE_MISFIRE_PER_POINT)
+    const mo = broadcast.view().actors.find((actor) => actor.id === 'mo')
+    expect(mo?.misfireChance).toBe(0)
+  })
+
+  it('view를 읽어도 결과가 달라지지 않는다(미리보기는 rng를 쓰지 않는다)', async () => {
+    const plain = await open(infoSetup())
+    const peeked = await open(infoSetup())
+    for (let i = 0; i < 40; i++) {
+      const inputs: BroadcastInput[] = i % 10 === 0 ? [directRex('noise')] : []
+      plain.step(inputs)
+      peeked.step(inputs)
+      peeked.view()
+    }
+    expect(peeked.events()).toEqual(plain.events())
+    expect(peeked.view().log).toEqual(plain.view().log)
+  })
+
+  it('최근 현상은 생긴 스텝부터 90스텝 들어 있고 그 뒤에 빠지며 문구는 로그와 같다', async () => {
+    const displaySteps = Math.round(PHENOMENON_DISPLAY_SECONDS * STEPS_PER_SECOND)
+    expect(displaySteps).toBe(90)
+    const broadcast = await open(infoSetup())
+    broadcast.step([directRex('noise')])
+    const noise = broadcast.events().find((event) => event.kind === 'noise')
+    if (noise === undefined) throw new Error('소음이 생기지 않았습니다.')
+    const findShown = () => broadcast.view().recentPhenomena.find((item) => item.id === noise.id)
+
+    expect(findShown()).toMatchObject({ kind: 'noise', intensity: 1, x: noise.x, y: noise.y, z: noise.z })
+    const logLine = broadcast.view().log.find((line) => line.eventId === noise.id)
+    expect(findShown()?.text).toBe(logLine?.text)
+
+    run(broadcast, displaySteps - 1)
+    expect(broadcast.currentStep).toBe(displaySteps)
+    expect(findShown()).toBeDefined()
+    expect(findShown()?.ageSeconds).toBeCloseTo(PHENOMENON_DISPLAY_SECONDS)
+    run(broadcast, 1)
+    expect(findShown()).toBeUndefined()
+  })
+
+  it('silence와 gaze는 최근 현상에서 뺀다', async () => {
+    const broadcast = await open(quietSetup())
+    run(broadcast, 8 * STEPS_PER_SECOND)
+    const kinds = broadcast.events().map((event) => event.kind)
+    expect(kinds).toContain('silence')
+    const shown = broadcast.view().recentPhenomena.map((item) => item.kind)
+    expect(shown).not.toContain('silence')
+    expect(shown).not.toContain('gaze')
+  })
+
+  it('시청자 추세는 강도 3 사고가 송출된 다음 1초 동안 1이고 변화가 없으면 0이다', async () => {
+    const broadcast = await open(infoSetup())
+    expect(broadcast.view().viewersTrend).toBe(0)
+    broadcast.step([directRex('flash3')])
+    expect(broadcast.view().viewers).toBeGreaterThan(500)
+    expect(broadcast.view().viewersTrend).toBe(1)
   })
 })

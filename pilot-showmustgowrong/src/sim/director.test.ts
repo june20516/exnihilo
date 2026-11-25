@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ActionDef, PerformerDef, StaffDef } from '@/content/types'
 import { createRng, type RngState } from '@/kit/rng'
+import { FATIGUE_MISFIRE_PER_POINT, STAFF_FATIGUE_MISFIRE_PER_POINT } from '@/content/balance'
 import { Director, type DirectiveOutcome } from './director'
 
 const SHOUT: ActionDef = {
@@ -22,12 +23,14 @@ function performer(
     id,
     name: id,
     shortName: id,
+    role: '역할',
+    tendency: '성향',
     presence: 1,
     tolerance,
     weight: 'normal',
     tags: [],
     reactions: [],
-    directives: [{ id: 'shout', label: '소리쳐', action: SHOUT }],
+    directives: [{ id: 'shout', label: '소리쳐', expect: '분노 2', action: SHOUT }],
     misfire,
   }
 }
@@ -246,5 +249,47 @@ describe('Director 광고와 피로', () => {
     expect(director.fatigue).toBe(0)
     expect(director.staffFatigue).toBe(1)
     expect(director.directivesUsed('over')).toBe(3)
+  })
+})
+
+describe('Director 엇나감 미리보기', () => {
+  it('피로 0이면 0, 개입 2번 뒤에는 2 × FATIGUE_MISFIRE_PER_POINT다', () => {
+    const director = makeDirector()
+    expect(director.previewMisfireChance('over')).toBe(0)
+    direct(director, 'over', 2, createRng(1))
+    expect(director.previewMisfireChance('over')).toBeCloseTo(2 * FATIGUE_MISFIRE_PER_POINT)
+  })
+
+  it('misfire never 출연자는 피로와 상관없이 0이다', () => {
+    const director = makeDirector()
+    direct(director, 'over', 3, createRng(1))
+    expect(director.previewMisfireChance('never')).toBe(0)
+  })
+
+  it('스태프 미리보기는 스태프 피로로 계산한다', () => {
+    const director = makeDirector()
+    expect(director.previewStaffMisfireChance('cam')).toBe(0)
+    director.directStaff('cam', 'audience', createRng(1))
+    expect(director.previewStaffMisfireChance('cam')).toBeCloseTo(STAFF_FATIGUE_MISFIRE_PER_POINT)
+  })
+
+  it('없는 id는 오류를 던진다', () => {
+    const director = makeDirector()
+    expect(() => director.previewMisfireChance('ghost')).toThrow()
+    expect(() => director.previewStaffMisfireChance('ghost')).toThrow()
+  })
+
+  it('미리보기는 상태를 바꾸지 않아 다음 지시 결과가 같다', () => {
+    const previewed = makeDirector()
+    const plain = makeDirector()
+    direct(previewed, 'over', 4, createRng(3))
+    direct(plain, 'over', 4, createRng(3))
+    previewed.previewMisfireChance('over')
+    previewed.previewStaffMisfireChance('cam')
+    const rng = createRng(MISFIRE_SEED)
+    expect(previewed.directPerformer('over', 'shout', rng)).toEqual(
+      plain.directPerformer('over', 'shout', rng),
+    )
+    expect(previewed.fatigue).toBe(plain.fatigue)
   })
 })

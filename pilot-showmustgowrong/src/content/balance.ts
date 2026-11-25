@@ -41,6 +41,16 @@ export const AUDIENCE_LAUGHTER_INTENSITY: Intensity = 1
 /** BroadcastView.log에 담는 최근 줄 수 */
 export const VIEW_LOG_LINES = 50
 
+// 판단 정보(spec 8.2)
+/** 현상 반응의 긴장도가 되돌아보는 시간(초) */
+export const TENSION_WINDOW_SECONDS = 1
+/** 긴장도가 이 값 이상이면 "곧 터짐!"을 붙인다. */
+export const BURST_WARNING_TENSION = 0.75
+/** 최근 현상으로 공간에 머무는 시간(초) */
+export const PHENOMENON_DISPLAY_SECONDS = 1.5
+/** 1초 전과 시청자 수 차이가 이 값(천 명) 이하면 추세 없음으로 본다. */
+export const VIEWERS_TREND_EPSILON = 0.5
+
 // 현상 전파
 export const NOISE_RADIUS: Record<Intensity, number> = { 1: 3, 2: 6, 3: 12 }
 /** 웃음과 노출이 보이는 반경(m) */
@@ -142,7 +152,8 @@ export const MISFIRE_MAX_INTENSITY = 3
 /** overdo 엇나감이 move 속도에 곱하는 배율 */
 export const OVERDO_SPEED_MULTIPLIER = 1.5
 export const INTERVENTION_SPEED = 0.2
-export const INTERVENTION_REAL_SECONDS = 4
+/** 개입 선택 시간(실제 초). 대상 카드를 읽고 고를 시간이다(spec 8.2). */
+export const INTERVENTION_REAL_SECONDS = 10
 export const AUTO_SLOWMO_REAL_SECONDS = 1.5
 export const AUTO_SLOWMO_GAUGE_RATIO = 0.8
 

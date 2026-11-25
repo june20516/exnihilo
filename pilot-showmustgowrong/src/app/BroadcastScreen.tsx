@@ -7,6 +7,7 @@ import {
   useState,
   type MouseEvent,
 } from 'react'
+import { INTERVENTION_REAL_SECONDS } from '@/content/balance'
 import type { PerformerDef } from '@/content/types'
 import { StudioRenderer } from '@/render/StudioRenderer'
 import { clientToCanvas } from '@/render/geometry'
@@ -236,7 +237,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
           )}
           {!interventionOpen && !adPanelOpen && (
             <p className="text-xs leading-5 text-neutral-400">
-              출연자를 클릭하거나 Space를 누르면 시간이 느려지며 개입합니다(4초). 지시가 쌓이면
+              출연자를 클릭하거나 Space를 누르면 시간이 느려지며 개입합니다({INTERVENTION_REAL_SECONDS}초). 지시가 쌓이면
               출연자가 덜 따르고, 내성을 넘기면 방송을 떠납니다.
               <br />
               누적 피로 {view.fatigue}

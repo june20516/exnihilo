@@ -16,6 +16,8 @@ function makePerformer(id: string, overrides: Partial<PerformerDef> = {}): Perfo
     id,
     name: `이름 ${id}`,
     shortName: id,
+    role: '역할',
+    tendency: '성향',
     presence: 1,
     tolerance: 'normal',
     weight: 'normal',
@@ -174,6 +176,22 @@ describe('validateShow', () => {
     expect(errors.join('\n')).toContain('중복 id')
   })
 
+  it.each([
+    ['role', { role: ' ' }, '빈 역할: a'],
+    ['tendency', { tendency: '' }, '빈 성향: a'],
+  ])('출연자의 %s가 비어 있으면 오류다', (_name, overrides, message) => {
+    const errors = validateShow(show, [makePerformer('a', overrides)], [makeStaff()], equipment)
+    expect(errors).toContain(message)
+  })
+
+  it('지시의 expect가 비어 있으면 오류다', () => {
+    const blank = makePerformer('a', {
+      directives: [{ id: 'd1', label: '지시', expect: '', action: idleAction }],
+    })
+    const errors = validateShow(show, [blank], [makeStaff()], equipment)
+    expect(errors).toContain('빈 예상 결과: d1 (a)')
+  })
+
   it('지시 안의 알 수 없는 태그를 보고한다', () => {
     const withDirective = [
       makePerformer('a', {
@@ -181,6 +199,7 @@ describe('validateShow', () => {
           {
             id: 'd1',
             label: '지시',
+            expect: '소음 1',
             action: {
               pose: 'idle',
               emits: [{ kind: 'noise', intensity: 1, target: { tag: 'dir-ghost' } }],

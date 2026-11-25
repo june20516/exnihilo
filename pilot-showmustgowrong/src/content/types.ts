@@ -63,6 +63,8 @@ export interface ReactionDef {
 export interface DirectiveDef {
   id: string
   label: string
+  /** 이 지시를 하면 어떻게 되는지 한 줄(판단 카드에 보인다) */
+  expect: string
   action: ActionDef
 }
 
@@ -73,6 +75,10 @@ export interface PerformerDef {
   id: string
   name: string
   shortName: string
+  /** 연쇄 역할 한 단어(예: "MC") */
+  role: string
+  /** 무엇을 받으면 무엇을 일으키는지 한 줄 */
+  tendency: string
   presence: 1 | 2 | 3
   tolerance: Tolerance
   weight: Weight

@@ -190,12 +190,13 @@ describe('토크쇼 장비(Ruling 28)', () => {
       {
         id: 'taunt',
         label: '도발',
+        expect: '분노 2',
         action: {
           pose: 'angry',
           emits: [{ kind: 'anger', intensity: 2, target: { tag: 'athlete' } }],
         },
       },
-      { id: 'calm', label: '진정', action: { pose: 'idle', emits: [] } },
+      { id: 'calm', label: '진정', expect: '없음', action: { pose: 'idle', emits: [] } },
     ],
   }
 

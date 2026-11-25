@@ -78,8 +78,13 @@ export function validateShow(
   }
 
   for (const performer of performers) {
+    if (performer.role.trim() === '') errors.push(`빈 역할: ${performer.id}`)
+    if (performer.tendency.trim() === '') errors.push(`빈 성향: ${performer.id}`)
     checkReactions(performer.reactions, performer.id)
     for (const directive of performer.directives) {
+      if (directive.expect.trim() === '') {
+        errors.push(`빈 예상 결과: ${directive.id} (${performer.id})`)
+      }
       for (const target of actionTargets(directive.action)) checkTarget(target, performer.id)
     }
   }

@@ -7,7 +7,9 @@ import {
   CORNER_STEPS,
   LEAP_VERTICAL_RATIO,
   LIGHT_DARKNESS_INTENSITY,
+  BURST_WARNING_TENSION,
   MOTION_CAUSE_SECONDS,
+  PHENOMENON_DISPLAY_SECONDS,
   RATING_LIMITS,
   SILENCE_SECONDS,
   STEP_SECONDS,
@@ -16,6 +18,7 @@ import {
   STUDIO_WIDTH,
   TOLERANCE_COUNT,
   VIEW_LOG_LINES,
+  VIEWERS_START,
   WALKOUT_INTENSITY,
   WALKOUT_SECONDS,
   WALKOUT_SPEED,
@@ -43,7 +46,7 @@ import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
 import { describeEvent, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
-import { EventLog, type PhenomenonEvent } from './phenomena'
+import { EventLog, perceives, type PhenomenonEvent } from './phenomena'
 import { PhysicsWorld, initPhysics, type Contact } from './physics'
 import {
   ShowValidationError,
@@ -58,11 +61,13 @@ import {
   type InputRecord,
   type LogLine,
   type Phase,
+  type RecentPhenomenon,
   type StaffView,
 } from './engineTypes'
 import { updateGaze } from './gaze'
 import { validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
+import { TENSION_WINDOW_STEPS, tensionOf, viewersTrendOf } from './tension'
 import { StageLocator, type Emitter } from './targeting'
 import { type FloorPoint, floorDistance, type Vec3, yawBetween } from './vec'
 
@@ -82,6 +87,7 @@ function secondsToSteps(seconds: number): number {
 
 const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
 const MOTION_CAUSE_STEPS = secondsToSteps(MOTION_CAUSE_SECONDS)
+const PHENOMENON_DISPLAY_STEPS = secondsToSteps(PHENOMENON_DISPLAY_SECONDS)
 
 /** 관객은 고정 환경이라 콘텐츠가 아니라 balance 수치로 반응한다(spec 7.4, Ruling 17). */
 const AUDIENCE_REACTIONS: ReactionDef[] = [
@@ -150,6 +156,8 @@ export class Broadcast {
   private autoSlowmo: AutoSlowmo | null = null
   private readonly slowmoGauges = new Set<GaugeKind>()
   private readonly inputs: InputRecord[] = []
+  /** 스텝 n 직후의 시청자 수(index n). 1초 전 추세 비교용 */
+  private readonly viewersByStep: number[] = [VIEWERS_START]
 
   private constructor(setup: BroadcastSetup, physics: PhysicsWorld) {
     this.setup = setup
@@ -279,6 +287,7 @@ export class Broadcast {
     if ((this.stepCount + 1) % STEPS_PER_SECOND === 0) this.score.tickSecond(this.silenceLevel())
 
     this.stepCount += 1
+    this.viewersByStep.push(this.score.viewers)
     // 9. 방송 중단과 종료
     if (this.score.checkHalt() !== null || this.stepCount >= BROADCAST_STEPS) {
       this.currentPhase = 'ended'
@@ -304,6 +313,7 @@ export class Broadcast {
 
   view(): BroadcastView {
     const rating = this.setup.show.rating
+    const recentEvents = this.log.since(this.stepCount - TENSION_WINDOW_STEPS)
     return {
       step: this.stepCount,
       phase: this.currentPhase,
@@ -312,9 +322,11 @@ export class Broadcast {
       cameraAngles: this.rig.angles(),
       cameraTargets: this.rig.targets(),
       staff: this.rig.staffViews().map((view) => this.staffView(view)),
-      actors: this.cast.all().map((member) => this.actorView(member)),
+      actors: this.cast.all().map((member) => this.actorView(member, recentEvents)),
       equipment: [...this.equipment.keys()].map((id) => this.equipmentView(id)),
       viewers: this.score.viewers,
+      viewersTrend: this.viewersTrend(),
+      recentPhenomena: this.recentPhenomena(),
       gauges: { ...this.score.gauges },
       limits: { ...RATING_LIMITS[rating] },
       haltedBy: this.score.haltedBy,
@@ -450,6 +462,7 @@ export class Broadcast {
   private finishAdStep(): void {
     if ((this.stepCount + 1) % STEPS_PER_SECOND === 0) this.score.tickSecond(this.silenceLevel())
     this.stepCount += 1
+    this.viewersByStep.push(this.score.viewers)
   }
 
   private resetCast(): void {
@@ -1003,11 +1016,12 @@ export class Broadcast {
     return Math.min(LAST_CORNER_INDEX, index) as 0 | 1 | 2
   }
 
-  private actorView(member: CastMember): ActorView {
+  private actorView(member: CastMember, recentEvents: readonly PhenomenonEvent[]): ActorView {
     const placement = this.cast.placement(member)
     const pose: Pose = placement.tumbling ? (placement.grounded ? 'fallen' : 'flying') : member.pose
     const used = this.director.directivesUsed(member.def.id)
     const { position, up } = placement
+    const tension = this.tensionOf(member, recentEvents)
     return {
       id: member.def.id,
       name: member.def.name,
@@ -1020,7 +1034,41 @@ export class Broadcast {
       walkedOut: member.walkedOut,
       departed: member.departedAt !== null,
       directivesLeft: Math.max(0, TOLERANCE_COUNT[member.def.tolerance] - used),
+      tension,
+      aboutToBurst: tension >= BURST_WARNING_TENSION,
+      misfireChance: this.director.previewMisfireChance(member.def.id),
     }
+  }
+
+  private tensionOf(member: CastMember, recentEvents: readonly PhenomenonEvent[]): number {
+    if (member.departedAt !== null) return 0
+    const { x, y, z } = this.cast.position(member)
+    const perceiver = { id: member.def.id, x, y, z, inDarkness: this.inDarkness({ x, y, z }) }
+    return tensionOf(member, recentEvents, this.cooldowns, this.stepCount, (event) =>
+      perceives(event, perceiver),
+    )
+  }
+
+  private viewersTrend(): -1 | 0 | 1 {
+    const oneSecondAgo = Math.max(0, this.stepCount - STEPS_PER_SECOND)
+    return viewersTrendOf(this.score.viewers, this.viewersByStep[oneSecondAgo])
+  }
+
+  /** gaze는 카메라 시야로, silence는 공간에 그릴 자리가 없어 뺀다. */
+  private recentPhenomena(): RecentPhenomenon[] {
+    return this.log
+      .since(this.stepCount - PHENOMENON_DISPLAY_STEPS)
+      .filter((event) => isPhenomenonShown(event))
+      .map((event) => ({
+        id: event.id,
+        kind: event.kind,
+        intensity: event.intensity,
+        x: event.x,
+        y: event.y,
+        z: event.z,
+        ageSeconds: (this.stepCount - event.step) * STEP_SECONDS,
+        text: this.describe(event),
+      }))
   }
 
   private staffView(view: Omit<StaffView, 'name' | 'x' | 'y' | 'z'>): StaffView {

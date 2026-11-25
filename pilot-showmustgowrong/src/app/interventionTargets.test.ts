@@ -20,6 +20,9 @@ function actor(id: string, overrides: Partial<ActorView> = {}): ActorView {
     walkedOut: false,
     departed: false,
     directivesLeft: 3,
+    tension: 0,
+    aboutToBurst: false,
+    misfireChance: 0,
     ...overrides,
   }
 }
