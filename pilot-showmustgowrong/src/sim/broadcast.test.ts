@@ -1,0 +1,180 @@
+import { describe, expect, it } from 'vitest'
+import { RATING_LIMITS, VIEWERS_START } from '@/content/balance'
+import type { CameraDef, ShowDef } from '@/content/types'
+import { BroadcastScore, inFrame } from './broadcast'
+import type { PhenomenonEvent } from './phenomena'
+
+const camera = (overrides: Partial<CameraDef> = {}): CameraDef => ({
+  id: 'cam',
+  label: '카메라',
+  position: { x: 0, y: 0 },
+  defaultAngle: 0,
+  fovDegrees: 60,
+  range: 10,
+  shotIntensity: 2,
+  ...overrides,
+})
+
+const show = (rating: ShowDef['rating'] = 'TV-14') => ({ rating }) as ShowDef
+
+let nextId = 0
+const event = (overrides: Partial<PhenomenonEvent> = {}): PhenomenonEvent => ({
+  id: nextId++,
+  kind: 'laughter',
+  intensity: 2,
+  sourceId: 'rex',
+  targetId: null,
+  x: 0,
+  y: 0,
+  step: 0,
+  causeId: null,
+  depth: 1,
+  ...overrides,
+})
+
+describe('inFrame', () => {
+  it('부채꼴 안은 true, 밖은 false', () => {
+    expect(inFrame(camera(), 0, 5, 0)).toBe(true)
+    expect(inFrame(camera(), 0, 5, 5)).toBe(false)
+    expect(inFrame(camera(), 0, 11, 0)).toBe(false)
+  })
+
+  it('카메라 위치를 기준으로 계산한다', () => {
+    const cam = camera({ position: { x: 4, y: 2 } })
+    expect(inFrame(cam, 0, 9, 2)).toBe(true)
+    expect(inFrame(cam, 0, 4, 7)).toBe(false)
+  })
+
+  it('각도와 거리 경계값을 포함한다', () => {
+    expect(inFrame(camera(), 0, 10, 0)).toBe(true)
+    const edge = (30 * Math.PI) / 180
+    expect(inFrame(camera(), 0, 5 * Math.cos(edge), 5 * Math.sin(edge))).toBe(true)
+    expect(inFrame(camera(), 0, 5 * Math.cos(edge), -5 * Math.sin(edge))).toBe(true)
+    const outside = (31 * Math.PI) / 180
+    expect(inFrame(camera(), 0, 5 * Math.cos(outside), 5 * Math.sin(outside))).toBe(false)
+  })
+
+  it('+y가 위인 반시계 각도를 쓴다', () => {
+    expect(inFrame(camera(), 90, 0, 5)).toBe(true)
+    expect(inFrame(camera(), 90, 0, -5)).toBe(false)
+  })
+
+  it('±180도 경계를 정규화한다', () => {
+    const toward = (deg: number) => [
+      5 * Math.cos((deg * Math.PI) / 180),
+      5 * Math.sin((deg * Math.PI) / 180),
+    ]
+    const [x, y] = toward(-175)
+    expect(inFrame(camera(), 170, x, y)).toBe(true)
+    const [x2, y2] = toward(-155)
+    expect(inFrame(camera(), 170, x2, y2)).toBe(false)
+  })
+})
+
+describe('BroadcastScore.scoreEvent', () => {
+  it('깊이와 존재감을 반영해 점수와 시청자를 올린다', () => {
+    const score = new BroadcastScore(show())
+    const points = score.scoreEvent(event({ depth: 3, intensity: 2 }), 2, 1)
+    expect(points).toBeCloseTo(7.5)
+    expect(score.viewers).toBeCloseTo(VIEWERS_START + 30)
+    expect(score.peakViewers).toBeCloseTo(VIEWERS_START + 30)
+  })
+
+  it('같은 (source, kind) 세 번째 송출의 novelty는 0.25다', () => {
+    const score = new BroadcastScore(show())
+    score.scoreEvent(event(), 1, 1)
+    score.scoreEvent(event(), 1, 1)
+    expect(score.scoreEvent(event(), 1, 1)).toBeCloseTo(3 * 0.25)
+    expect(score.scoreEvent(event(), 1, 1)).toBeCloseTo(3 * 0.25)
+  })
+
+  it('source나 kind가 다르면 novelty를 따로 센다', () => {
+    const score = new BroadcastScore(show())
+    score.scoreEvent(event(), 1, 1)
+    expect(score.scoreEvent(event({ sourceId: 'mia' }), 1, 1)).toBeCloseTo(3)
+    expect(score.scoreEvent(event({ kind: 'anger' }), 1, 1)).toBeCloseTo(3)
+  })
+
+  it('gaze와 silence는 점수 0이다', () => {
+    const score = new BroadcastScore(show())
+    expect(score.scoreEvent(event({ kind: 'gaze' }), 1, 1)).toBe(0)
+    expect(score.scoreEvent(event({ kind: 'silence' }), 1, 1)).toBe(0)
+    expect(score.viewers).toBe(VIEWERS_START)
+  })
+
+  it('분노 강도 3은 language +10, violence +3', () => {
+    const score = new BroadcastScore(show())
+    score.scoreEvent(event({ kind: 'anger', intensity: 3 }), 1, 1)
+    expect(score.gauges.language).toBe(10)
+    expect(score.gauges.violence).toBe(3)
+  })
+
+  it('hitViolenceMultiplier는 impact 폭력성에만 곱한다', () => {
+    const score = new BroadcastScore(show())
+    score.scoreEvent(event({ kind: 'impact', intensity: 2 }), 1, 0.5)
+    expect(score.gauges.violence).toBe(3)
+    score.scoreEvent(event({ kind: 'anger', intensity: 1, sourceId: 'x' }), 1, 0.5)
+    expect(score.gauges.violence).toBe(4)
+  })
+})
+
+describe('BroadcastScore 게이지와 중단', () => {
+  it('TV-14에서 동시에 넘으면 sexual이 먼저고, 이후에도 유지된다', () => {
+    const score = new BroadcastScore(show('TV-14'))
+    score.addGauge('violence', 70)
+    score.addGauge('sexual', 70)
+    expect(score.checkHalt()).toBe('sexual')
+    expect(score.haltedBy).toBe('sexual')
+    score.addGauge('language', 90)
+    expect(score.checkHalt()).toBe('sexual')
+  })
+
+  it('상한 아래면 중단하지 않는다', () => {
+    const score = new BroadcastScore(show('TV-14'))
+    score.addGauge('violence', RATING_LIMITS['TV-14'].violence - 1)
+    expect(score.checkHalt()).toBeNull()
+    expect(score.haltedBy).toBeNull()
+  })
+
+  it('nearLimit은 상한의 80% 이상인 첫 게이지를 매번 계산한다', () => {
+    const score = new BroadcastScore(show('TV-14'))
+    expect(score.nearLimit()).toBeNull()
+    score.addGauge('violence', 56)
+    expect(score.nearLimit()).toBe('violence')
+    score.relieveGauges(10)
+    expect(score.nearLimit()).toBeNull()
+  })
+
+  it('relieveGauges는 0 미만으로 내리지 않는다', () => {
+    const score = new BroadcastScore(show())
+    score.addGauge('drugs', 5)
+    score.relieveGauges(25)
+    expect(score.gauges).toEqual({ sexual: 0, violence: 0, drugs: 0, language: 0 })
+  })
+})
+
+describe('BroadcastScore 시청자', () => {
+  it('tickSecond(2)는 viewers를 1% 줄이고 0이면 줄이지 않는다', () => {
+    const score = new BroadcastScore(show())
+    score.tickSecond(2)
+    expect(score.viewers).toBeCloseTo(VIEWERS_START * 0.99)
+    expect(score.peakViewers).toBe(VIEWERS_START)
+    score.tickSecond(0)
+    expect(score.viewers).toBeCloseTo(VIEWERS_START * 0.99)
+  })
+
+  it('applyAdLoss는 10%를 줄인다', () => {
+    const score = new BroadcastScore(show())
+    score.applyAdLoss()
+    expect(score.viewers).toBeCloseTo(VIEWERS_START * 0.9)
+  })
+
+  it('averageViewers는 표본 평균이고 표본이 없으면 현재 viewers다', () => {
+    const score = new BroadcastScore(show())
+    expect(score.averageViewers()).toBe(VIEWERS_START)
+    score.tickSecond(0)
+    score.scoreEvent(event({ intensity: 3 }), 1, 1)
+    score.tickSecond(0)
+    expect(score.averageViewers()).toBeCloseTo((VIEWERS_START + (VIEWERS_START + 36)) / 2)
+  })
+})
