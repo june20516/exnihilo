@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engine'
 import { CameraFeedCanvas } from './CameraFeedCanvas'
@@ -46,6 +46,11 @@ export function OnAirColumn({
   const onAir = show.cameras.find((camera) => camera.id === view.onAirCameraId) ?? show.cameras[0]
   const others = show.cameras.filter((camera) => camera !== onAir)
   const onAirTarget = trackingTarget(view, onAir, performers)
+  // 미리보기는 폭이 좁아 본명 4개가 겹치므로 짧은 이름을 쓴다.
+  const shortNames = useMemo(
+    () => new Map([...performers].map(([id, performer]) => [id, performer.shortName])),
+    [performers],
+  )
   return (
     <aside className="relative flex w-[300px] shrink-0 flex-col gap-2 py-1 pr-3">
       <section
@@ -94,6 +99,7 @@ export function OnAirColumn({
                   audienceZone={show.audienceZone}
                   width={PREVIEW_WIDTH}
                   height={PREVIEW_HEIGHT}
+                  shortNames={shortNames}
                 />
               </span>
               <span className="flex items-center gap-1 text-xs font-bold text-slate-200">

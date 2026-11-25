@@ -49,6 +49,8 @@ interface CameraFeedCanvasProps {
   audienceZone: ShowDef['audienceZone']
   width: number
   height: number
+  /** 출연자 id → 이름표에 쓸 짧은 이름. 작은 미리보기처럼 본명이 들어갈 자리가 없을 때 넘긴다. */
+  shortNames?: ReadonlyMap<string, string>
 }
 
 export function CameraFeedCanvas({
@@ -57,14 +59,18 @@ export function CameraFeedCanvas({
   audienceZone,
   width,
   height,
+  shortNames,
 }: CameraFeedCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     const context = canvasRef.current?.getContext('2d')
     if (!context) return
-    drawFeed(context, cameraFeed(view, camera, audienceZone), width, height)
-  }, [view, camera, audienceZone, width, height])
+    const items = cameraFeed(view, camera, audienceZone).map((item) =>
+      item.kind === 'actor' ? { ...item, label: shortNames?.get(item.id) ?? item.label } : item,
+    )
+    drawFeed(context, items, width, height)
+  }, [view, camera, audienceZone, width, height, shortNames])
 
   return (
     <canvas

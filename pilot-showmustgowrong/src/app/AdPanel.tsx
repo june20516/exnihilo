@@ -29,7 +29,7 @@ export function AdPanel({ benchLeft, secondsLeft, onConfirm, onCancel }: AdPanel
   return (
     <section
       data-testid="ad-panel"
-      className="flex flex-col gap-2 rounded border border-amber-400 bg-amber-950/40 p-3"
+      className="flex flex-col gap-2 rounded-xl border-2 border-amber-400 bg-slate-950 p-3 shadow-[4px_4px_0_#000]"
     >
       <header className="flex items-center justify-between">
         <span className="font-bold">광고 효과를 {AD_EFFECT_PICKS}개 고르세요</span>
