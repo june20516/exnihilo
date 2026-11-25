@@ -91,10 +91,11 @@ test('스튜디오의 출연자를 클릭하면 그 대상으로 개입하고, �
   page,
 }) => {
   await openBroadcast(page)
-  // 렉스는 첫 home spot(x 4m)에 서 있다. 논리 좌표 (320, 652)를 960×540으로 줄인 화면 좌표로 누른다.
+  // 렉스는 첫 home spot(4.5, 4)에 서 있다(몸 중심 높이 약 0.85m). 960×540 캔버스에서
+  // fitIso(960, 540, 16)으로 투영한 몸 중심은 약 (409, 209)이다.
   const studio = page.getByTestId('studio')
   await expect(studio.locator('canvas')).toHaveCount(1)
-  await studio.click({ position: { x: 320 * 0.75, y: 652 * 0.75 } })
+  await studio.click({ position: { x: 409, y: 209 } })
   const panel = page.getByTestId('intervention-panel')
   await expect(panel).toBeVisible()
   const rex = panel.getByTestId('target-rex')

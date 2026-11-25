@@ -1063,6 +1063,8 @@ export class Broadcast {
         id: event.id,
         kind: event.kind,
         intensity: event.intensity,
+        sourceId: event.sourceId,
+        targetId: event.targetId,
         x: event.x,
         y: event.y,
         z: event.z,

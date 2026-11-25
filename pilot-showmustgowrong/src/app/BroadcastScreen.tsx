@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { INTERVENTION_REAL_SECONDS } from '@/content/balance'
 import type { PerformerDef } from '@/content/types'
-import { StudioRenderer } from '@/render/StudioRenderer'
+import { StudioRenderer, type StudioMode } from '@/render/StudioRenderer'
 import { clientToCanvas } from '@/render/geometry'
 import type { BroadcastInput, BroadcastSetup } from '@/sim/engine'
 import { AdPanel } from './AdPanel'
@@ -19,6 +19,7 @@ import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
 import { GAUGE_LABELS, SWITCHER_KEYS } from './labels'
 import { ResultScreen } from './ResultScreen'
+import type { Slowmo } from './loopState'
 import { useBroadcastLoop } from './useBroadcastLoop'
 
 interface BroadcastScreenProps {
@@ -28,6 +29,12 @@ interface BroadcastScreenProps {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+
+const STUDIO_MODES: Record<Slowmo, StudioMode> = {
+  none: 'live',
+  intervention: 'intervention',
+  auto: 'auto',
 }
 
 /**
@@ -48,7 +55,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     startAd,
     cancelAd,
   } = loop
-  const { show } = setup
+  const { show, equipment } = setup
   const hostRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<StudioRenderer | null>(null)
   const [rendererError, setRendererError] = useState<string | null>(null)
@@ -70,7 +77,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     if (!studioVisible || host === null) return
     const controller = new AbortController()
     let renderer: StudioRenderer | null = null
-    StudioRenderer.create(host, show, controller.signal).then(
+    StudioRenderer.create(host, show, controller.signal, equipment).then(
       (created) => {
         renderer = created
         rendererRef.current = created
@@ -84,10 +91,10 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       renderer?.destroy()
       rendererRef.current = null
     }
-  }, [show, studioVisible])
+  }, [show, equipment, studioVisible])
 
   useEffect(() => {
-    if (view !== null) rendererRef.current?.draw(view, slowmo !== 'none')
+    if (view !== null) rendererRef.current?.draw(view, STUDIO_MODES[slowmo])
   }, [view, slowmo])
 
   const beginIntervention = useCallback(
@@ -132,9 +139,15 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     const renderer = rendererRef.current
     const host = hostRef.current
     if (renderer === null || host === null) return
-    const point = clientToCanvas(event.clientX, event.clientY, host.getBoundingClientRect())
-    const actorId = renderer.actorAt(point.x, point.y)
-    if (actorId !== null) beginIntervention({ kind: 'performer', id: actorId })
+    const point = clientToCanvas(
+      event.clientX,
+      event.clientY,
+      host.getBoundingClientRect(),
+      renderer.size,
+    )
+    const hit = renderer.hitTest(point.x, point.y)
+    if (hit?.kind === 'actor') beginIntervention({ kind: 'performer', id: hit.id })
+    else if (hit?.kind === 'staff') beginIntervention({ kind: 'staff', id: hit.id })
   }
 
   const onDirect = (input: BroadcastInput): void => {

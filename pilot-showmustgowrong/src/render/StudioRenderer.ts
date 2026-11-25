@@ -1,138 +1,265 @@
 import { Application, ColorMatrixFilter, Container, Graphics, Text } from 'pixi.js'
-import { CAPSULE, LIGHT_HALF_EXTENTS, SET_WALL_HALF_EXTENTS } from '@/content/balance'
-import type { CameraDef, ShowDef } from '@/content/types'
-import type { ActorView, BroadcastView, LogLine } from '@/sim/engine'
+import {
+  CAPSULE,
+  LIGHT_HALF_EXTENTS,
+  NOISE_RADIUS,
+  PHENOMENON_DISPLAY_SECONDS,
+  SET_WALL_HALF_EXTENTS,
+  SIGHT_RADIUS,
+  STUDIO_DEPTH,
+  STUDIO_WIDTH,
+} from '@/content/balance'
+import type { EquipmentDef, ShowDef } from '@/content/types'
+import type {
+  ActorView,
+  BroadcastView,
+  EquipmentView,
+  RecentPhenomenon,
+  StaffView,
+} from '@/sim/engineTypes'
+import type { Vec3 } from '@/sim/vec'
 import { COLORS, POSE_COLORS, POSE_SYMBOLS } from './colors'
 import {
-  CANVAS_HEIGHT,
-  CANVAS_WIDTH,
-  PIXELS_PER_METER,
-  cameraFanPoints,
-  capsuleEndpoints,
-  capsuleVerticalExtent,
-  distanceToSegment,
-  sideViewRotation,
-  sideViewTilt,
-  toScreen,
+  ISO_VIEW_HEIGHT,
+  cameraFanFloorPoints,
+  depthKey,
+  fitIso,
+  floorEllipseRadii,
+  pointInPolygon,
+  projectIso,
+  screenTilt,
+  visibleBoxFaces,
+  type IsoTransform,
+  type Point,
 } from './geometry'
 
-// 말풍선
-const BUBBLE_SECONDS = 1.5
-const BUBBLE_FADE_SECONDS = 0.3
-const MAX_BUBBLES = 3
-const BUBBLE_VERTICAL_OFFSET = 56
-const BUBBLE_STACK_GAP = 8
-const BUBBLE_WRAP_WIDTH = 260
-const BUBBLE_PADDING_X = 10
-const BUBBLE_PADDING_Y = 6
-const BUBBLE_RADIUS = 10
-const BUBBLE_ALPHA = 0.95
-const BUBBLE_FONT_SIZE = 15
-const SCREEN_MARGIN = 16
+export type StudioMode = 'live' | 'intervention' | 'auto'
 
-// 배경
-const EXIT_HEIGHT_METERS = 2.2
-const EXIT_FILL_ALPHA = 0.35
-const AUDIENCE_FILL_ALPHA = 0.5
-const AUDIENCE_LINE_ALPHA = 0.6
-const SPOT_HALF_WIDTH = 24
-const SPOT_LIFT = 3
-const SPOT_LINE_WIDTH = 4
-const FLOOR_LINE_WIDTH = 3
-const ZONE_LINE_WIDTH = 2
+export type StudioHit =
+  | { kind: 'actor'; id: string }
+  | { kind: 'staff'; id: string }
+  | { kind: 'equipment'; id: string }
+  | { kind: 'phenomenon'; id: number }
 
-// 카메라
+// 캔버스
+/** host 크기를 읽지 못할 때 쓰는 논리 크기 */
+const FALLBACK_WIDTH = 960
+const FALLBACK_HEIGHT = 540
+const FIT_PADDING = 16
+const FONT_FAMILY = 'sans-serif'
+
+// 바닥
+const TILE_METERS = 1
+const TILE_LINE_WIDTH = 1
+const FLOOR_EDGE_WIDTH = 2
+const BACK_WALL_ALPHA = 0.9
+const AUDIENCE_FILL_ALPHA = 0.55
+const SPOT_RADIUS_METERS = 0.35
+const SPOT_ALPHA = 0.5
+const DARKNESS_ALPHA = 0.6
+
+// 카메라 시야
 const FAN_ARC_STEPS = 16
-const FAN_ALPHA = 0.12
-const FAN_ON_AIR_ALPHA = 0.2
-const FAN_ON_AIR_LINE_WIDTH = 3
-const CAMERA_DOT_RADIUS = 8
+const FAN_ON_AIR_FILL_ALPHA = 0.3
+const FAN_ON_AIR_LINE_WIDTH = 2
+const FAN_IDLE_LINE_WIDTH = 1.5
+const FAN_IDLE_LINE_ALPHA = 0.4
+const CAMERA_MARK_RADIUS = 5
 
-// 출연자
-const ACTOR_HIT_PADDING_PX = 10
+// 몸
+const SHADOW_ALPHA = 0.35
+/** 높이 1m 오를 때 그림자가 줄어드는 비율 */
+const SHADOW_SHRINK_PER_METER = 0.15
+const SHADOW_MIN_RATIO = 0.4
 const ACTOR_OUTLINE_WIDTH = 2
 const ACTOR_ON_AIR_OUTLINE_WIDTH = 4
-const ACTOR_OUTLINE_ALPHA = 0.5
-const WALKED_OUT_ALPHA = 0.5
-const SYMBOL_FONT_SIZE = 28
-const NAME_FONT_SIZE = 14
-const TEXT_GAP = 4
+const ACTOR_OUTLINE_ALPHA = 0.6
+const WALKED_OUT_ALPHA = 0.45
+const ACTOR_HIT_PADDING_PX = 6
+const SYMBOL_FONT_SIZE = 14
+const NAME_FONT_SIZE = 11
+const NAME_GAP = 2
 
-// 슬로모션
-const SLOWMO_SATURATION = -0.6
+// 머리 위 표시
+const OVERHEAD_GAP = 6
+const TENSION_BAR_WIDTH = 34
+const TENSION_BAR_HEIGHT = 5
+const TOLERANCE_DOT_RADIUS = 2.5
+const TOLERANCE_DOT_GAP = 3
+const TOLERANCE_ROW_GAP = 3
+const BURST_FONT_SIZE = 11
+const BURST_PADDING_X = 5
+const BURST_PADDING_Y = 2
+const BURST_GAP = 3
+const TRACKING_ICON_WIDTH = 12
+const TRACKING_ICON_HEIGHT = 8
+const TRACKING_ICON_GAP = 4
+
+// 스태프
+const STAFF_HEIGHT_METERS = 1.6
+const STAFF_HEAD_RATIO = 0.17
+const STAFF_BODY_WIDTH_METERS = 0.5
+const STAFF_HIT_PADDING_PX = 4
+const STAFF_OUTLINE = {
+  color: COLORS.actorOutline,
+  width: ACTOR_OUTLINE_WIDTH,
+  alpha: ACTOR_OUTLINE_ALPHA,
+} as const
+const STARTLED_FONT_SIZE = 12
+const STARTLED_PADDING_X = 6
+const STARTLED_PADDING_Y = 3
+const RECOVERY_RADIUS = 7
+const RECOVERY_LINE_WIDTH = 3
+
+// 장비
+const LIGHT_CORD_METERS = 1
+const LIGHT_CORD_WIDTH = 2
+/** 이 높이(m)보다 떠 있는 장비만 바닥 그림자를 그린다. */
+const EQUIPMENT_SHADOW_MIN_HEIGHT = 0.3
+const EQUIPMENT_EDGE_WIDTH = 1.5
+const EQUIPMENT_EDGE_ALPHA = 0.5
+
+// 현상
+const NOISE_SPREAD_SECONDS = 0.5
+const RING_LINE_WIDTH_PER_INTENSITY = 1.5
+const IMPACT_STAR_POINTS = 5
+const IMPACT_STAR_RADIUS_PER_INTENSITY = 6
+const IMPACT_STAR_INNER_RATIO = 0.45
+const ANGER_ARROW_MAX_METERS = 1.5
+const ANGER_ARROW_WIDTH = 3
+const ANGER_ARROW_HEAD = 8
+const ANGER_MARK_RADIUS = 6
+const PHENOMENON_HIT_RADIUS_PX = 14
+
+// 개입·자동 슬로모션
+const INTERVENTION_SATURATION = -0.75
+const AUTO_SATURATION = -0.35
 const VIGNETTE_LAYERS = 10
-const VIGNETTE_LAYER_THICKNESS = 14
-const VIGNETTE_MAX_ALPHA = 0.3
+const VIGNETTE_LAYER_THICKNESS = 12
+const VIGNETTE_MAX_ALPHA = 0.35
+const AUTO_VIGNETTE_ALPHA = 0.5
 
-const FONT_FAMILY = 'sans-serif'
+/** 조명이 오른쪽 위 앞에서 비친다고 보고 면마다 밝기를 정한다. */
+const LIGHT_DIRECTION: Vec3 = { x: 0.35, y: 1, z: 0.6 }
+const FACE_MIN_BRIGHTNESS = 0.55
 
 interface ActorSprite {
   root: Container
   body: Graphics
   symbol: Text
   label: Text
-  /** 마지막으로 그린 pose와 송출 여부. 바뀔 때만 도형을 다시 그린다. */
+  overhead: Container
+  overheadMarks: Graphics
+  burstTag: Container
+  /** 마지막으로 그린 몸의 key(pose, 송출, scale). 바뀔 때만 도형을 다시 그린다. */
   drawnKey: string | null
 }
 
-interface Bubble {
-  root: Container
-  width: number
-  height: number
-  /** 겹침을 피하기 전, 이벤트 위치 기준의 중심 좌표. */
-  anchorX: number
-  anchorY: number
-  expiresAt: number
+interface StaffSprite {
+  root: Graphics
+  overhead: Container
+  overheadMarks: Graphics
+  startledTag: Container
+}
+
+interface ActorHitShape {
+  id: string
+  center: Point
+  tilt: number
+  halfWidth: number
+  halfHeight: number
+  depth: number
+}
+
+interface RectHitShape {
+  id: string
+  left: number
+  top: number
+  right: number
+  bottom: number
+  depth: number
+}
+
+interface PolygonHitShape {
+  id: string
+  polygons: Point[][]
+  depth: number
+}
+
+interface PointHitShape {
+  id: number
+  point: Point
+  depth: number
 }
 
 /**
- * 스튜디오를 도형으로 그린다. 물리 각도는 라디안·반시계(+y 위)이고
- * 카메라 각도는 도 단위·반시계다. 화면은 y가 아래로 늘어나므로 두 각도 모두 부호를 뒤집어 쓴다
- * (좌표 변환은 geometry.ts).
+ * 스튜디오를 쿼터뷰로 그린다(spec 8.2 2단계). Plan 1처럼 매 draw마다 view를 읽어 다시 그린다.
+ * 레이어는 floor(바닥 표시) → bodies(깊이 정렬한 몸과 장비) → overlays(머리 위 표시, 말풍선) 순이다.
+ * 물리 좌표 → 화면 좌표는 geometry.ts의 projectIso가 맡는다.
  */
 export class StudioRenderer {
   private readonly app: Application
   private readonly show: ShowDef
+  private readonly darknessZones = new Map<string, NonNullable<EquipmentDef['darknessZone']>>()
   private readonly world = new Container()
-  private readonly fans = new Graphics()
-  private readonly equipmentLayer = new Container()
-  private readonly actorLayer = new Container()
-  private readonly bubbleLayer = new Container()
+  private readonly floorStatic = new Graphics()
+  private readonly floorDynamic = new Graphics()
+  private readonly bodies = new Container()
+  private readonly overlays = new Container()
+  private readonly overlayMarks = new Graphics()
   private readonly vignette = new Graphics()
-  private readonly slowmoFilter = new ColorMatrixFilter()
+  private readonly interventionFilter = new ColorMatrixFilter()
+  private readonly autoFilter = new ColorMatrixFilter()
   private readonly actorSprites = new Map<string, ActorSprite>()
+  private readonly staffSprites = new Map<string, StaffSprite>()
   private readonly equipmentShapes = new Map<string, Graphics>()
-  private bubbles: Bubble[] = []
-  private elapsedSeconds = 0
-  /** 이미 처리한 가장 큰 LogLine.index. 첫 draw 전에는 null. */
-  private lastLogIndex: number | null = null
-  private slowmoActive = false
-  private lastActors: ActorView[] = []
+  private transform: IsoTransform
+  private logicalWidth: number
+  private logicalHeight: number
+  private mode: StudioMode = 'live'
+  private lastView: BroadcastView | null = null
+  private actorHits: ActorHitShape[] = []
+  private staffHits: RectHitShape[] = []
+  private equipmentHits: PolygonHitShape[] = []
+  private phenomenonHits: PointHitShape[] = []
   private destroyed = false
 
-  private constructor(app: Application, show: ShowDef) {
+  private constructor(
+    app: Application,
+    show: ShowDef,
+    equipment: readonly EquipmentDef[],
+    width: number,
+    height: number,
+  ) {
     this.app = app
     this.show = show
+    for (const piece of equipment) {
+      if (piece.darknessZone !== undefined) this.darknessZones.set(piece.id, piece.darknessZone)
+    }
+    this.logicalWidth = width
+    this.logicalHeight = height
+    this.transform = fitIso(width, height, FIT_PADDING)
   }
 
   /**
-   * 렌더러를 만들어 host에 캔버스를 붙인다. 초기화(await)가 끝나기 전에 화면이 사라질 수 있으므로
-   * (React StrictMode의 이중 마운트 등) AbortSignal을 받는다. 초기화 뒤 이미 abort됐다면 만들던
-   * Pixi 앱을 바로 정리하고 `AbortError` DOMException으로 reject한다. 호출 쪽은 이 오류를 무시하면 된다.
-   *
-   *   const controller = new AbortController()
-   *   StudioRenderer.create(host, show, controller.signal).then(setRenderer, ignoreAbort)
-   *   return () => controller.abort() // 만들어진 뒤라면 renderer.destroy()도 호출한다
+   * 렌더러를 만들어 host에 캔버스를 붙인다. 캔버스 논리 크기는 host의 크기다.
+   * 초기화(await)가 끝나기 전에 화면이 사라질 수 있으므로(React StrictMode의 이중 마운트 등)
+   * AbortSignal을 받는다. 초기화 뒤 이미 abort됐다면 만들던 Pixi 앱을 바로 정리하고
+   * `AbortError` DOMException으로 reject한다. 호출 쪽은 이 오류를 무시하면 된다.
+   * equipment는 조명이 부서졌을 때 어둡게 칠할 바닥 원(darknessZone)을 읽는 데 쓴다.
    */
   static async create(
     host: HTMLElement,
     show: ShowDef,
     signal?: AbortSignal,
+    equipment: readonly EquipmentDef[] = [],
   ): Promise<StudioRenderer> {
+    const width = host.clientWidth > 0 ? host.clientWidth : FALLBACK_WIDTH
+    const height = host.clientHeight > 0 ? host.clientHeight : FALLBACK_HEIGHT
     const app = new Application()
     await app.init({
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
+      width,
+      height,
       background: COLORS.background,
       antialias: true,
       autoDensity: true,
@@ -142,111 +269,181 @@ export class StudioRenderer {
       app.destroy({ removeView: true }, { children: true })
       throw new DOMException('StudioRenderer 생성이 취소되었습니다.', 'AbortError')
     }
-    const renderer = new StudioRenderer(app, show)
+    const renderer = new StudioRenderer(app, show, equipment, width, height)
     host.appendChild(app.canvas)
     renderer.buildScene()
-    app.ticker.add(renderer.onTick)
     return renderer
   }
 
-  draw(view: BroadcastView, slowmo: boolean): void {
+  /** 캔버스 논리 크기. 클릭 좌표를 clientToCanvas로 환산할 때 쓴다. */
+  get size(): { width: number; height: number } {
+    return { width: this.logicalWidth, height: this.logicalHeight }
+  }
+
+  draw(view: BroadcastView, mode: StudioMode): void {
     if (this.destroyed) return
-    this.drawCameraFans(view)
-    this.drawEquipment(view)
+    this.lastView = view
+    this.drawFloorMarks(view)
+    this.drawEquipment(view.equipment)
     this.drawActors(view)
-    this.collectBubbles(view)
-    this.applySlowmo(slowmo)
+    this.drawStaff(view.staff)
+    this.drawPhenomenonMarks(view)
+    this.applyMode(mode)
   }
 
   /**
-   * 캔버스 논리 좌표(1280×720, 80px/m)의 한 점 (px, py)에 있는 출연자 id. 없으면 null.
-   * CSS로 캔버스를 줄여 보여 준다면 클릭 좌표를 호출 쪽에서 논리 좌표로 환산해 넘긴다.
+   * 캔버스 논리 좌표의 한 점 (px, py)에 있는 대상. 출연자, 스태프, 장비, 최근 현상 순으로 보고,
+   * 같은 종류 안에서는 앞쪽(depthKey가 큰 것)이 우선이다. 없으면 null.
    */
-  actorAt(px: number, py: number): string | null {
-    let bestId: string | null = null
-    let bestDistance = Infinity
-    const reach = CAPSULE.radius * PIXELS_PER_METER + ACTOR_HIT_PADDING_PX
-    for (const actor of this.lastActors) {
-      if (actor.walkedOut) continue
-      const [a, b] = capsuleEndpoints(actor.x, actor.y, sideViewTilt(actor.up))
-      const distance = distanceToSegment({ x: px, y: py }, a, b)
-      if (distance <= reach && distance < bestDistance) {
-        bestId = actor.id
-        bestDistance = distance
-      }
-    }
-    return bestId
+  hitTest(px: number, py: number): StudioHit | null {
+    const point = { x: px, y: py }
+    const actor = frontmost(this.actorHits.filter((shape) => insideBillboard(point, shape)))
+    if (actor !== null) return { kind: 'actor', id: actor.id }
+    const staff = frontmost(
+      this.staffHits.filter(
+        (shape) =>
+          px >= shape.left && px <= shape.right && py >= shape.top && py <= shape.bottom,
+      ),
+    )
+    if (staff !== null) return { kind: 'staff', id: staff.id }
+    const equipment = frontmost(
+      this.equipmentHits.filter((shape) =>
+        shape.polygons.some((polygon) => pointInPolygon(point, polygon)),
+      ),
+    )
+    if (equipment !== null) return { kind: 'equipment', id: equipment.id }
+    const phenomenon = frontmost(
+      this.phenomenonHits.filter(
+        (shape) =>
+          Math.hypot(shape.point.x - px, shape.point.y - py) <= PHENOMENON_HIT_RADIUS_PX,
+      ),
+    )
+    if (phenomenon !== null) return { kind: 'phenomenon', id: phenomenon.id }
+    return null
+  }
+
+  resize(width: number, height: number): void {
+    if (this.destroyed || width <= 0 || height <= 0) return
+    if (width === this.logicalWidth && height === this.logicalHeight) return
+    this.logicalWidth = width
+    this.logicalHeight = height
+    this.transform = fitIso(width, height, FIT_PADDING)
+    this.app.renderer.resize(width, height)
+    this.drawFloorStatic()
+    this.drawVignette()
+    if (this.lastView !== null) this.draw(this.lastView, this.mode)
   }
 
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
-    this.app.ticker.remove(this.onTick)
     this.world.filters = null
-    this.slowmoFilter.destroy()
+    this.interventionFilter.destroy()
+    this.autoFilter.destroy()
     this.app.destroy({ removeView: true }, { children: true })
     this.actorSprites.clear()
+    this.staffSprites.clear()
     this.equipmentShapes.clear()
-    this.bubbles = []
+    this.lastView = null
   }
 
-  private readonly onTick = (): void => {
-    this.elapsedSeconds += this.app.ticker.elapsedMS / 1000
-    this.updateBubbles()
-  }
+  // ── 장면 구성 ─────────────────────────────────────────────
 
   private buildScene(): void {
-    this.slowmoFilter.saturate(SLOWMO_SATURATION, false)
-    this.world.addChild(this.buildBackground(), this.fans, this.equipmentLayer, this.actorLayer)
-    this.buildVignette()
-    this.app.stage.addChild(this.world, this.bubbleLayer, this.vignette)
+    this.interventionFilter.saturate(INTERVENTION_SATURATION, false)
+    this.autoFilter.saturate(AUTO_SATURATION, false)
+    this.bodies.sortableChildren = true
+    this.overlays.addChild(this.overlayMarks)
+    this.world.addChild(this.floorStatic, this.floorDynamic, this.bodies, this.overlays)
+    this.app.stage.addChild(this.world, this.vignette)
+    this.drawFloorStatic()
+    this.drawVignette()
   }
 
-  private buildBackground(): Graphics {
-    const { audienceZone, exit, homeSpots, benchSpot } = this.show
-    const floorY = toScreen(0, 0).y
-    const background = new Graphics()
+  private project(point: Vec3): Point {
+    return projectIso(point, this.transform)
+  }
 
-    const audienceLeft = audienceZone.minX * PIXELS_PER_METER
-    const audienceWidth = (audienceZone.maxX - audienceZone.minX) * PIXELS_PER_METER
-    background
-      .rect(audienceLeft, 0, audienceWidth, CANVAS_HEIGHT)
+  private floorPolygon(minX: number, maxX: number, minZ: number, maxZ: number): Point[] {
+    return [
+      this.project({ x: minX, y: 0, z: minZ }),
+      this.project({ x: maxX, y: 0, z: minZ }),
+      this.project({ x: maxX, y: 0, z: maxZ }),
+      this.project({ x: minX, y: 0, z: maxZ }),
+    ]
+  }
+
+  /** 바뀌지 않는 바닥: 뒤 벽 두 면, 바닥 타일, 관객석, home spot, 대기석, 출구. */
+  private drawFloorStatic(): void {
+    const floor = this.floorStatic.clear()
+    const top = ISO_VIEW_HEIGHT
+    // 뒤 벽(z=0 면과 x=0 면)
+    floor
+      .poly([
+        this.project({ x: 0, y: 0, z: 0 }),
+        this.project({ x: STUDIO_WIDTH, y: 0, z: 0 }),
+        this.project({ x: STUDIO_WIDTH, y: top, z: 0 }),
+        this.project({ x: 0, y: top, z: 0 }),
+      ])
+      .fill({ color: COLORS.backWall, alpha: BACK_WALL_ALPHA })
+      .poly([
+        this.project({ x: 0, y: 0, z: 0 }),
+        this.project({ x: 0, y: 0, z: STUDIO_DEPTH }),
+        this.project({ x: 0, y: top, z: STUDIO_DEPTH }),
+        this.project({ x: 0, y: top, z: 0 }),
+      ])
+      .fill({ color: COLORS.backWall, alpha: BACK_WALL_ALPHA * 0.8 })
+
+    floor.poly(this.floorPolygon(0, STUDIO_WIDTH, 0, STUDIO_DEPTH)).fill(COLORS.floor)
+    for (let x = TILE_METERS; x < STUDIO_WIDTH; x += TILE_METERS) {
+      const a = this.project({ x, y: 0, z: 0 })
+      const b = this.project({ x, y: 0, z: STUDIO_DEPTH })
+      floor.moveTo(a.x, a.y).lineTo(b.x, b.y)
+    }
+    for (let z = TILE_METERS; z < STUDIO_DEPTH; z += TILE_METERS) {
+      const a = this.project({ x: 0, y: 0, z })
+      const b = this.project({ x: STUDIO_WIDTH, y: 0, z })
+      floor.moveTo(a.x, a.y).lineTo(b.x, b.y)
+    }
+    floor.stroke({ color: COLORS.floorTile, width: TILE_LINE_WIDTH })
+    floor
+      .poly(this.floorPolygon(0, STUDIO_WIDTH, 0, STUDIO_DEPTH))
+      .stroke({ color: COLORS.floorEdge, width: FLOOR_EDGE_WIDTH })
+
+    const { audienceZone, homeSpots, benchSpot, exit } = this.show
+    const audience = this.floorPolygon(
+      audienceZone.minX,
+      audienceZone.maxX,
+      audienceZone.minZ,
+      audienceZone.maxZ,
+    )
+    floor
+      .poly(audience)
       .fill({ color: COLORS.audienceZone, alpha: AUDIENCE_FILL_ALPHA })
-      .rect(audienceLeft, 0, audienceWidth, CANVAS_HEIGHT)
-      .stroke({
-        color: COLORS.audienceZoneLine,
-        width: ZONE_LINE_WIDTH,
-        alpha: AUDIENCE_LINE_ALPHA,
-      })
+      .poly(audience)
+      .stroke({ color: COLORS.audienceZoneLine, width: FLOOR_EDGE_WIDTH })
 
-    const exitLeft = exit.x * PIXELS_PER_METER
-    const exitHeight = EXIT_HEIGHT_METERS * PIXELS_PER_METER
-    background
-      .rect(exitLeft, floorY - exitHeight, CANVAS_WIDTH - exitLeft, exitHeight)
-      .fill({ color: COLORS.exit, alpha: EXIT_FILL_ALPHA })
-      .stroke({ color: COLORS.exit, width: ZONE_LINE_WIDTH })
-
-    background
-      .rect(0, floorY, CANVAS_WIDTH, CANVAS_HEIGHT - floorY)
-      .fill(COLORS.floor)
-      .moveTo(0, floorY)
-      .lineTo(CANVAS_WIDTH, floorY)
-      .stroke({ color: COLORS.floorLine, width: FLOOR_LINE_WIDTH })
-
-    for (const spot of homeSpots) this.drawSpotMark(background, spot.x, floorY, COLORS.homeSpot)
-    this.drawSpotMark(background, benchSpot.x, floorY, COLORS.benchSpot)
-    return background
+    const spot = floorEllipseRadii(SPOT_RADIUS_METERS, this.transform.scale)
+    for (const home of homeSpots) {
+      const center = this.project({ x: home.x, y: 0, z: home.z })
+      floor
+        .ellipse(center.x, center.y, spot.rx, spot.ry)
+        .stroke({ color: COLORS.homeSpot, width: FLOOR_EDGE_WIDTH, alpha: SPOT_ALPHA })
+    }
+    const bench = this.project({ x: benchSpot.x, y: 0, z: benchSpot.z })
+    floor
+      .ellipse(bench.x, bench.y, spot.rx, spot.ry)
+      .stroke({ color: COLORS.benchSpot, width: FLOOR_EDGE_WIDTH, alpha: SPOT_ALPHA })
+    const exitCenter = this.project({ x: exit.x, y: 0, z: exit.z })
+    floor
+      .ellipse(exitCenter.x, exitCenter.y, spot.rx, spot.ry)
+      .fill({ color: COLORS.exit, alpha: SPOT_ALPHA })
   }
 
-  private drawSpotMark(target: Graphics, xMeters: number, floorY: number, color: number): void {
-    const x = xMeters * PIXELS_PER_METER
-    target
-      .moveTo(x - SPOT_HALF_WIDTH, floorY - SPOT_LIFT)
-      .lineTo(x + SPOT_HALF_WIDTH, floorY - SPOT_LIFT)
-      .stroke({ color, width: SPOT_LINE_WIDTH })
-  }
-
-  private buildVignette(): void {
+  private drawVignette(): void {
+    this.vignette.clear()
+    const width = this.logicalWidth
+    const height = this.logicalHeight
     for (let layer = 0; layer < VIGNETTE_LAYERS; layer++) {
       const inset = layer * VIGNETTE_LAYER_THICKNESS
       const alpha = VIGNETTE_MAX_ALPHA * (1 - layer / VIGNETTE_LAYERS)
@@ -254,80 +451,182 @@ export class StudioRenderer {
         .rect(
           inset + VIGNETTE_LAYER_THICKNESS / 2,
           inset + VIGNETTE_LAYER_THICKNESS / 2,
-          CANVAS_WIDTH - inset * 2 - VIGNETTE_LAYER_THICKNESS,
-          CANVAS_HEIGHT - inset * 2 - VIGNETTE_LAYER_THICKNESS,
+          width - inset * 2 - VIGNETTE_LAYER_THICKNESS,
+          height - inset * 2 - VIGNETTE_LAYER_THICKNESS,
         )
         .stroke({ color: COLORS.vignette, width: VIGNETTE_LAYER_THICKNESS, alpha })
     }
-    this.vignette.visible = false
+    this.vignette.visible = this.mode !== 'live'
   }
 
-  /** 상태가 바뀔 때만 필터와 비네트를 바꾼다. */
-  private applySlowmo(slowmo: boolean): void {
-    if (slowmo === this.slowmoActive) return
-    this.slowmoActive = slowmo
-    this.vignette.visible = slowmo
-    this.world.filters = slowmo ? [this.slowmoFilter] : null
+  /** 개입은 강하게, 자동 슬로모션은 약하게 채도를 빼고 가장자리를 어둡게 한다. */
+  private applyMode(mode: StudioMode): void {
+    if (mode === this.mode) return
+    this.mode = mode
+    this.vignette.visible = mode !== 'live'
+    this.vignette.alpha = mode === 'auto' ? AUTO_VIGNETTE_ALPHA : 1
+    if (mode === 'intervention') this.world.filters = [this.interventionFilter]
+    else if (mode === 'auto') this.world.filters = [this.autoFilter]
+    else this.world.filters = null
   }
 
-  private drawCameraFans(view: BroadcastView): void {
-    this.fans.clear()
-    for (const camera of this.show.cameras) {
-      const angleDegrees = view.cameraAngles[camera.id] ?? camera.defaultAngle
-      this.drawFan(camera, angleDegrees, camera.id === view.onAirCameraId)
+  // ── 바닥 표시 ─────────────────────────────────────────────
+
+  /** 몸보다 먼저 그리는 바닥 표시: 어둠, 카메라 시야, 현상 링, 그림자. */
+  private drawFloorMarks(view: BroadcastView): void {
+    const floor = this.floorDynamic.clear()
+    this.drawDarkness(floor, view.equipment)
+    this.drawCameraFans(floor, view)
+    this.drawPhenomenonRings(floor, view.recentPhenomena)
+    this.drawShadows(floor, view)
+  }
+
+  private drawDarkness(floor: Graphics, equipment: readonly EquipmentView[]): void {
+    for (const item of equipment) {
+      const zone = this.darknessZones.get(item.id)
+      if (!item.released || zone === undefined) continue
+      const center = this.project({ x: zone.x, y: 0, z: zone.z })
+      const { rx, ry } = floorEllipseRadii(zone.radius, this.transform.scale)
+      floor
+        .ellipse(center.x, center.y, rx, ry)
+        .fill({ color: COLORS.darkness, alpha: DARKNESS_ALPHA })
     }
   }
 
-  private drawFan(camera: CameraDef, angleDegrees: number, onAir: boolean): void {
-    const points = cameraFanPoints(
-      camera.position,
-      angleDegrees,
-      camera.fovDegrees,
-      camera.range,
-      FAN_ARC_STEPS,
+  private drawCameraFans(floor: Graphics, view: BroadcastView): void {
+    // 송출 중인 시야가 다른 시야 위에 오도록 마지막에 그린다.
+    const cameras = [...this.show.cameras].sort(
+      (a, b) => Number(a.id === view.onAirCameraId) - Number(b.id === view.onAirCameraId),
     )
-    this.fans.poly(points).fill({
-      color: onAir ? COLORS.cameraOnAirFan : COLORS.cameraFan,
-      alpha: onAir ? FAN_ON_AIR_ALPHA : FAN_ALPHA,
-    })
-    if (onAir) {
-      this.fans
-        .poly(points)
-        .stroke({ color: COLORS.cameraOnAirStroke, width: FAN_ON_AIR_LINE_WIDTH })
+    for (const camera of cameras) {
+      const onAir = camera.id === view.onAirCameraId
+      const yaw = view.cameraAngles[camera.id] ?? camera.defaultAngle
+      const points = cameraFanFloorPoints(
+        camera.position,
+        yaw,
+        camera.fovDegrees,
+        camera.range,
+        FAN_ARC_STEPS,
+      ).map((point) => this.project(point))
+      if (onAir) {
+        floor
+          .poly(points)
+          .fill({ color: COLORS.cameraOnAirFan, alpha: FAN_ON_AIR_FILL_ALPHA })
+          .poly(points)
+          .stroke({ color: COLORS.cameraOnAirStroke, width: FAN_ON_AIR_LINE_WIDTH })
+      } else {
+        floor.poly(points).stroke({
+          color: COLORS.cameraFan,
+          width: FAN_IDLE_LINE_WIDTH,
+          alpha: FAN_IDLE_LINE_ALPHA,
+        })
+      }
+      floor
+        .circle(points[0].x, points[0].y, CAMERA_MARK_RADIUS)
+        .fill(onAir ? COLORS.cameraOnAirStroke : COLORS.cameraBody)
     }
-    this.fans
-      .circle(points[0], points[1], CAMERA_DOT_RADIUS)
-      .fill(onAir ? COLORS.cameraOnAirStroke : COLORS.cameraBody)
   }
 
-  private drawEquipment(view: BroadcastView): void {
+  private drawPhenomenonRings(floor: Graphics, phenomena: readonly RecentPhenomenon[]): void {
+    for (const item of phenomena) {
+      const color = ringColor(item.kind)
+      if (color === null) continue
+      const fade = Math.max(0, 1 - item.ageSeconds / PHENOMENON_DISPLAY_SECONDS)
+      const fullRadius = item.kind === 'noise' ? NOISE_RADIUS[item.intensity] : SIGHT_RADIUS
+      const radius =
+        item.kind === 'noise'
+          ? fullRadius * Math.min(1, item.ageSeconds / NOISE_SPREAD_SECONDS)
+          : fullRadius
+      if (radius <= 0) continue
+      const center = this.project({ x: item.x, y: 0, z: item.z })
+      const { rx, ry } = floorEllipseRadii(radius, this.transform.scale)
+      floor.ellipse(center.x, center.y, rx, ry).stroke({
+        color,
+        width: RING_LINE_WIDTH_PER_INTENSITY * item.intensity,
+        alpha: fade,
+      })
+    }
+  }
+
+  private drawShadows(floor: Graphics, view: BroadcastView): void {
+    const scale = this.transform.scale
+    for (const actor of view.actors) {
+      if (actor.departed) continue
+      // 서 있을 때 중심 높이(반 높이 + 반지름) 위로 뜬 만큼 그림자를 줄인다.
+      const lift = Math.max(0, actor.y - (CAPSULE.halfHeight + CAPSULE.radius))
+      const ratio = Math.max(SHADOW_MIN_RATIO, 1 - lift * SHADOW_SHRINK_PER_METER)
+      const center = this.project({ x: actor.x, y: 0, z: actor.z })
+      const { rx, ry } = floorEllipseRadii(CAPSULE.radius * ratio, scale)
+      floor.ellipse(center.x, center.y, rx, ry).fill({
+        color: COLORS.shadow,
+        alpha: SHADOW_ALPHA * (actor.walkedOut ? WALKED_OUT_ALPHA : 1),
+      })
+    }
     for (const item of view.equipment) {
+      if (item.kind !== 'hangingLight') continue
+      if (item.y < EQUIPMENT_SHADOW_MIN_HEIGHT + LIGHT_HALF_EXTENTS.hy) continue
+      const center = this.project({ x: item.x, y: 0, z: item.z })
+      const { rx, ry } = floorEllipseRadii(LIGHT_HALF_EXTENTS.hx, scale)
+      floor.ellipse(center.x, center.y, rx, ry).fill({ color: COLORS.shadow, alpha: SHADOW_ALPHA })
+    }
+  }
+
+  // ── 몸(깊이 정렬) ─────────────────────────────────────────
+
+  private drawEquipment(equipment: readonly EquipmentView[]): void {
+    this.equipmentHits = []
+    for (const item of equipment) {
       let shape = this.equipmentShapes.get(item.id)
       if (shape === undefined) {
         shape = new Graphics()
         this.equipmentShapes.set(item.id, shape)
-        this.equipmentLayer.addChild(shape)
+        this.bodies.addChild(shape)
       }
-      const isWall = item.kind === 'setWall'
-      const half = isWall ? SET_WALL_HALF_EXTENTS : LIGHT_HALF_EXTENTS
-      const width = half.hx * 2 * PIXELS_PER_METER
-      const height = half.hy * 2 * PIXELS_PER_METER
-      const baseColor = isWall ? COLORS.setWall : COLORS.light
-      shape
-        .clear()
-        .rect(-width / 2, -height / 2, width, height)
-        .fill(item.released ? COLORS.equipmentReleased : baseColor)
-      const position = toScreen(item.x, item.y)
-      shape.position.set(position.x, position.y)
-      shape.rotation = -sideViewRotation(item.rotation)
+      const isLight = item.kind === 'hangingLight'
+      const half = isLight ? LIGHT_HALF_EXTENTS : SET_WALL_HALF_EXTENTS
+      const baseColor = item.released
+        ? COLORS.equipmentReleased
+        : isLight
+          ? COLORS.light
+          : COLORS.setWall
+      shape.clear()
+      if (isLight && !item.released) {
+        const top = this.project({ x: item.x, y: item.y + half.hy, z: item.z })
+        const anchor = this.project({
+          x: item.x,
+          y: item.y + half.hy + LIGHT_CORD_METERS,
+          z: item.z,
+        })
+        shape
+          .moveTo(top.x, top.y)
+          .lineTo(anchor.x, anchor.y)
+          .stroke({ color: COLORS.lightCord, width: LIGHT_CORD_WIDTH })
+      }
+      const faces = visibleBoxFaces(item, half, item.rotation, this.transform)
+      for (const face of faces) {
+        shape
+          .poly(face.corners)
+          .fill(shade(baseColor, faceBrightness(face.normal)))
+          .stroke({
+            color: COLORS.actorOutline,
+            width: EQUIPMENT_EDGE_WIDTH,
+            alpha: EQUIPMENT_EDGE_ALPHA,
+          })
+      }
+      const depth = depthKey(item)
+      shape.zIndex = depth
+      this.equipmentHits.push({ id: item.id, polygons: faces.map((face) => face.corners), depth })
     }
   }
 
   private drawActors(view: BroadcastView): void {
-    this.lastActors = view.actors
+    this.actorHits = []
+    const tracked = new Set(
+      Object.values(view.cameraTargets).filter((id): id is string => id !== null),
+    )
     for (const actor of view.actors) {
       const sprite = this.actorSprites.get(actor.id) ?? this.createActorSprite(actor)
-      this.drawActor(sprite, actor)
+      this.drawActor(sprite, actor, tracked.has(actor.id))
     }
   }
 
@@ -343,35 +642,55 @@ export class StudioRenderer {
         fontFamily: FONT_FAMILY,
       },
     })
-    symbol.anchor.set(0.5, 1)
+    symbol.anchor.set(0.5)
+    body.addChild(symbol)
     const label = new Text({
       text: actor.name,
       style: { fill: COLORS.nameText, fontSize: NAME_FONT_SIZE, fontFamily: FONT_FAMILY },
     })
-    label.anchor.set(0.5, 1)
-    root.addChild(body)
-    this.actorLayer.addChild(root, symbol, label)
-    const sprite: ActorSprite = { root, body, symbol, label, drawnKey: null }
+    label.anchor.set(0.5, 0)
+    root.addChild(body, label)
+    this.bodies.addChild(root)
+
+    const overhead = new Container()
+    const overheadMarks = new Graphics()
+    const burstTag = createTag('곧 터짐!', COLORS.burstTag, COLORS.burstText, BURST_FONT_SIZE, {
+      x: BURST_PADDING_X,
+      y: BURST_PADDING_Y,
+    })
+    overhead.addChild(overheadMarks, burstTag)
+    this.overlays.addChild(overhead)
+
+    const sprite: ActorSprite = {
+      root,
+      body,
+      symbol,
+      label,
+      overhead,
+      overheadMarks,
+      burstTag,
+      drawnKey: null,
+    }
     this.actorSprites.set(actor.id, sprite)
     return sprite
   }
 
-  /** Plan 2에서 스프라이트로 바뀌는 지점. actor 한 명을 그리는 일은 이 함수가 전부 맡는다. */
-  private drawActor(sprite: ActorSprite, actor: ActorView): void {
+  /** Plan 3에서 툰 스프라이트로 바뀌는 지점. 출연자 한 명을 그리는 일은 이 함수가 전부 맡는다. */
+  private drawActor(sprite: ActorSprite, actor: ActorView, tracked: boolean): void {
     const visible = !actor.departed
     sprite.root.visible = visible
-    sprite.symbol.visible = visible
-    sprite.label.visible = visible
+    sprite.overhead.visible = visible && !actor.walkedOut
     if (!visible) return
 
-    const drawnKey = `${actor.pose}:${actor.onAir}`
+    const scale = this.transform.scale
+    const halfWidth = CAPSULE.radius * scale
+    const halfHeight = (CAPSULE.halfHeight + CAPSULE.radius) * scale
+    const drawnKey = `${actor.pose}:${actor.onAir}:${scale}`
     if (sprite.drawnKey !== drawnKey) {
       sprite.drawnKey = drawnKey
-      const width = CAPSULE.radius * 2 * PIXELS_PER_METER
-      const height = (CAPSULE.halfHeight + CAPSULE.radius) * 2 * PIXELS_PER_METER
       sprite.body
         .clear()
-        .roundRect(-width / 2, -height / 2, width, height, width / 2)
+        .roundRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, halfWidth)
         .fill(POSE_COLORS[actor.pose])
         .stroke(
           actor.onAir
@@ -384,118 +703,300 @@ export class StudioRenderer {
         )
       sprite.symbol.text = POSE_SYMBOLS[actor.pose]
     }
-    const center = toScreen(actor.x, actor.y)
+
+    const center = this.project(actor)
+    const tilt = screenTilt(actor.up)
+    const depth = depthKey(actor)
     sprite.root.position.set(center.x, center.y)
-    const tilt = sideViewTilt(actor.up)
-    sprite.root.rotation = -tilt
+    sprite.root.zIndex = depth
     sprite.root.alpha = actor.walkedOut ? WALKED_OUT_ALPHA : 1
-    // 글자는 몸과 함께 돌지 않고, 캡슐이 화면에서 위로 차지하는 폭만큼 떨어진 곳에 둔다.
-    // 바닥(y=0)이 캔버스 아래 끝이라 몸 아래에 쓰면 잘리므로 이름은 머리 위, 포즈 기호는 그 위에 둔다.
-    const extent = capsuleVerticalExtent(tilt)
+    sprite.body.rotation = tilt
+    // 몸이 화면에서 위·아래로 차지하는 폭. 누우면 줄어들어 이름표와 머리 위 표시가 몸에 붙는다.
+    const extent = Math.abs(Math.cos(tilt)) * (halfHeight - halfWidth) + halfWidth
     if (sprite.label.text !== actor.name) sprite.label.text = actor.name
-    const labelBottom = center.y - extent - TEXT_GAP
-    sprite.label.position.set(center.x, labelBottom)
-    sprite.symbol.position.set(center.x, labelBottom - sprite.label.height - TEXT_GAP)
-  }
+    sprite.label.position.set(0, extent + NAME_GAP)
 
-  private collectBubbles(view: BroadcastView): void {
-    const newestIndex = view.log.length === 0 ? -1 : view.log[view.log.length - 1].index
-    if (this.lastLogIndex === null) {
-      // 처음 받은 로그는 이미 지난 일이므로 말풍선으로 띄우지 않는다.
-      this.lastLogIndex = newestIndex
-      return
-    }
-    const previousIndex = this.lastLogIndex
-    const fresh = view.log.slice(-MAX_BUBBLES).filter((line) => line.index > previousIndex)
-    this.lastLogIndex = newestIndex
-    if (fresh.length === 0) return
-    for (const line of fresh) this.bubbles.push(this.createBubble(line))
-    while (this.bubbles.length > MAX_BUBBLES) this.bubbles.shift()?.root.destroy({ children: true })
-    this.layoutBubbles()
-  }
+    sprite.overhead.position.set(center.x, center.y - extent - OVERHEAD_GAP)
+    this.drawOverhead(sprite, actor, tracked)
 
-  private createBubble(line: LogLine): Bubble {
-    const text = new Text({
-      text: line.text,
-      style: {
-        fill: COLORS.bubbleText,
-        fontSize: BUBBLE_FONT_SIZE,
-        fontFamily: FONT_FAMILY,
-        wordWrap: true,
-        wordWrapWidth: BUBBLE_WRAP_WIDTH,
-      },
-    })
-    text.anchor.set(0.5)
-    const width = text.width + BUBBLE_PADDING_X * 2
-    const height = text.height + BUBBLE_PADDING_Y * 2
-    const background = new Graphics()
-      .roundRect(-width / 2, -height / 2, width, height, BUBBLE_RADIUS)
-      .fill({ color: COLORS.bubbleFill, alpha: BUBBLE_ALPHA })
-    const root = new Container()
-    root.addChild(background, text)
-    this.bubbleLayer.addChild(root)
-
-    const anchor = toScreen(line.x, line.y)
-    const halfWidth = width / 2 + SCREEN_MARGIN
-    const halfHeight = height / 2 + SCREEN_MARGIN
-    return {
-      root,
-      width,
-      height,
-      anchorX: Math.min(Math.max(anchor.x, halfWidth), CANVAS_WIDTH - halfWidth),
-      anchorY: Math.min(
-        Math.max(anchor.y - BUBBLE_VERTICAL_OFFSET, halfHeight),
-        CANVAS_HEIGHT - halfHeight,
-      ),
-      expiresAt: this.elapsedSeconds + BUBBLE_SECONDS,
+    if (!actor.walkedOut) {
+      this.actorHits.push({
+        id: actor.id,
+        center,
+        tilt,
+        halfWidth: halfWidth + ACTOR_HIT_PADDING_PX,
+        halfHeight: halfHeight + ACTOR_HIT_PADDING_PX,
+        depth,
+      })
     }
   }
 
-  /**
-   * 오래된 말풍선부터 제자리를 잡고, 나중 것은 겹치면 위로, 위가 막히면 아래로 비켜 간다.
-   * 모두 이벤트 위치(anchor) 기준으로 다시 계산하므로 매번 같은 결과가 나온다.
-   */
-  private layoutBubbles(): void {
-    const placed: Bubble[] = []
-    for (const bubble of this.bubbles) {
-      const step = bubble.height + BUBBLE_STACK_GAP
-      const minY = bubble.height / 2 + SCREEN_MARGIN
-      const maxY = CANVAS_HEIGHT - minY
-      let y = bubble.anchorY
-      for (let k = 0; k <= MAX_BUBBLES * 2; k++) {
-        // k=0: 제자리, 이후 위(-), 아래(+)를 번갈아 시도
-        const offset = k === 0 ? 0 : (k % 2 === 1 ? -1 : 1) * Math.ceil(k / 2) * step
-        const candidate = bubble.anchorY + offset
-        if (candidate < minY || candidate > maxY) continue
-        if (!placed.some((other) => overlaps(bubble, bubble.anchorX, candidate, other))) {
-          y = candidate
-          break
+  /** 머리 위(아래에서 위로): 남은 내성 점, 긴장도 막대, "곧 터짐!" 태그. 추적 대상이면 카메라 표시. */
+  private drawOverhead(sprite: ActorSprite, actor: ActorView, tracked: boolean): void {
+    const marks = sprite.overheadMarks.clear()
+    // 남은 내성 점(바닥 줄)
+    const dotCount = Math.max(0, actor.directivesLeft)
+    const dotsWidth =
+      dotCount * TOLERANCE_DOT_RADIUS * 2 + Math.max(0, dotCount - 1) * TOLERANCE_DOT_GAP
+    const dotY = -TOLERANCE_DOT_RADIUS
+    for (let index = 0; index < dotCount; index++) {
+      const x =
+        -dotsWidth / 2 +
+        TOLERANCE_DOT_RADIUS +
+        index * (TOLERANCE_DOT_RADIUS * 2 + TOLERANCE_DOT_GAP)
+      marks.circle(x, dotY, TOLERANCE_DOT_RADIUS).fill(COLORS.toleranceDot)
+    }
+    if (dotCount === 0) marks.circle(0, dotY, TOLERANCE_DOT_RADIUS).fill(COLORS.toleranceDotEmpty)
+
+    // 긴장도 막대
+    const barTop = dotY - TOLERANCE_DOT_RADIUS - TOLERANCE_ROW_GAP - TENSION_BAR_HEIGHT
+    const tension = Math.min(1, Math.max(0, actor.tension))
+    marks
+      .rect(-TENSION_BAR_WIDTH / 2, barTop, TENSION_BAR_WIDTH, TENSION_BAR_HEIGHT)
+      .fill(COLORS.tensionTrack)
+    if (tension > 0) {
+      marks
+        .rect(-TENSION_BAR_WIDTH / 2, barTop, TENSION_BAR_WIDTH * tension, TENSION_BAR_HEIGHT)
+        .fill(actor.aboutToBurst ? COLORS.tensionDanger : COLORS.tensionFill)
+    }
+
+    // 클로즈업 추적 대상: 막대 오른쪽의 작은 카메라
+    if (tracked) {
+      const left = TENSION_BAR_WIDTH / 2 + TRACKING_ICON_GAP
+      const top = barTop + TENSION_BAR_HEIGHT / 2 - TRACKING_ICON_HEIGHT / 2
+      const lensX = left + TRACKING_ICON_WIDTH + TRACKING_ICON_HEIGHT / 2
+      marks
+        .roundRect(left, top, TRACKING_ICON_WIDTH, TRACKING_ICON_HEIGHT, 2)
+        .fill(COLORS.trackingIcon)
+        .poly([
+          { x: left + TRACKING_ICON_WIDTH, y: top + TRACKING_ICON_HEIGHT / 2 },
+          { x: lensX, y: top },
+          { x: lensX, y: top + TRACKING_ICON_HEIGHT },
+        ])
+        .fill(COLORS.trackingIcon)
+    }
+
+    sprite.burstTag.visible = actor.aboutToBurst
+    sprite.burstTag.position.set(0, barTop - BURST_GAP - sprite.burstTag.height / 2)
+  }
+
+  private drawStaff(staff: readonly StaffView[]): void {
+    this.staffHits = []
+    const scale = this.transform.scale
+    const height = STAFF_HEIGHT_METERS * scale
+    const headRadius = height * STAFF_HEAD_RATIO
+    const bodyWidth = STAFF_BODY_WIDTH_METERS * scale
+    for (const member of staff) {
+      const sprite = this.staffSprites.get(member.id) ?? this.createStaffSprite(member)
+      // 스태프는 담당 카메라 바로 아래 바닥에 선다.
+      const feetPoint = { x: member.x, y: 0, z: member.z }
+      const feet = this.project(feetPoint)
+      const depth = depthKey(feetPoint)
+      sprite.root
+        .clear()
+        .roundRect(
+          -bodyWidth / 2,
+          -(height - headRadius * 2),
+          bodyWidth,
+          height - headRadius * 2,
+          bodyWidth / 3,
+        )
+        .fill(COLORS.staffBody)
+        .stroke(STAFF_OUTLINE)
+        .circle(0, -height + headRadius, headRadius)
+        .fill(COLORS.staffHead)
+        .stroke(STAFF_OUTLINE)
+      sprite.root.position.set(feet.x, feet.y)
+      sprite.root.zIndex = depth
+
+      const headTop = feet.y - height
+      sprite.overhead.position.set(feet.x, headTop - OVERHEAD_GAP)
+      const marks = sprite.overheadMarks.clear()
+      sprite.startledTag.visible = member.mode === 'startled'
+      sprite.startledTag.position.set(0, -sprite.startledTag.height / 2)
+      if (member.mode === 'recovering') {
+        const cy = -RECOVERY_RADIUS
+        const progress = Math.min(1, Math.max(0, member.recoveryProgress))
+        marks
+          .circle(0, cy, RECOVERY_RADIUS)
+          .stroke({ color: COLORS.recoveryTrack, width: RECOVERY_LINE_WIDTH })
+        if (progress > 0) {
+          marks
+            .arc(0, cy, RECOVERY_RADIUS, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2)
+            .stroke({ color: COLORS.recoveryFill, width: RECOVERY_LINE_WIDTH })
         }
       }
-      bubble.root.position.set(bubble.anchorX, y)
-      placed.push(bubble)
+
+      this.staffHits.push({
+        id: member.id,
+        left: feet.x - bodyWidth / 2 - STAFF_HIT_PADDING_PX,
+        right: feet.x + bodyWidth / 2 + STAFF_HIT_PADDING_PX,
+        top: headTop - STAFF_HIT_PADDING_PX,
+        bottom: feet.y + STAFF_HIT_PADDING_PX,
+        depth,
+      })
     }
   }
 
-  private updateBubbles(): void {
-    const alive: Bubble[] = []
-    for (const bubble of this.bubbles) {
-      const remaining = bubble.expiresAt - this.elapsedSeconds
-      if (remaining <= 0) {
-        bubble.root.destroy({ children: true })
-        continue
+  private createStaffSprite(member: StaffView): StaffSprite {
+    const root = new Graphics()
+    this.bodies.addChild(root)
+    const overhead = new Container()
+    const overheadMarks = new Graphics()
+    const startledTag = createTag(
+      '놀람!',
+      COLORS.startledBubble,
+      COLORS.startledText,
+      STARTLED_FONT_SIZE,
+      { x: STARTLED_PADDING_X, y: STARTLED_PADDING_Y },
+    )
+    overhead.addChild(overheadMarks, startledTag)
+    this.overlays.addChild(overhead)
+    const sprite: StaffSprite = { root, overhead, overheadMarks, startledTag }
+    this.staffSprites.set(member.id, sprite)
+    return sprite
+  }
+
+  // ── 몸 위 현상 표시 ───────────────────────────────────────
+
+  /** 몸 위에 그리는 현상(충격 별, 분노 화살표)과 hitTest용 현상 중심. */
+  private drawPhenomenonMarks(view: BroadcastView): void {
+    const marks = this.overlayMarks.clear()
+    this.phenomenonHits = []
+    const actors = new Map(view.actors.map((actor) => [actor.id, actor]))
+    for (const item of view.recentPhenomena) {
+      if (item.kind === 'darkness') continue
+      const fade = Math.max(0, 1 - item.ageSeconds / PHENOMENON_DISPLAY_SECONDS)
+      const isRing = ringColor(item.kind) !== null
+      const anchor: Vec3 = isRing ? { x: item.x, y: 0, z: item.z } : item
+      const point = this.project(anchor)
+      this.phenomenonHits.push({ id: item.id, point, depth: depthKey(anchor) })
+
+      if (item.kind === 'impact') {
+        const radius = IMPACT_STAR_RADIUS_PER_INTENSITY * (item.intensity + 1)
+        marks
+          .star(point.x, point.y, IMPACT_STAR_POINTS, radius, radius * IMPACT_STAR_INNER_RATIO)
+          .fill({ color: COLORS.impact, alpha: fade })
+          .stroke({ color: COLORS.actorOutline, width: 1.5, alpha: fade })
+      } else if (item.kind === 'anger') {
+        this.drawAngerMark(marks, item, actors, fade)
       }
-      bubble.root.alpha = Math.min(1, remaining / BUBBLE_FADE_SECONDS)
-      alive.push(bubble)
     }
-    this.bubbles = alive
+  }
+
+  /** 출처에서 대상 쪽으로 향하는 짧은 화살표. 대상이 없으면 출처에 작은 분노 표시만 둔다. */
+  private drawAngerMark(
+    marks: Graphics,
+    item: RecentPhenomenon,
+    actors: ReadonlyMap<string, ActorView>,
+    alpha: number,
+  ): void {
+    const source = actors.get(item.sourceId) ?? item
+    const target = item.targetId === null ? undefined : actors.get(item.targetId)
+    const from = this.project(source)
+    if (target === undefined) {
+      marks.circle(from.x, from.y, ANGER_MARK_RADIUS).fill({ color: COLORS.anger, alpha })
+      return
+    }
+    const dx = target.x - source.x
+    const dy = target.y - source.y
+    const dz = target.z - source.z
+    const length = Math.hypot(dx, dy, dz)
+    if (length === 0) return
+    const reach = Math.min(length, ANGER_ARROW_MAX_METERS) / length
+    const to = this.project({
+      x: source.x + dx * reach,
+      y: source.y + dy * reach,
+      z: source.z + dz * reach,
+    })
+    const angle = Math.atan2(to.y - from.y, to.x - from.x)
+    const wing = Math.PI / 6
+    marks
+      .moveTo(from.x, from.y)
+      .lineTo(to.x, to.y)
+      .stroke({ color: COLORS.anger, width: ANGER_ARROW_WIDTH, alpha })
+      .poly([
+        to,
+        {
+          x: to.x - Math.cos(angle - wing) * ANGER_ARROW_HEAD,
+          y: to.y - Math.sin(angle - wing) * ANGER_ARROW_HEAD,
+        },
+        {
+          x: to.x - Math.cos(angle + wing) * ANGER_ARROW_HEAD,
+          y: to.y - Math.sin(angle + wing) * ANGER_ARROW_HEAD,
+        },
+      ])
+      .fill({ color: COLORS.anger, alpha })
   }
 }
 
-/** bubble을 (x, y)에 두었을 때 이미 놓인 other(root 위치 기준)와 사각형이 겹치는지. */
-function overlaps(bubble: Bubble, x: number, y: number, other: Bubble): boolean {
-  return (
-    Math.abs(x - other.root.x) < (bubble.width + other.width) / 2 + BUBBLE_STACK_GAP &&
-    Math.abs(y - other.root.y) < (bubble.height + other.height) / 2 + BUBBLE_STACK_GAP
-  )
+/** 바닥 링으로 그리는 현상의 색. 링이 아니면 null. */
+function ringColor(kind: RecentPhenomenon['kind']): number | null {
+  switch (kind) {
+    case 'noise':
+      return COLORS.noise
+    case 'laughter':
+      return COLORS.laughter
+    case 'exposure':
+      return COLORS.exposure
+    default:
+      return null
+  }
+}
+
+function frontmost<T extends { depth: number }>(shapes: readonly T[]): T | null {
+  let best: T | null = null
+  for (const shape of shapes) if (best === null || shape.depth > best.depth) best = shape
+  return best
+}
+
+/** 기울어진 빌보드 사각형 안에 점이 있는지. 점을 몸의 로컬 좌표로 되돌려 잰다. */
+function insideBillboard(point: Point, shape: ActorHitShape): boolean {
+  const dx = point.x - shape.center.x
+  const dy = point.y - shape.center.y
+  const cos = Math.cos(shape.tilt)
+  const sin = Math.sin(shape.tilt)
+  const localX = dx * cos + dy * sin
+  const localY = -dx * sin + dy * cos
+  return Math.abs(localX) <= shape.halfWidth && Math.abs(localY) <= shape.halfHeight
+}
+
+function faceBrightness(normal: Vec3): number {
+  const length = Math.hypot(LIGHT_DIRECTION.x, LIGHT_DIRECTION.y, LIGHT_DIRECTION.z)
+  const lit =
+    (normal.x * LIGHT_DIRECTION.x + normal.y * LIGHT_DIRECTION.y + normal.z * LIGHT_DIRECTION.z) /
+    length
+  return FACE_MIN_BRIGHTNESS + (1 - FACE_MIN_BRIGHTNESS) * Math.max(0, lit)
+}
+
+/** 0xRRGGBB 색의 밝기를 factor배 한다. */
+function shade(color: number, factor: number): number {
+  const channel = (shift: number): number =>
+    Math.min(255, Math.round(((color >> shift) & 0xff) * factor))
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0)
+}
+
+/** 둥근 사각형 배경 위 글자 태그. 가운데가 원점이다. */
+function createTag(
+  text: string,
+  background: number,
+  color: number,
+  fontSize: number,
+  padding: Point,
+): Container {
+  const label = new Text({
+    text,
+    style: { fill: color, fontSize, fontWeight: 'bold', fontFamily: FONT_FAMILY },
+  })
+  label.anchor.set(0.5)
+  const width = label.width + padding.x * 2
+  const height = label.height + padding.y * 2
+  const back = new Graphics()
+    .roundRect(-width / 2, -height / 2, width, height, height / 2)
+    .fill(background)
+    .stroke({ color: COLORS.actorOutline, width: 1.5 })
+  const tag = new Container()
+  tag.addChild(back, label)
+  tag.visible = false
+  return tag
 }

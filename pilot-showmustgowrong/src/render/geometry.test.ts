@@ -1,107 +1,202 @@
 import { describe, expect, it } from 'vitest'
+import { STUDIO_DEPTH, STUDIO_WIDTH } from '@/content/balance'
 import {
-  CANVAS_HEIGHT,
-  CANVAS_WIDTH,
-  PIXELS_PER_METER,
-  cameraFanPoints,
-  capsuleEndpoints,
-  capsuleVerticalExtent,
+  ISO_VIEW_HEIGHT,
+  cameraFanFloorPoints,
   clientToCanvas,
-  distanceToSegment,
-  toScreen,
+  depthKey,
+  fitIso,
+  floorEllipseRadii,
+  pointInPolygon,
+  projectIso,
+  rotateByQuaternion,
+  screenTilt,
+  visibleBoxFaces,
+  type IsoTransform,
 } from './geometry'
 
-describe('toScreen', () => {
-  it('바닥 왼쪽 끝은 화면 왼쪽 아래, y가 커지면 화면 위로 간다', () => {
-    expect(toScreen(0, 0)).toEqual({ x: 0, y: CANVAS_HEIGHT })
-    expect(toScreen(2, 3)).toEqual({
-      x: 2 * PIXELS_PER_METER,
-      y: CANVAS_HEIGHT - 3 * PIXELS_PER_METER,
-    })
+const UNIT: IsoTransform = { scale: 10, originX: 100, originY: 50 }
+const EPSILON = 1e-6
+
+describe('projectIso', () => {
+  it('(0,0,0)과 (1,0,1)은 화면 x가 같고 뒤의 것이 아래에 있다', () => {
+    const origin = projectIso({ x: 0, y: 0, z: 0 }, UNIT)
+    const diagonal = projectIso({ x: 1, y: 0, z: 1 }, UNIT)
+    expect(diagonal.x).toBeCloseTo(origin.x)
+    expect(diagonal.y).toBeGreaterThan(origin.y)
+  })
+
+  it('y가 1 커지면 화면 y가 scale만큼 작아진다', () => {
+    const ground = projectIso({ x: 3, y: 0, z: 2 }, UNIT)
+    const raised = projectIso({ x: 3, y: 1, z: 2 }, UNIT)
+    expect(raised.x).toBeCloseTo(ground.x)
+    expect(ground.y - raised.y).toBeCloseTo(UNIT.scale)
+  })
+
+  it('x는 화면 오른쪽 아래, z는 왼쪽 아래로 간다', () => {
+    const origin = projectIso({ x: 0, y: 0, z: 0 }, UNIT)
+    const alongX = projectIso({ x: 1, y: 0, z: 0 }, UNIT)
+    const alongZ = projectIso({ x: 0, y: 0, z: 1 }, UNIT)
+    expect(alongX.x).toBeCloseTo(origin.x + Math.cos(Math.PI / 6) * UNIT.scale)
+    expect(alongX.y).toBeCloseTo(origin.y + Math.sin(Math.PI / 6) * UNIT.scale)
+    expect(alongZ.x).toBeCloseTo(origin.x - Math.cos(Math.PI / 6) * UNIT.scale)
+    expect(alongZ.y).toBeCloseTo(alongX.y)
   })
 })
 
-describe('cameraFanPoints', () => {
-  const origin = { x: 4, y: 2 }
-  const originScreen = toScreen(origin.x, origin.y)
+describe('fitIso', () => {
+  const width = 760
+  const height = 560
+  const padding = 16
+  const transform = fitIso(width, height, padding)
+  const floorCorners = [
+    { x: 0, y: 0, z: 0 },
+    { x: STUDIO_WIDTH, y: 0, z: 0 },
+    { x: 0, y: 0, z: STUDIO_DEPTH },
+    { x: STUDIO_WIDTH, y: 0, z: STUDIO_DEPTH },
+  ]
+  const boxCorners = [
+    ...floorCorners,
+    ...floorCorners.map((corner) => ({ ...corner, y: ISO_VIEW_HEIGHT })),
+  ]
 
-  it('첫 점은 카메라 위치이고 꼭짓점 수는 호 분할 + 2점이다', () => {
-    const points = cameraFanPoints(origin, 0, 60, 3, 4)
-    expect(points.slice(0, 2)).toEqual([originScreen.x, originScreen.y])
-    expect(points).toHaveLength(2 + (4 + 1) * 2)
+  it('스튜디오 바닥 네 모서리가 여백 안에 들어간다', () => {
+    for (const corner of floorCorners) {
+      const point = projectIso(corner, transform)
+      expect(point.x).toBeGreaterThanOrEqual(padding - EPSILON)
+      expect(point.x).toBeLessThanOrEqual(width - padding + EPSILON)
+      expect(point.y).toBeGreaterThanOrEqual(padding - EPSILON)
+      expect(point.y).toBeLessThanOrEqual(height - padding + EPSILON)
+    }
   })
 
-  it('0도는 화면 오른쪽을 향한다', () => {
-    const points = cameraFanPoints(origin, 0, 0, 3, 2)
-    const [x, y] = points.slice(-2)
-    expect(x).toBeCloseTo(originScreen.x + 3 * PIXELS_PER_METER)
-    expect(y).toBeCloseTo(originScreen.y)
-  })
-
-  it('90도는 화면 위쪽(y 감소)을 향하고 -90도는 아래쪽을 향한다', () => {
-    const up = cameraFanPoints(origin, 90, 0, 3, 2).slice(-2)
-    expect(up[0]).toBeCloseTo(originScreen.x)
-    expect(up[1]).toBeCloseTo(originScreen.y - 3 * PIXELS_PER_METER)
-    const down = cameraFanPoints(origin, -90, 0, 3, 2).slice(-2)
-    expect(down[1]).toBeCloseTo(originScreen.y + 3 * PIXELS_PER_METER)
-  })
-
-  it('화각은 중심각 양쪽으로 절반씩 퍼진다', () => {
-    const points = cameraFanPoints(origin, 0, 90, 1, 1)
-    const first = points.slice(2, 4)
-    const last = points.slice(4, 6)
-    // 0도 중심, 화각 90도 → -45도(화면 아래)와 +45도(화면 위)
-    expect(first[1]).toBeGreaterThan(originScreen.y)
-    expect(last[1]).toBeLessThan(originScreen.y)
-  })
-})
-
-describe('capsuleEndpoints', () => {
-  it('서 있으면 중심 위아래 반 높이 지점이다', () => {
-    const [top, bottom] = capsuleEndpoints(1, 1, 0)
-    const center = toScreen(1, 1)
-    expect(top.x).toBeCloseTo(center.x)
-    expect(top.y).toBeLessThan(center.y)
-    expect(bottom.y).toBeGreaterThan(center.y)
-  })
-
-  it('반시계 +90도로 누우면 위쪽 끝이 화면 왼쪽으로 간다', () => {
-    const [top, bottom] = capsuleEndpoints(1, 1, Math.PI / 2)
-    const center = toScreen(1, 1)
-    expect(top.x).toBeLessThan(center.x)
-    expect(top.y).toBeCloseTo(center.y)
-    expect(bottom.x).toBeGreaterThan(center.x)
+  it('바닥부터 천장 높이까지의 상자가 가로나 세로 한쪽 여백에 닿는다(꽉 참)', () => {
+    const points = boxCorners.map((corner) => projectIso(corner, transform))
+    const xs = points.map((point) => point.x)
+    const ys = points.map((point) => point.y)
+    const touchesHorizontal =
+      Math.abs(Math.min(...xs) - padding) < EPSILON &&
+      Math.abs(Math.max(...xs) - (width - padding)) < EPSILON
+    const touchesVertical =
+      Math.abs(Math.min(...ys) - padding) < EPSILON &&
+      Math.abs(Math.max(...ys) - (height - padding)) < EPSILON
+    expect(touchesHorizontal || touchesVertical).toBe(true)
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(padding - EPSILON)
+    expect(Math.max(...xs)).toBeLessThanOrEqual(width - padding + EPSILON)
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(padding - EPSILON)
+    expect(Math.max(...ys)).toBeLessThanOrEqual(height - padding + EPSILON)
   })
 })
 
-describe('capsuleVerticalExtent', () => {
-  it('누우면 서 있을 때보다 줄어들고 반지름 아래로는 줄지 않는다', () => {
-    expect(capsuleVerticalExtent(Math.PI / 2)).toBeLessThan(capsuleVerticalExtent(0))
-    expect(capsuleVerticalExtent(Math.PI / 2)).toBeGreaterThan(0)
-  })
-})
-
-describe('distanceToSegment', () => {
-  const a = { x: 0, y: 0 }
-  const b = { x: 10, y: 0 }
-
-  it('선분 위 수직 거리를 잰다', () => {
-    expect(distanceToSegment({ x: 5, y: 3 }, a, b)).toBe(3)
-  })
-
-  it('선분 밖이면 가까운 끝점까지 거리를 잰다', () => {
-    expect(distanceToSegment({ x: 13, y: 4 }, a, b)).toBe(5)
-  })
-
-  it('길이 0인 선분은 점까지 거리다', () => {
-    expect(distanceToSegment({ x: 3, y: 4 }, a, a)).toBe(5)
+describe('depthKey', () => {
+  it('x + z가 클수록 앞이다', () => {
+    expect(depthKey({ x: 1, y: 5, z: 2 })).toBe(3)
+    expect(depthKey({ x: 4, y: 0, z: 4 })).toBeGreaterThan(depthKey({ x: 1, y: 0, z: 6 }))
   })
 })
 
 describe('clientToCanvas', () => {
-  it('CSS로 줄인 캔버스의 클릭 좌표를 논리 좌표(1280×720)로 환산한다', () => {
-    const rect = { left: 10, top: 20, width: 960, height: 540 }
-    expect(clientToCanvas(10 + 480, 20 + 270, rect)).toEqual({ x: 640, y: 360 })
-    expect(clientToCanvas(10 + 960, 20 + 540, rect)).toEqual({ x: CANVAS_WIDTH, y: CANVAS_HEIGHT })
+  it('CSS로 0.5배 표시한 캔버스의 클릭 좌표가 투영된 출연자 중심과 2px 안에서 일치한다', () => {
+    const canvas = { width: 960, height: 540 }
+    const transform = fitIso(canvas.width, canvas.height, 16)
+    const actorCenter = projectIso({ x: 4.5, y: 0.85, z: 4 }, transform)
+    const rect = { left: 30, top: 70, width: canvas.width / 2, height: canvas.height / 2 }
+    // 사용자가 줄어든 화면에서 출연자 중심을 누른 위치
+    const clientX = rect.left + actorCenter.x / 2
+    const clientY = rect.top + actorCenter.y / 2
+    const point = clientToCanvas(clientX, clientY, rect, canvas)
+    expect(Math.abs(point.x - actorCenter.x)).toBeLessThan(2)
+    expect(Math.abs(point.y - actorCenter.y)).toBeLessThan(2)
+  })
+})
+
+describe('screenTilt', () => {
+  it('서 있으면 0이다', () => {
+    expect(screenTilt({ x: 0, y: 1, z: 0 })).toBeCloseTo(0)
+  })
+
+  it('+x로 누우면 화면 오른쪽(시계 방향 +)으로, +z로 누우면 왼쪽으로 기운다', () => {
+    expect(screenTilt({ x: 1, y: 0, z: 0 })).toBeGreaterThan(0)
+    expect(screenTilt({ x: 0, y: 0, z: 1 })).toBeLessThan(0)
+  })
+})
+
+describe('floorEllipseRadii', () => {
+  it('바닥 원은 가로가 세로보다 긴 타원으로 보인다', () => {
+    const { rx, ry } = floorEllipseRadii(2, 10)
+    expect(rx).toBeCloseTo(Math.SQRT2 * Math.cos(Math.PI / 6) * 20)
+    expect(ry).toBeCloseTo(Math.SQRT2 * Math.sin(Math.PI / 6) * 20)
+  })
+
+  it('투영한 바닥 원 위의 점이 그 타원 안에 있다', () => {
+    const radius = 3
+    const center = projectIso({ x: 5, y: 0, z: 5 }, UNIT)
+    const { rx, ry } = floorEllipseRadii(radius, UNIT.scale)
+    for (const angle of [0, 0.7, 2, 4]) {
+      const point = projectIso(
+        { x: 5 + Math.cos(angle) * radius, y: 0, z: 5 + Math.sin(angle) * radius },
+        UNIT,
+      )
+      const value = ((point.x - center.x) / rx) ** 2 + ((point.y - center.y) / ry) ** 2
+      expect(value).toBeLessThanOrEqual(1 + EPSILON)
+    }
+  })
+})
+
+describe('cameraFanFloorPoints', () => {
+  it('첫 점은 카메라 바로 아래 바닥이고 호 분할 + 2점이다', () => {
+    const points = cameraFanFloorPoints({ x: 8, y: 5, z: 9 }, -90, 60, 4, 6)
+    expect(points[0]).toEqual({ x: 8, y: 0, z: 9 })
+    expect(points).toHaveLength(2 + 6)
+  })
+
+  it('yaw -90도(−z)는 무대 안쪽을 향하고 0도는 +x를 향한다', () => {
+    const back = cameraFanFloorPoints({ x: 8, y: 5, z: 9 }, -90, 0, 4, 1)[1]
+    expect(back.x).toBeCloseTo(8)
+    expect(back.z).toBeCloseTo(5)
+    const right = cameraFanFloorPoints({ x: 8, y: 5, z: 9 }, 0, 0, 4, 1)[1]
+    expect(right.x).toBeCloseTo(12)
+    expect(right.z).toBeCloseTo(9)
+  })
+})
+
+describe('pointInPolygon', () => {
+  const square = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ]
+
+  it('안쪽 점은 true, 바깥 점은 false다', () => {
+    expect(pointInPolygon({ x: 5, y: 5 }, square)).toBe(true)
+    expect(pointInPolygon({ x: 15, y: 5 }, square)).toBe(false)
+  })
+})
+
+describe('rotateByQuaternion', () => {
+  it('y축 +90도 회전은 +x를 −z로 보낸다', () => {
+    const half = Math.SQRT1_2
+    const rotated = rotateByQuaternion({ x: 1, y: 0, z: 0 }, { x: 0, y: half, z: 0, w: half })
+    expect(rotated.x).toBeCloseTo(0)
+    expect(rotated.y).toBeCloseTo(0)
+    expect(rotated.z).toBeCloseTo(-1)
+  })
+})
+
+describe('visibleBoxFaces', () => {
+  it('돌리지 않은 상자는 윗면, +x면, +z면 세 개가 보인다', () => {
+    const faces = visibleBoxFaces(
+      { x: 5, y: 1, z: 5 },
+      { hx: 1, hy: 1, hz: 1 },
+      { x: 0, y: 0, z: 0, w: 1 },
+      UNIT,
+    )
+    const normals = faces.map((face) => face.normal)
+    expect(normals).toHaveLength(3)
+    expect(normals).toContainEqual({ x: 1, y: 0, z: 0 })
+    expect(normals).toContainEqual({ x: 0, y: 1, z: 0 })
+    expect(normals).toContainEqual({ x: 0, y: 0, z: 1 })
+    for (const face of faces) expect(face.corners).toHaveLength(4)
   })
 })

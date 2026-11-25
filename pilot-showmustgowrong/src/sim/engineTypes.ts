@@ -96,6 +96,10 @@ export interface RecentPhenomenon {
   id: number
   kind: PhenomenonKind
   intensity: Intensity
+  /** 출연자, 장비 id, 'broadcast' 또는 'audience' */
+  sourceId: string
+  /** 분노처럼 대상이 있는 현상의 대상 id. 없으면 null */
+  targetId: string | null
   x: number
   y: number
   z: number
