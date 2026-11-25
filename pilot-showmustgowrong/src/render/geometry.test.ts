@@ -3,6 +3,7 @@ import { STUDIO_DEPTH, STUDIO_WIDTH } from '@/content/balance'
 import {
   ISO_VIEW_HEIGHT,
   cameraFanFloorPoints,
+  clipToFloor,
   clientToCanvas,
   depthKey,
   fitIso,
@@ -198,5 +199,32 @@ describe('visibleBoxFaces', () => {
     expect(normals).toContainEqual({ x: 0, y: 1, z: 0 })
     expect(normals).toContainEqual({ x: 0, y: 0, z: 1 })
     for (const face of faces) expect(face.corners).toHaveLength(4)
+  })
+})
+
+describe('clipToFloor', () => {
+  it('바닥 밖으로 나간 부분을 경계에서 자른다', () => {
+    const triangle = [
+      { x: 2, y: 0, z: 2 },
+      { x: 6, y: 0, z: 2 },
+      { x: 2, y: 0, z: 6 },
+    ]
+    const clipped = clipToFloor(triangle, { minX: 0, maxX: 4, minZ: 0, maxZ: 10 })
+    for (const point of clipped) expect(point.x).toBeLessThanOrEqual(4 + EPSILON)
+    expect(clipped).toContainEqual({ x: 4, y: 0, z: 2 })
+    expect(clipped).toContainEqual({ x: 4, y: 0, z: 4 })
+    expect(clipped).toContainEqual({ x: 2, y: 0, z: 6 })
+  })
+
+  it('안에 있는 다각형은 그대로, 완전히 밖이면 빈 배열이다', () => {
+    const inside = [
+      { x: 1, y: 0, z: 1 },
+      { x: 2, y: 0, z: 1 },
+      { x: 1, y: 0, z: 2 },
+    ]
+    const bounds = { minX: 0, maxX: 16, minZ: 0, maxZ: 10 }
+    expect(clipToFloor(inside, bounds)).toHaveLength(3)
+    const outside = inside.map((point) => ({ ...point, x: point.x + 20 }))
+    expect(clipToFloor(outside, bounds)).toEqual([])
   })
 })

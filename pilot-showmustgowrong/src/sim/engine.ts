@@ -327,6 +327,7 @@ export class Broadcast {
       viewers: this.score.viewers,
       viewersTrend: this.viewersTrend(),
       recentPhenomena: this.recentPhenomena(),
+      darkZones: this.darkZones.map((zone) => ({ ...zone })),
       gauges: { ...this.score.gauges },
       limits: { ...RATING_LIMITS[rating] },
       haltedBy: this.score.haltedBy,

@@ -55,7 +55,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     startAd,
     cancelAd,
   } = loop
-  const { show, equipment } = setup
+  const { show } = setup
   const hostRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<StudioRenderer | null>(null)
   const [rendererError, setRendererError] = useState<string | null>(null)
@@ -77,7 +77,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     if (!studioVisible || host === null) return
     const controller = new AbortController()
     let renderer: StudioRenderer | null = null
-    StudioRenderer.create(host, show, controller.signal, equipment).then(
+    StudioRenderer.create(host, show, controller.signal).then(
       (created) => {
         renderer = created
         rendererRef.current = created
@@ -91,7 +91,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       renderer?.destroy()
       rendererRef.current = null
     }
-  }, [show, equipment, studioVisible])
+  }, [show, studioVisible])
 
   useEffect(() => {
     if (view !== null) rendererRef.current?.draw(view, STUDIO_MODES[slowmo])

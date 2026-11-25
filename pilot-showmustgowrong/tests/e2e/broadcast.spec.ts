@@ -53,7 +53,10 @@ test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', asy
   await expect(page.getByTestId('switcher-wide')).toHaveAttribute('aria-pressed', 'false')
 })
 
-test('Space를 누르면 개입 패널이 열리고 4초 뒤 닫힌다', async ({ page }) => {
+/** src/content/balance.ts의 INTERVENTION_REAL_SECONDS(초). e2e는 앱 경로 별칭을 못 읽어 값을 옮겨 적는다. */
+const INTERVENTION_REAL_SECONDS = 10
+
+test('Space를 누르면 개입 패널이 열리고 개입 시간이 지나면 닫힌다', async ({ page }) => {
   await openBroadcast(page)
   const pressedAt = Date.now()
   await page.keyboard.press('Space')
@@ -62,11 +65,12 @@ test('Space를 누르면 개입 패널이 열리고 4초 뒤 닫힌다', async (
   // 스태프도 대상 목록에 있다
   await expect(panel.getByTestId('target-cameraOperator')).toBeVisible()
   await expectInViewport(page, 'intervention-panel')
-  // 개입은 실제 4초. 누른 지 3.5초에는 아직 열려 있고, 5초(약 4.5초 ± 0.5초) 안에 닫힌다.
+  // 누른 지 (개입 시간 - 0.5)초에는 아직 열려 있고, (개입 시간 + 1)초 안에 닫힌다.
   // 여유는 프레임 지연(CI 흔들림)을 감안한 값이다.
-  await page.waitForTimeout(3_500 - (Date.now() - pressedAt))
+  const durationMs = INTERVENTION_REAL_SECONDS * 1_000
+  await page.waitForTimeout(durationMs - 500 - (Date.now() - pressedAt))
   await expect(panel).toBeVisible({ timeout: 100 })
-  await expect(panel).toBeHidden({ timeout: 5_000 - (Date.now() - pressedAt) })
+  await expect(panel).toBeHidden({ timeout: durationMs + 1_000 - (Date.now() - pressedAt) })
 })
 
 test('광고 효과 2개를 골라 확정하면 남은 광고가 0회가 된다', async ({ page }) => {
@@ -93,6 +97,8 @@ test('스튜디오의 출연자를 클릭하면 그 대상으로 개입하고, �
   await openBroadcast(page)
   // 렉스는 첫 home spot(4.5, 4)에 서 있다(몸 중심 높이 약 0.85m). 960×540 캔버스에서
   // fitIso(960, 540, 16)으로 투영한 몸 중심은 약 (409, 209)이다.
+  // Task 7 배치 변경으로 스튜디오 크기가 바뀌면 이 좌표도 함께 갱신한다(페이지에서 투영 좌표를
+  // 읽을 공개 API가 아직 없어 하드코딩한다).
   const studio = page.getByTestId('studio')
   await expect(studio.locator('canvas')).toHaveCount(1)
   await studio.click({ position: { x: 409, y: 209 } })

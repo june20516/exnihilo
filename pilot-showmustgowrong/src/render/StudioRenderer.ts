@@ -9,10 +9,11 @@ import {
   STUDIO_DEPTH,
   STUDIO_WIDTH,
 } from '@/content/balance'
-import type { EquipmentDef, ShowDef } from '@/content/types'
+import type { ShowDef } from '@/content/types'
 import type {
   ActorView,
   BroadcastView,
+  DarkZone,
   EquipmentView,
   RecentPhenomenon,
   StaffView,
@@ -22,24 +23,21 @@ import { COLORS, POSE_COLORS, POSE_SYMBOLS } from './colors'
 import {
   ISO_VIEW_HEIGHT,
   cameraFanFloorPoints,
+  clipToFloor,
   depthKey,
   fitIso,
   floorEllipseRadii,
-  pointInPolygon,
   projectIso,
   screenTilt,
   visibleBoxFaces,
   type IsoTransform,
   type Point,
 } from './geometry'
+import { pickHit, type HitShapes, type StudioHit } from './hitTest'
+
+export type { StudioHit } from './hitTest'
 
 export type StudioMode = 'live' | 'intervention' | 'auto'
-
-export type StudioHit =
-  | { kind: 'actor'; id: string }
-  | { kind: 'staff'; id: string }
-  | { kind: 'equipment'; id: string }
-  | { kind: 'phenomenon'; id: number }
 
 // 캔버스
 /** host 크기를 읽지 못할 때 쓰는 논리 크기 */
@@ -65,6 +63,7 @@ const FAN_ON_AIR_LINE_WIDTH = 2
 const FAN_IDLE_LINE_WIDTH = 1.5
 const FAN_IDLE_LINE_ALPHA = 0.4
 const CAMERA_MARK_RADIUS = 5
+const STUDIO_FLOOR = { minX: 0, maxX: STUDIO_WIDTH, minZ: 0, maxZ: STUDIO_DEPTH }
 
 // 몸
 const SHADOW_ALPHA = 0.35
@@ -145,6 +144,8 @@ const FACE_MIN_BRIGHTNESS = 0.55
 
 interface ActorSprite {
   root: Container
+  /** 몸 도형과 포즈 기호를 함께 기울이는 묶음 */
+  tiltGroup: Container
   body: Graphics
   symbol: Text
   label: Text
@@ -162,36 +163,6 @@ interface StaffSprite {
   startledTag: Container
 }
 
-interface ActorHitShape {
-  id: string
-  center: Point
-  tilt: number
-  halfWidth: number
-  halfHeight: number
-  depth: number
-}
-
-interface RectHitShape {
-  id: string
-  left: number
-  top: number
-  right: number
-  bottom: number
-  depth: number
-}
-
-interface PolygonHitShape {
-  id: string
-  polygons: Point[][]
-  depth: number
-}
-
-interface PointHitShape {
-  id: number
-  point: Point
-  depth: number
-}
-
 /**
  * 스튜디오를 쿼터뷰로 그린다(spec 8.2 2단계). Plan 1처럼 매 draw마다 view를 읽어 다시 그린다.
  * 레이어는 floor(바닥 표시) → bodies(깊이 정렬한 몸과 장비) → overlays(머리 위 표시, 말풍선) 순이다.
@@ -200,7 +171,6 @@ interface PointHitShape {
 export class StudioRenderer {
   private readonly app: Application
   private readonly show: ShowDef
-  private readonly darknessZones = new Map<string, NonNullable<EquipmentDef['darknessZone']>>()
   private readonly world = new Container()
   private readonly floorStatic = new Graphics()
   private readonly floorDynamic = new Graphics()
@@ -218,24 +188,12 @@ export class StudioRenderer {
   private logicalHeight: number
   private mode: StudioMode = 'live'
   private lastView: BroadcastView | null = null
-  private actorHits: ActorHitShape[] = []
-  private staffHits: RectHitShape[] = []
-  private equipmentHits: PolygonHitShape[] = []
-  private phenomenonHits: PointHitShape[] = []
+  private hits: HitShapes = { actors: [], staff: [], equipment: [], phenomena: [] }
   private destroyed = false
 
-  private constructor(
-    app: Application,
-    show: ShowDef,
-    equipment: readonly EquipmentDef[],
-    width: number,
-    height: number,
-  ) {
+  private constructor(app: Application, show: ShowDef, width: number, height: number) {
     this.app = app
     this.show = show
-    for (const piece of equipment) {
-      if (piece.darknessZone !== undefined) this.darknessZones.set(piece.id, piece.darknessZone)
-    }
     this.logicalWidth = width
     this.logicalHeight = height
     this.transform = fitIso(width, height, FIT_PADDING)
@@ -246,13 +204,11 @@ export class StudioRenderer {
    * 초기화(await)가 끝나기 전에 화면이 사라질 수 있으므로(React StrictMode의 이중 마운트 등)
    * AbortSignal을 받는다. 초기화 뒤 이미 abort됐다면 만들던 Pixi 앱을 바로 정리하고
    * `AbortError` DOMException으로 reject한다. 호출 쪽은 이 오류를 무시하면 된다.
-   * equipment는 조명이 부서졌을 때 어둡게 칠할 바닥 원(darknessZone)을 읽는 데 쓴다.
    */
   static async create(
     host: HTMLElement,
     show: ShowDef,
     signal?: AbortSignal,
-    equipment: readonly EquipmentDef[] = [],
   ): Promise<StudioRenderer> {
     const width = host.clientWidth > 0 ? host.clientWidth : FALLBACK_WIDTH
     const height = host.clientHeight > 0 ? host.clientHeight : FALLBACK_HEIGHT
@@ -269,7 +225,7 @@ export class StudioRenderer {
       app.destroy({ removeView: true }, { children: true })
       throw new DOMException('StudioRenderer 생성이 취소되었습니다.', 'AbortError')
     }
-    const renderer = new StudioRenderer(app, show, equipment, width, height)
+    const renderer = new StudioRenderer(app, show, width, height)
     host.appendChild(app.canvas)
     renderer.buildScene()
     return renderer
@@ -292,34 +248,11 @@ export class StudioRenderer {
   }
 
   /**
-   * 캔버스 논리 좌표의 한 점 (px, py)에 있는 대상. 출연자, 스태프, 장비, 최근 현상 순으로 보고,
-   * 같은 종류 안에서는 앞쪽(depthKey가 큰 것)이 우선이다. 없으면 null.
+   * 캔버스 논리 좌표의 한 점 (px, py)에 있는 대상. 없으면 null.
+   * 우선순위(종류 → 깊이)는 hitTest.ts의 pickHit이 정한다.
    */
   hitTest(px: number, py: number): StudioHit | null {
-    const point = { x: px, y: py }
-    const actor = frontmost(this.actorHits.filter((shape) => insideBillboard(point, shape)))
-    if (actor !== null) return { kind: 'actor', id: actor.id }
-    const staff = frontmost(
-      this.staffHits.filter(
-        (shape) =>
-          px >= shape.left && px <= shape.right && py >= shape.top && py <= shape.bottom,
-      ),
-    )
-    if (staff !== null) return { kind: 'staff', id: staff.id }
-    const equipment = frontmost(
-      this.equipmentHits.filter((shape) =>
-        shape.polygons.some((polygon) => pointInPolygon(point, polygon)),
-      ),
-    )
-    if (equipment !== null) return { kind: 'equipment', id: equipment.id }
-    const phenomenon = frontmost(
-      this.phenomenonHits.filter(
-        (shape) =>
-          Math.hypot(shape.point.x - px, shape.point.y - py) <= PHENOMENON_HIT_RADIUS_PX,
-      ),
-    )
-    if (phenomenon !== null) return { kind: 'phenomenon', id: phenomenon.id }
-    return null
+    return pickHit({ x: px, y: py }, this.hits)
   }
 
   resize(width: number, height: number): void {
@@ -475,16 +408,14 @@ export class StudioRenderer {
   /** 몸보다 먼저 그리는 바닥 표시: 어둠, 카메라 시야, 현상 링, 그림자. */
   private drawFloorMarks(view: BroadcastView): void {
     const floor = this.floorDynamic.clear()
-    this.drawDarkness(floor, view.equipment)
+    this.drawDarkness(floor, view.darkZones)
     this.drawCameraFans(floor, view)
     this.drawPhenomenonRings(floor, view.recentPhenomena)
     this.drawShadows(floor, view)
   }
 
-  private drawDarkness(floor: Graphics, equipment: readonly EquipmentView[]): void {
-    for (const item of equipment) {
-      const zone = this.darknessZones.get(item.id)
-      if (!item.released || zone === undefined) continue
+  private drawDarkness(floor: Graphics, zones: readonly DarkZone[]): void {
+    for (const zone of zones) {
       const center = this.project({ x: zone.x, y: 0, z: zone.z })
       const { rx, ry } = floorEllipseRadii(zone.radius, this.transform.scale)
       floor
@@ -501,13 +432,19 @@ export class StudioRenderer {
     for (const camera of cameras) {
       const onAir = camera.id === view.onAirCameraId
       const yaw = view.cameraAngles[camera.id] ?? camera.defaultAngle
-      const points = cameraFanFloorPoints(
+      const fan = cameraFanFloorPoints(
         camera.position,
         yaw,
         camera.fovDegrees,
         camera.range,
         FAN_ARC_STEPS,
-      ).map((point) => this.project(point))
+      )
+      const points = clipToFloor(fan, STUDIO_FLOOR).map((point) => this.project(point))
+      const mark = this.project(fan[0])
+      floor
+        .circle(mark.x, mark.y, CAMERA_MARK_RADIUS)
+        .fill(onAir ? COLORS.cameraOnAirStroke : COLORS.cameraBody)
+      if (points.length < 3) continue
       if (onAir) {
         floor
           .poly(points)
@@ -521,9 +458,6 @@ export class StudioRenderer {
           alpha: FAN_IDLE_LINE_ALPHA,
         })
       }
-      floor
-        .circle(points[0].x, points[0].y, CAMERA_MARK_RADIUS)
-        .fill(onAir ? COLORS.cameraOnAirStroke : COLORS.cameraBody)
     }
   }
 
@@ -531,7 +465,7 @@ export class StudioRenderer {
     for (const item of phenomena) {
       const color = ringColor(item.kind)
       if (color === null) continue
-      const fade = Math.max(0, 1 - item.ageSeconds / PHENOMENON_DISPLAY_SECONDS)
+      const fade = phenomenonFade(item)
       const fullRadius = item.kind === 'noise' ? NOISE_RADIUS[item.intensity] : SIGHT_RADIUS
       const radius =
         item.kind === 'noise'
@@ -574,7 +508,7 @@ export class StudioRenderer {
   // ── 몸(깊이 정렬) ─────────────────────────────────────────
 
   private drawEquipment(equipment: readonly EquipmentView[]): void {
-    this.equipmentHits = []
+    this.hits.equipment = []
     for (const item of equipment) {
       let shape = this.equipmentShapes.get(item.id)
       if (shape === undefined) {
@@ -615,12 +549,12 @@ export class StudioRenderer {
       }
       const depth = depthKey(item)
       shape.zIndex = depth
-      this.equipmentHits.push({ id: item.id, polygons: faces.map((face) => face.corners), depth })
+      this.hits.equipment.push({ id: item.id, polygons: faces.map((face) => face.corners), depth })
     }
   }
 
   private drawActors(view: BroadcastView): void {
-    this.actorHits = []
+    this.hits.actors = []
     const tracked = new Set(
       Object.values(view.cameraTargets).filter((id): id is string => id !== null),
     )
@@ -643,13 +577,14 @@ export class StudioRenderer {
       },
     })
     symbol.anchor.set(0.5)
-    body.addChild(symbol)
+    const tiltGroup = new Container()
+    tiltGroup.addChild(body, symbol)
     const label = new Text({
       text: actor.name,
       style: { fill: COLORS.nameText, fontSize: NAME_FONT_SIZE, fontFamily: FONT_FAMILY },
     })
     label.anchor.set(0.5, 0)
-    root.addChild(body, label)
+    root.addChild(tiltGroup, label)
     this.bodies.addChild(root)
 
     const overhead = new Container()
@@ -663,6 +598,7 @@ export class StudioRenderer {
 
     const sprite: ActorSprite = {
       root,
+      tiltGroup,
       body,
       symbol,
       label,
@@ -710,7 +646,7 @@ export class StudioRenderer {
     sprite.root.position.set(center.x, center.y)
     sprite.root.zIndex = depth
     sprite.root.alpha = actor.walkedOut ? WALKED_OUT_ALPHA : 1
-    sprite.body.rotation = tilt
+    sprite.tiltGroup.rotation = tilt
     // 몸이 화면에서 위·아래로 차지하는 폭. 누우면 줄어들어 이름표와 머리 위 표시가 몸에 붙는다.
     const extent = Math.abs(Math.cos(tilt)) * (halfHeight - halfWidth) + halfWidth
     if (sprite.label.text !== actor.name) sprite.label.text = actor.name
@@ -720,7 +656,7 @@ export class StudioRenderer {
     this.drawOverhead(sprite, actor, tracked)
 
     if (!actor.walkedOut) {
-      this.actorHits.push({
+      this.hits.actors.push({
         id: actor.id,
         center,
         tilt,
@@ -781,7 +717,7 @@ export class StudioRenderer {
   }
 
   private drawStaff(staff: readonly StaffView[]): void {
-    this.staffHits = []
+    this.hits.staff = []
     const scale = this.transform.scale
     const height = STAFF_HEIGHT_METERS * scale
     const headRadius = height * STAFF_HEAD_RATIO
@@ -827,7 +763,7 @@ export class StudioRenderer {
         }
       }
 
-      this.staffHits.push({
+      this.hits.staff.push({
         id: member.id,
         left: feet.x - bodyWidth / 2 - STAFF_HIT_PADDING_PX,
         right: feet.x + bodyWidth / 2 + STAFF_HIT_PADDING_PX,
@@ -862,15 +798,20 @@ export class StudioRenderer {
   /** 몸 위에 그리는 현상(충격 별, 분노 화살표)과 hitTest용 현상 중심. */
   private drawPhenomenonMarks(view: BroadcastView): void {
     const marks = this.overlayMarks.clear()
-    this.phenomenonHits = []
+    this.hits.phenomena = []
     const actors = new Map(view.actors.map((actor) => [actor.id, actor]))
     for (const item of view.recentPhenomena) {
       if (item.kind === 'darkness') continue
-      const fade = Math.max(0, 1 - item.ageSeconds / PHENOMENON_DISPLAY_SECONDS)
+      const fade = phenomenonFade(item)
       const isRing = ringColor(item.kind) !== null
       const anchor: Vec3 = isRing ? { x: item.x, y: 0, z: item.z } : item
       const point = this.project(anchor)
-      this.phenomenonHits.push({ id: item.id, point, depth: depthKey(anchor) })
+      this.hits.phenomena.push({
+        id: item.id,
+        center: point,
+        radius: PHENOMENON_HIT_RADIUS_PX,
+        depth: depthKey(anchor),
+      })
 
       if (item.kind === 'impact') {
         const radius = IMPACT_STAR_RADIUS_PER_INTENSITY * (item.intensity + 1)
@@ -930,6 +871,11 @@ export class StudioRenderer {
   }
 }
 
+/** 최근 현상의 불투명도. 생길 때 1에서 표시 시간이 끝날 때 0으로 줄어든다. */
+function phenomenonFade(item: RecentPhenomenon): number {
+  return Math.max(0, 1 - item.ageSeconds / PHENOMENON_DISPLAY_SECONDS)
+}
+
 /** 바닥 링으로 그리는 현상의 색. 링이 아니면 null. */
 function ringColor(kind: RecentPhenomenon['kind']): number | null {
   switch (kind) {
@@ -942,23 +888,6 @@ function ringColor(kind: RecentPhenomenon['kind']): number | null {
     default:
       return null
   }
-}
-
-function frontmost<T extends { depth: number }>(shapes: readonly T[]): T | null {
-  let best: T | null = null
-  for (const shape of shapes) if (best === null || shape.depth > best.depth) best = shape
-  return best
-}
-
-/** 기울어진 빌보드 사각형 안에 점이 있는지. 점을 몸의 로컬 좌표로 되돌려 잰다. */
-function insideBillboard(point: Point, shape: ActorHitShape): boolean {
-  const dx = point.x - shape.center.x
-  const dy = point.y - shape.center.y
-  const cos = Math.cos(shape.tilt)
-  const sin = Math.sin(shape.tilt)
-  const localX = dx * cos + dy * sin
-  const localY = -dx * sin + dy * cos
-  return Math.abs(localX) <= shape.halfWidth && Math.abs(localY) <= shape.halfHeight
 }
 
 function faceBrightness(normal: Vec3): number {

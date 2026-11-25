@@ -126,6 +126,50 @@ export function cameraFanFloorPoints(
   return points
 }
 
+/** 바닥 위 직사각형 범위(m) */
+export interface FloorBounds {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+/**
+ * 바닥 다각형(y=0)을 bounds 안으로 자른다(Sutherland–Hodgman). 카메라 시야 부채꼴이
+ * 스튜디오 바닥 밖으로 나가지 않게 할 때 쓴다. 완전히 밖이면 빈 배열이다.
+ */
+export function clipToFloor(polygon: readonly Vec3[], bounds: FloorBounds): Vec3[] {
+  const edges: Array<{ inside(point: Vec3): boolean; cross(a: Vec3, b: Vec3): Vec3 }> = [
+    { inside: (p) => p.x >= bounds.minX, cross: (a, b) => crossX(a, b, bounds.minX) },
+    { inside: (p) => p.x <= bounds.maxX, cross: (a, b) => crossX(a, b, bounds.maxX) },
+    { inside: (p) => p.z >= bounds.minZ, cross: (a, b) => crossZ(a, b, bounds.minZ) },
+    { inside: (p) => p.z <= bounds.maxZ, cross: (a, b) => crossZ(a, b, bounds.maxZ) },
+  ]
+  let output: Vec3[] = [...polygon]
+  for (const edge of edges) {
+    const input = output
+    output = []
+    for (let index = 0; index < input.length; index++) {
+      const current = input[index]
+      const previous = input[(index + input.length - 1) % input.length]
+      const currentInside = edge.inside(current)
+      if (currentInside !== edge.inside(previous)) output.push(edge.cross(previous, current))
+      if (currentInside) output.push(current)
+    }
+  }
+  return output
+}
+
+function crossX(a: Vec3, b: Vec3, x: number): Vec3 {
+  const t = (x - a.x) / (b.x - a.x)
+  return { x, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }
+}
+
+function crossZ(a: Vec3, b: Vec3, z: number): Vec3 {
+  const t = (z - a.z) / (b.z - a.z)
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z }
+}
+
 /** 짝수-홀수 규칙으로 점이 다각형 안에 있는지 본다. */
 export function pointInPolygon(point: Point, polygon: readonly Point[]): boolean {
   let inside = false

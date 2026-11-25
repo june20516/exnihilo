@@ -108,6 +108,13 @@ export interface RecentPhenomenon {
   text: string
 }
 
+/** 어둠이 덮은 바닥 원(EquipmentDef.darknessZone과 같은 모양) */
+export interface DarkZone {
+  x: number
+  z: number
+  radius: number
+}
+
 /** 가장 최근의 자동 슬로모션 계기. step으로 새 계기인지 구분한다. */
 export interface AutoSlowmo {
   gauge: GaugeKind | null
@@ -132,6 +139,8 @@ export interface BroadcastView {
   viewersTrend: -1 | 0 | 1
   /** 최근 PHENOMENON_DISPLAY_SECONDS초의 현상 */
   recentPhenomena: RecentPhenomenon[]
+  /** 부서진 조명이 만든 어둠 원. 방송이 끝날 때까지 남는다. */
+  darkZones: DarkZone[]
   gauges: Record<GaugeKind, number>
   limits: Record<GaugeKind, number>
   haltedBy: GaugeKind | null

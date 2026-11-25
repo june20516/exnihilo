@@ -902,6 +902,11 @@ describe('반응과 시선', () => {
       step: 10,
     })
     expect(fromMo(10)).toBeUndefined()
+    // 최근 현상에도 출처와 대상이 실린다(렌더러의 분노 화살표)
+    const anger = broadcast.events().at(-1)
+    expect(
+      broadcast.view().recentPhenomena.find((item) => item.id === anger?.id),
+    ).toMatchObject({ kind: 'anger', sourceId: 'rex', targetId: 'mo' })
 
     broadcast.step([])
     expect(fromMo(11)).toMatchObject({ kind: 'anger', intensity: 3, targetId: 'rex', depth: 2 })
@@ -948,6 +953,7 @@ describe('장비 파손 연쇄', () => {
     // 생성 직후 첫 스텝에 바로 뛰어도 이륙은 충격이 아니다(Ruling 24)
     broadcast.step([{ type: 'direct', actorId: 'jumper', directiveId: 'jump' }])
     expect(broadcast.events().filter((event) => event.kind === 'impact')).toEqual([])
+    expect(broadcast.view().darkZones).toEqual([])
 
     const breakImpact = runUntil(
       broadcast,
@@ -964,6 +970,8 @@ describe('장비 파손 연쇄', () => {
     for (const event of onBreak) expect(event.causeId).toBe(breakImpact.id)
     const darkness = onBreak[2]
     expect(darkness).toMatchObject({ intensity: 2, x: 8, y: STANDING_Y, z: 4 })
+    // 어둠 원은 view에 실려 방송이 끝날 때까지 남는다(렌더러가 바닥에 칠한다)
+    expect(broadcast.view().darkZones).toEqual([{ x: 8, z: 4, radius: 2 }])
 
     // 어둠은 구역 안(inDarkness)의 출연자만 지각한다
     broadcast.step([])
@@ -1435,7 +1443,15 @@ describe('판단 정보 view', () => {
     const findShown = () => broadcast.view().recentPhenomena.find((item) => item.id === noise.id)
 
     const { x, y, z } = noise
-    expect(findShown()).toMatchObject({ kind: 'noise', intensity: 1, x, y, z })
+    expect(findShown()).toMatchObject({
+      kind: 'noise',
+      intensity: 1,
+      sourceId: noise.sourceId,
+      targetId: noise.targetId,
+      x,
+      y,
+      z,
+    })
     const logLine = broadcast.view().log.find((line) => line.eventId === noise.id)
     expect(findShown()?.text).toBe(logLine?.text)
 
