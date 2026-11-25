@@ -1,5 +1,4 @@
 import {
-  AD_EFFECT_PICKS,
   AD_GAUGE_RELIEF,
   BROADCAST_STEPS,
   CORNER_STEPS,
@@ -31,13 +30,12 @@ import type {
   ReactionDef,
   StaffDef,
   StaffDirectiveDef,
-  TargetSelector,
 } from '@/content/types'
 import { validateShow } from '@/content/validate'
 import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame } from './broadcast'
 import { Cast, STANDING_Y, type CastMember, type Point } from './cast'
-import { describeEvent, withSubject } from './describe'
+import { describeEvent, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
 import { EventLog, type PhenomenonEvent } from './phenomena'
 import { PhysicsWorld, initPhysics, type Contact } from './physics'
@@ -55,7 +53,10 @@ import {
   type LogLine,
   type Phase,
 } from './engineTypes'
+import { updateGaze } from './gaze'
+import { validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
+import { StageLocator, angleBetween, type Emitter } from './targeting'
 
 export * from './engineTypes'
 
@@ -65,27 +66,8 @@ const INTENSITIES: readonly Intensity[] = [1, 2, 3]
 const MAX_INTENSITY: Intensity = 3
 const LAST_CORNER_INDEX = 2
 
-/** 이름이 있는 대상. 위치가 없으면(방송 자체 등) 이동 방향을 정하지 않는다. */
-interface Target {
-  id: string | null
-  position: Point | null
-}
-
-const NO_TARGET: Target = { id: null, position: null }
-
-/** 행동을 하거나 현상을 내뿜는 주체 */
-interface Emitter {
-  id: string
-  position: Point
-}
-
 function secondsToSteps(seconds: number): number {
   return Math.max(1, Math.round(seconds * STEPS_PER_SECOND))
-}
-
-/** from에서 to를 보는 각도(도). +x가 0도, 반시계로 증가한다(Ruling 15). */
-function angleBetween(from: Point, to: Point): number {
-  return (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI
 }
 
 function cloneInput(input: BroadcastInput): BroadcastInput {
@@ -104,6 +86,7 @@ export class Broadcast {
   private readonly setup: BroadcastSetup
   private readonly physics: PhysicsWorld
   private readonly cast: Cast
+  private readonly locator: StageLocator
   private readonly score: BroadcastScore
   private readonly director: Director
   private readonly log = new EventLog()
@@ -141,6 +124,13 @@ export class Broadcast {
     this.director = new Director([...setup.performers, ...setup.bench], setup.staff)
     this.cast = new Cast(physics)
     this.benchQueue = [...setup.bench]
+    this.locator = new StageLocator({
+      cast: this.cast,
+      physics,
+      cameras: this.cameras,
+      audienceZone: setup.show.audienceZone,
+      onAirCamera: () => this.onAirCamera(),
+    })
 
     const [firstCamera] = setup.show.cameras
     if (firstCamera === undefined) throw new Error('카메라가 없는 쇼입니다.')
@@ -208,7 +198,14 @@ export class Broadcast {
   step(inputs: readonly BroadcastInput[] = []): void {
     if (this.currentPhase !== 'live') return
 
-    // 1. 입력
+    // 1. 입력(전부 검증한 뒤 적용한다)
+    validateInputs(inputs, {
+      cast: this.cast,
+      staff: this.staff,
+      director: this.director,
+      cameras: this.cameras,
+      benchLeft: this.benchQueue.length,
+    })
     for (const input of inputs) {
       const recorded = cloneInput(input)
       this.applyInput(recorded)
@@ -257,7 +254,7 @@ export class Broadcast {
     return {
       step: this.stepCount,
       phase: this.currentPhase,
-      cornerIndex: Math.min(LAST_CORNER_INDEX, Math.floor(this.stepCount / CORNER_STEPS)) as 0 | 1 | 2,
+      cornerIndex: this.cornerIndex(),
       onAirCameraId: this.onAirCameraId,
       cameraAngles: { ...this.cameraAngles },
       actors: this.cast.all().map((member) => this.actorView(member)),
@@ -269,6 +266,7 @@ export class Broadcast {
       log: this.lines.slice(-VIEW_LOG_LINES).map((line) => ({ ...line })),
       autoSlowmo: this.autoSlowmo === null ? null : { ...this.autoSlowmo },
       adsLeft: this.director.adsLeft,
+      benchLeft: this.benchQueue.length,
       fatigue: this.director.fatigue,
     }
   }
@@ -300,7 +298,7 @@ export class Broadcast {
     }
   }
 
-  /** 물리 월드(wasm 메모리)를 해제한다. 이후 step은 오류를 던진다. */
+  /** 물리 월드(wasm 메모리)를 해제한다. 두 번 불러도 안전하다. 이후 step은 오류를 던진다. */
   dispose(): void {
     this.physics.dispose()
   }
@@ -352,7 +350,7 @@ export class Broadcast {
         this.cameraAngles[cameraId] = camera.defaultAngle
         return
       case 'audience':
-        this.cameraAngles[cameraId] = angleBetween(camera.position, this.audiencePosition())
+        this.cameraAngles[cameraId] = angleBetween(camera.position, this.locator.audiencePosition())
         return
       case 'nearestPerformer': {
         const nearest = this.cast.nearestActive(camera.position, null)
@@ -366,14 +364,8 @@ export class Broadcast {
     }
   }
 
-  /** Ruling 4: 광고는 입력 하나로 효과와 대가를 적용하고 adBreak로 들어간다. */
+  /** Ruling 4: 광고는 입력 하나로 효과와 대가를 적용하고 adBreak로 들어간다(검증은 validateInputs). */
   private takeAd(effects: readonly AdEffect[]): void {
-    if (effects.length !== AD_EFFECT_PICKS) {
-      throw new Error(`광고 효과는 ${AD_EFFECT_PICKS}개를 골라야 합니다: ${effects.length}개`)
-    }
-    if (new Set(effects).size !== effects.length) {
-      throw new Error(`같은 광고 효과를 두 번 고를 수 없습니다: ${effects.join(', ')}`)
-    }
     if (!this.director.takeAd()) throw new Error('남은 광고가 없습니다.')
 
     for (const effect of effects) {
@@ -407,12 +399,14 @@ export class Broadcast {
     }
     this.cooldowns.clear()
     this.director.resetFatigue()
+    // Ruling 22: 감정을 초기화하므로 광고 전 사고에 대한 반응도 남기지 않는다.
+    this.pendingEvents = []
   }
 
   /** 대기 출연자를 빈 home spot(없으면 bench 자리)에 올린다. */
   private bringInBench(): void {
     const performer = this.benchQueue.shift()
-    if (performer === undefined) return
+    if (performer === undefined) throw new Error('투입할 대기 출연자가 없습니다.')
     const taken = new Set(this.cast.active().map((member) => member.homeX))
     const spot = this.setup.show.homeSpots.find((candidate) => !taken.has(candidate.x))
     this.addToStage(performer, spot?.x ?? this.setup.show.benchSpot.x)
@@ -497,7 +491,7 @@ export class Broadcast {
   private emitImpact(contact: Contact): PhenomenonEvent {
     const sourceId = contact.fasterId
     const targetId = contact.b === 'floor' ? null : sourceId === contact.a ? contact.b : contact.a
-    const position = this.entityPosition(sourceId)
+    const position = this.locator.entityPosition(sourceId)
     if (position === undefined) throw new Error(`접촉한 물리 몸을 찾을 수 없습니다: ${sourceId}`)
     const cause = this.motionCauseOf(sourceId)
     const impact = this.emit({
@@ -517,7 +511,7 @@ export class Broadcast {
   private breakEquipment(piece: EquipmentDef, impact: PhenomenonEvent): void {
     this.physics.releaseEquipment(piece.id)
     this.brokenEquipment.set(piece.id, impact)
-    const position = this.entityPosition(piece.id) ?? piece.position
+    const position = this.locator.entityPosition(piece.id) ?? piece.position
     this.emitAll({ id: piece.id, position }, piece.onBreak, impact)
     if (piece.kind !== 'hangingLight' || piece.darknessZone === undefined) return
 
@@ -590,46 +584,29 @@ export class Broadcast {
 
   private updateGaze(): void {
     const camera = this.onAirCamera()
-    for (const member of this.cast.active()) {
-      const position = this.cast.position(member)
-      const onAir = this.isOnAir(position)
-      const entered = onAir && !member.wasOnAir
-      member.wasOnAir = onAir
-      member.absentSteps = onAir ? 0 : member.absentSteps + 1
-
-      for (const reaction of member.def.reactions) {
-        const { trigger } = reaction
-        if (trigger.kind !== 'gaze') continue
-        const due =
-          trigger.when === 'enter'
-            ? entered
-            : member.absentSteps > 0 && member.absentSteps % secondsToSteps(trigger.seconds) === 0
-        if (!due) continue
-        if (this.fireGazeReaction(member, reaction, trigger.when === 'enter' ? camera : null)) break
+    for (const { member, reactions } of updateGaze(this.cast, (point) => this.isOnAir(point))) {
+      for (const reaction of reactions) {
+        if (this.fireGazeReaction(member, reaction, camera)) break
       }
     }
   }
 
-  /** camera가 null이면 오래 화면에 잡히지 않은 것(absentFor)이다. 실행했으면 true. */
-  private fireGazeReaction(
-    member: CastMember,
-    reaction: ReactionDef,
-    camera: CameraDef | null,
-  ): boolean {
-    const key = cooldownKey(reaction.trigger)
+  /** Ruling 23: 시선 반응은 원인 없이(깊이 1) 시작한다. 실행했으면 true. */
+  private fireGazeReaction(member: CastMember, reaction: ReactionDef, camera: CameraDef): boolean {
+    const { trigger } = reaction
+    if (trigger.kind !== 'gaze') return false
+    const key = cooldownKey(trigger)
     if (!this.cooldowns.ready(member.def.id, key, this.stepCount)) return false
     if (!this.rollChance(reaction.chance)) return false
     this.cooldowns.mark(member.def.id, key, this.stepCount)
 
-    const gaze = this.emit({
-      kind: 'gaze',
-      intensity: camera?.shotIntensity ?? 1,
-      sourceId: camera?.id ?? 'broadcast',
-      targetId: member.def.id,
-      ...this.cast.position(member),
-      causeId: null,
-    })
-    this.executeAction(member, reaction.action, gaze)
+    const name = member.def.shortName
+    const text =
+      trigger.when === 'enter'
+        ? `${withSubject(camera.label)} ${withObject(name)} 잡았다`
+        : `${withSubject(name)} 한동안 화면에 잡히지 않았다`
+    this.addLine(text, 1, null, this.cast.position(member))
+    this.executeAction(member, reaction.action, null)
     return true
   }
 
@@ -657,7 +634,8 @@ export class Broadcast {
     if (this.isOnAir(event)) return true
     return [event.sourceId, event.targetId].some((id) => {
       const member = id === null ? undefined : this.cast.get(id)
-      return member !== undefined && member.departedAt === null && this.isOnAir(this.cast.position(member))
+      if (member === undefined || member.departedAt !== null) return false
+      return this.isOnAir(this.cast.position(member))
     })
   }
 
@@ -712,13 +690,21 @@ export class Broadcast {
       this.autoSlowmo = { gauge: newGauge, eventId: trigger?.id ?? null, step }
       return
     }
-    const strong = aired.find((event) => isPhenomenonShown(event) && event.intensity === MAX_INTENSITY)
+    // gaze는 카메라가 잡았다는 표시일 뿐 사고가 아니고, silence는 아무 일도 없다는 뜻이라
+    // 강도 3이어도 PD가 개입할 순간이 아니다. 화면에 보이는 사고만 슬로모션을 건다.
+    const strong = aired.find(
+      (event) => isPhenomenonShown(event) && event.intensity === MAX_INTENSITY,
+    )
     if (strong !== undefined) this.autoSlowmo = { gauge: null, eventId: strong.id, step }
   }
 
   // ── 행동 실행 ─────────────────────────────────────────
 
-  private executeAction(member: CastMember, action: ActionDef, cause: PhenomenonEvent | null): void {
+  private executeAction(
+    member: CastMember,
+    action: ActionDef,
+    cause: PhenomenonEvent | null,
+  ): void {
     member.pose = action.pose
     member.motionCause = cause
     const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
@@ -726,13 +712,18 @@ export class Broadcast {
     this.emitAll(emitter, action.emits, cause)
   }
 
-  private move(member: CastMember, emitter: Emitter, move: MoveDef, cause: PhenomenonEvent | null): void {
+  private move(
+    member: CastMember,
+    emitter: Emitter,
+    move: MoveDef,
+    cause: PhenomenonEvent | null,
+  ): void {
     const id = member.def.id
     if (move.type === 'home') {
       this.physics.teleport(id, member.homeX)
       return
     }
-    const target = this.resolveTarget(move.toward, emitter, cause).position
+    const target = this.locator.resolveTarget(move.toward, emitter, cause).position
     const direction = target === null ? 0 : Math.sign(target.x - emitter.position.x)
     switch (move.type) {
       case 'dash':
@@ -747,7 +738,11 @@ export class Broadcast {
     }
   }
 
-  private emitAll(emitter: Emitter, emits: readonly EmitDef[], cause: PhenomenonEvent | null): void {
+  private emitAll(
+    emitter: Emitter,
+    emits: readonly EmitDef[],
+    cause: PhenomenonEvent | null,
+  ): void {
     for (const emit of emits) {
       const intensity =
         emit.intensity === 'causePlusOne'
@@ -757,50 +752,11 @@ export class Broadcast {
         kind: emit.kind,
         intensity,
         sourceId: emitter.id,
-        targetId: this.resolveTarget(emit.target, emitter, cause).id,
+        targetId: this.locator.resolveTarget(emit.target, emitter, cause).id,
         ...emitter.position,
         causeId: cause?.id ?? null,
       })
     }
-  }
-
-  /** 이탈한 출연자를 가리키는 선택은 'none'과 같다(Review Focus 2). */
-  private resolveTarget(
-    selector: TargetSelector,
-    emitter: Emitter,
-    cause: PhenomenonEvent | null,
-  ): Target {
-    if (selector === 'none') return NO_TARGET
-    if (selector === 'self') return { id: emitter.id, position: emitter.position }
-    if (selector === 'cause') return cause === null ? NO_TARGET : this.targetById(cause.sourceId)
-    if (selector === 'onAirCamera') {
-      const camera = this.onAirCamera()
-      return { id: camera.id, position: camera.position }
-    }
-    const tag = selector === 'nearestPerformer' ? undefined : selector.tag
-    const nearest = this.cast.nearestActive(emitter.position, emitter.id, tag)
-    return nearest === undefined
-      ? NO_TARGET
-      : { id: nearest.def.id, position: this.cast.position(nearest) }
-  }
-
-  private targetById(id: string): Target {
-    const member = this.cast.get(id)
-    if (member !== undefined) {
-      return member.walkedOut ? NO_TARGET : { id, position: this.cast.position(member) }
-    }
-    if (id === 'audience') return { id, position: this.audiencePosition() }
-    const position = this.entityPosition(id)
-    return position === undefined ? NO_TARGET : { id, position }
-  }
-
-  /** 물리 몸이 있는 출연자, 장비, 카메라의 위치 */
-  private entityPosition(id: string): Point | undefined {
-    const member = this.cast.get(id)
-    if (member !== undefined) return this.cast.position(member)
-    const equipment = this.physics.equipmentState(id)
-    if (equipment !== undefined) return { x: equipment.x, y: equipment.y }
-    return this.cameras.get(id)?.position
   }
 
   private motionCauseOf(id: string): PhenomenonEvent | null {
@@ -859,9 +815,9 @@ export class Broadcast {
     return this.darkZones.some((zone) => point.x >= zone.minX && point.x <= zone.maxX)
   }
 
-  private audiencePosition(): Point {
-    const zone = this.setup.show.audienceZone
-    return { x: (zone.minX + zone.maxX) / 2, y: STANDING_Y }
+  private cornerIndex(): 0 | 1 | 2 {
+    const index = Math.floor(this.stepCount / CORNER_STEPS)
+    return Math.min(LAST_CORNER_INDEX, index) as 0 | 1 | 2
   }
 
   private actorView(member: CastMember): ActorView {

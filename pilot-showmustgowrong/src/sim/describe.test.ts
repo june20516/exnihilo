@@ -42,9 +42,9 @@ describe('describeEvent', () => {
     expect(
       describeEvent(event({ kind: 'laughter', sourceId: 'priya', targetId: 'rex' }), NAMES),
     ).toBe('프리야가 렉스를 보고 웃는다')
-    expect(describeEvent(event({ kind: 'laughter', sourceId: 'priya', targetId: 'june' }), NAMES)).toBe(
-      '프리야가 준을 보고 웃는다',
-    )
+    expect(
+      describeEvent(event({ kind: 'laughter', sourceId: 'priya', targetId: 'june' }), NAMES),
+    ).toBe('프리야가 준을 보고 웃는다')
     expect(describeEvent(event({ kind: 'anger', intensity: 3 }), NAMES)).toBe(
       '렉스가 욕설을 했다! (삐—)',
     )

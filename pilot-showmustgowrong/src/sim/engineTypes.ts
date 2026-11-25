@@ -70,6 +70,8 @@ export interface BroadcastView {
   log: LogLine[]
   autoSlowmo: AutoSlowmo | null
   adsLeft: number
+  /** 광고 외적 세팅으로 투입할 수 있는 대기 출연자 수. 0이면 UI가 그 효과를 막는다. */
+  benchLeft: number
   fatigue: number
 }
 
