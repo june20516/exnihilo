@@ -1,4 +1,12 @@
-import type { GaugeKind, Intensity, PhenomenonKind, ShowDef, Tolerance, Weight } from './types'
+import type {
+  GaugeKind,
+  Intensity,
+  PhenomenonKind,
+  ShowDef,
+  StaffRecovery,
+  Tolerance,
+  Weight,
+} from './types'
 
 // 시간
 export const STEP_SECONDS = 1 / 60
@@ -126,6 +134,8 @@ export const RATING_LIMITS: Record<ShowDef['rating'], Record<GaugeKind, number>>
 export const TOLERANCE_COUNT: Record<Tolerance, number> = { low: 2, normal: 3, high: 5, max: 8 }
 export const FATIGUE_MISFIRE_PER_POINT = 0.1
 export const STAFF_FATIGUE_MISFIRE_PER_POINT = 0.15
+/** 스태프 자동 복구(spec 5.6): 반응한 상태를 holdSeconds 유지한 뒤 returnSeconds에 걸쳐 되돌린다. */
+export const STAFF_RECOVERY: StaffRecovery = { holdSeconds: 1.5, returnSeconds: 2 }
 export const MISFIRE_CAP = 0.6
 /** 엇나감으로 올라갈 수 있는 emit 강도 상한 */
 export const MISFIRE_MAX_INTENSITY = 3

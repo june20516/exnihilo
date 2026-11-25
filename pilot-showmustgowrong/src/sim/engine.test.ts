@@ -27,6 +27,7 @@ import type {
 import { STANDING_Y } from './cast'
 import { Broadcast, replay, type BroadcastInput, type BroadcastSetup } from './engine'
 import type { PhenomenonEvent } from './phenomena'
+import { yawBetween } from './vec'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 
@@ -1144,5 +1145,161 @@ describe('움직임 원인 만료(Ruling 29)', () => {
     expect(airSeconds(18)).toBeGreaterThan(MOTION_CAUSE_SECONDS)
     const { landing } = await landingImpact(18)
     expect(landing).toMatchObject({ causeId: null, depth: 1 })
+  })
+})
+
+describe('클로즈업 추적과 스태프 복구', () => {
+  const TRACKING_SHOW: ShowDef = {
+    ...SHOW,
+    cameras: SHOW.cameras.map((entry) => (entry.id === 'close' ? { ...entry, tracking: true } : entry)),
+  }
+  const CLOSE_POSITION = { x: 2, z: 4 }
+  const lowPerformer = (id: string, presence: 1 | 2 | 3, tags: string[] = []) =>
+    performer({ id, shortName: id, presence, tolerance: 'low', tags })
+  const calm = (actorId: string): BroadcastInput => ({ type: 'direct', actorId, directiveId: 'calm' })
+  const track = (actorId: string): BroadcastInput => ({ type: 'track', cameraId: 'close', actorId })
+
+  it('토크쇼 고정 라인업이면 클로즈업의 시작 대상은 첫 코너 host 태그 출연자다', async () => {
+    const view = (await open({ show: TALK_SHOW, ...LINEUP, seed: 7 })).view()
+    const host = LINEUP.performers.find((entry) => entry.tags.includes('host'))
+    expect(view.cameraTargets).toEqual({ wide: null, close: host?.id, audienceCam: null })
+  })
+
+  it('track 입력은 대상을 바꾸고 내성과 누적 피로를 쓰지 않는다', async () => {
+    const broadcast = await open(quietSetup({ show: TRACKING_SHOW }))
+    const before = broadcast.view()
+    expect(before.cameraTargets.close).toBe('rex')
+
+    broadcast.step([track('mo')])
+    const view = broadcast.view()
+    expect(view.cameraTargets.close).toBe('mo')
+    expect(view.fatigue).toBe(before.fatigue)
+    expect(view.actors.map((actor) => actor.directivesLeft)).toEqual(
+      before.actors.map((actor) => actor.directivesLeft),
+    )
+    const mo = view.actors.find((actor) => actor.id === 'mo')
+    expect(mo).toBeDefined()
+    if (mo === undefined) return
+    expect(view.cameraAngles.close).toBeCloseTo(yawBetween(CLOSE_POSITION, mo), 3)
+    expect(broadcast.inputLog()).toEqual([{ step: 0, input: track('mo') }])
+  })
+
+  it('대상이 이탈하면 존재감이 가장 높은 남은 출연자로, 모두 이탈하면 null로 바뀐다', async () => {
+    const performers = [
+      lowPerformer('rex', 1, ['host']),
+      lowPerformer('ann', 1),
+      lowPerformer('bo', 3),
+    ]
+    const broadcast = await open(quietSetup({ show: TRACKING_SHOW, performers }))
+    expect(broadcast.view().cameraTargets.close).toBe('rex')
+
+    broadcast.step([calm('rex'), calm('rex'), calm('rex')])
+    expect(broadcast.view().cameraTargets.close).toBe('bo')
+
+    broadcast.step([calm('bo'), calm('bo'), calm('bo')])
+    expect(broadcast.view().cameraTargets.close).toBe('ann')
+
+    broadcast.step([calm('ann'), calm('ann'), calm('ann')])
+    expect(broadcast.view().cameraTargets.close).toBeNull()
+    expect(() => run(broadcast, 5 * STEPS_PER_SECOND)).not.toThrow()
+    expect(broadcast.view().cameraAngles.close).toBe(0)
+  })
+
+  it('이탈한 출연자나 추적 카메라가 아닌 카메라로의 track은 입력 검증 오류다', async () => {
+    const performers = [lowPerformer('rex', 1, ['host']), lowPerformer('mo', 1)]
+    const broadcast = await open(quietSetup({ show: TRACKING_SHOW, performers }))
+    expect(() => broadcast.step([calm('rex'), calm('rex'), calm('rex'), track('rex')])).toThrow(
+      '이탈한 출연자',
+    )
+    broadcast.step([calm('rex'), calm('rex'), calm('rex')])
+    expect(() => broadcast.step([track('rex')])).toThrow('이탈한 출연자')
+    expect(() => broadcast.step([track('ghost')])).toThrow('무대에 없는 출연자')
+    expect(() => broadcast.step([{ type: 'track', cameraId: 'wide', actorId: 'mo' }])).toThrow(
+      '추적 카메라가 아닙니다',
+    )
+  })
+
+  it('스태프 view는 놀람, 복구 중, 평상시를 보이고 복구가 끝나면 자리를 잡았다는 로그가 남는다', async () => {
+    const shouter = performer({
+      id: 'rex',
+      tags: ['host'],
+      reactions: [
+        reaction(
+          { kind: 'corner', tag: 'host' },
+          { pose: 'angry', emits: [{ kind: 'noise', intensity: 2, target: 'none' }] },
+        ),
+      ],
+    })
+    const broadcast = await open(
+      setup({ show: TRACKING_SHOW, performers: [shouter, MO], equipment: [] }),
+    )
+    const modes = new Set<string>()
+    const texts = new Set<string>()
+    for (let i = 0; i < 300; i++) {
+      broadcast.step([])
+      const view = broadcast.view()
+      modes.add(view.staff[0].mode)
+      for (const line of view.log) texts.add(line.text)
+    }
+    expect([...modes]).toEqual(expect.arrayContaining(['startled', 'recovering', 'normal']))
+    expect(texts).toContain('카메라 감독이 놀라 카메라를 휘둘렀다')
+    expect(texts).toContain('카메라 감독이 자리를 잡았다')
+    expect(broadcast.view().staff).toEqual([
+      {
+        id: 'cammy',
+        name: '겁쟁이 카메라 감독',
+        cameraId: 'close',
+        mode: 'normal',
+        recoveryProgress: 1,
+        x: 2,
+        y: 1,
+        z: 4,
+      },
+    ])
+  })
+
+  it('switch, track, direct, directStaff, ad가 섞이고 놀람과 복구가 일어나는 방송을 replay하면 같다', async () => {
+    const shouter = performer({
+      id: 'rex',
+      shortName: '렉스',
+      tags: ['host'],
+      reactions: [
+        reaction(
+          { kind: 'corner', tag: 'host' },
+          { pose: 'angry', emits: [{ kind: 'noise', intensity: 2, target: 'none' }] },
+        ),
+      ],
+      directives: [CALM, SHOUT],
+    })
+    const replaySetup = () =>
+      setup({ show: TRACKING_SHOW, performers: [shouter, MO], equipment: [], seed: 11 })
+    const INPUTS = new Map<number, BroadcastInput[]>([
+      [5, [{ type: 'switch', cameraId: 'close' }]],
+      [10, [track('mo')]],
+      [60, [{ type: 'direct', actorId: 'rex', directiveId: 'shout' }]],
+      [250, [{ type: 'directStaff', staffId: 'cammy', directiveId: 'audience' }]],
+      [300, [{ type: 'ad', effects: ['relief', 'reset'] }]],
+      [350, [{ type: 'directStaff', staffId: 'cammy', directiveId: 'calm' }]],
+      [400, [track('rex')]],
+    ])
+    const first = await open(replaySetup())
+    const modes = new Set<string>()
+    for (let i = 0; i < 600; i++) {
+      run(first, 1, INPUTS)
+      modes.add(first.view().staff[0].mode)
+    }
+    expect([...modes]).toEqual(expect.arrayContaining(['startled', 'recovering', 'normal']))
+
+    const view = first.view()
+    expect(await replay(replaySetup(), first.inputLog(), 600)).toEqual(view)
+
+    const byStep = new Map<number, BroadcastInput[]>()
+    for (const { step, input } of first.inputLog()) {
+      byStep.set(step, [...(byStep.get(step) ?? []), input])
+    }
+    const second = await open(replaySetup())
+    run(second, 600, byStep)
+    expect(second.summary()).toEqual(first.summary())
+    expect(second.view()).toEqual(view)
   })
 })

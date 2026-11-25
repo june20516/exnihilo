@@ -207,6 +207,21 @@ describe('BroadcastLoop 입력 재검증(Ruling 35)', () => {
     expect(broadcast.steps[0]).toEqual([toPriya])
     expect(loop.snapshot().interventionsIssued).toBe(1)
   })
+
+  it('큐에 쌓인 track의 대상이 그사이 이탈하면 버리고, track은 개입을 닫지도 세지도 않는다', () => {
+    const { broadcast, loop } = setup()
+    const trackRex: BroadcastInput = { type: 'track', cameraId: 'close', actorId: 'rex' }
+    const trackPriya: BroadcastInput = { type: 'track', cameraId: 'close', actorId: 'priya' }
+    loop.openIntervention()
+    loop.send(trackRex)
+    loop.send(trackPriya)
+    expect(loop.snapshot().interventionOpen).toBe(true)
+    loop.closeIntervention()
+    broadcast.actors = [actor('rex', { walkedOut: true }), actor('priya')]
+    runFrames(loop, 1)
+    expect(broadcast.steps[0]).toEqual([trackPriya])
+    expect(loop.snapshot().interventionsIssued).toBe(0)
+  })
 })
 
 describe('BroadcastLoop 자동 슬로모션', () => {

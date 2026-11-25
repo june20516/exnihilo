@@ -14,6 +14,8 @@ export type BroadcastInput =
   | { type: 'direct'; actorId: string; directiveId: string }
   | { type: 'directStaff'; staffId: string; directiveId: string }
   | { type: 'ad'; effects: AdEffect[] }
+  /** 클로즈업 대상 바꾸기. 공짜이고 개입이 아니다(spec 3.1). */
+  | { type: 'track'; cameraId: string; actorId: string }
 
 export type Phase = 'live' | 'adBreak' | 'ended'
 
@@ -52,6 +54,22 @@ export interface EquipmentView {
   released: boolean
 }
 
+/** startled: 놀란 방향 유지, recovering: 기준 방향으로 돌아오는 중(spec 5.6) */
+export type StaffMode = 'normal' | 'startled' | 'recovering'
+
+/** 카메라를 맡은 스태프. 위치는 담당 카메라 자리다. */
+export interface StaffView {
+  id: string
+  name: string
+  cameraId: string
+  mode: StaffMode
+  /** 놀란 순간 0에서 복구 완료 1까지(유지+복귀 전체 기준). 평상시 1. */
+  recoveryProgress: number
+  x: number
+  y: number
+  z: number
+}
+
 /** 사고 로그 한 줄. eventId가 null이면 현상이 아닌 서술(이탈, 스태프 행동)이다. */
 export interface LogLine {
   /** 방송 시작부터 이어지는 줄 번호. 같은 문장이 반복돼도 줄을 구분한다. */
@@ -77,8 +95,11 @@ export interface BroadcastView {
   phase: Phase
   cornerIndex: 0 | 1 | 2
   onAirCameraId: string
-  /** 카메라별 현재 yaw(도) */
+  /** 카메라별 현재 yaw(도). 추적, 스태프 놀람과 복구를 반영한 실제 방향이다. */
   cameraAngles: Record<string, number>
+  /** 추적 카메라의 대상 출연자 id. 추적 카메라가 아니거나 대상이 없으면 null */
+  cameraTargets: Record<string, string | null>
+  staff: StaffView[]
   actors: ActorView[]
   equipment: EquipmentView[]
   viewers: number

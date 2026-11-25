@@ -133,6 +133,24 @@ describe('validateShow', () => {
     expect(errors.join('\n')).toContain('알 수 없는 카메라: cam9')
   })
 
+  it('한 카메라를 두 스태프가 맡으면 보고한다', () => {
+    const errors = validateShow(
+      show,
+      performers,
+      [makeStaff(), makeStaff({ id: 'staff2' })],
+      equipment,
+    )
+    expect(errors.join('\n')).toContain('한 카메라를 두 스태프가 맡음: cam1 (staff2)')
+  })
+
+  it.each([
+    { holdSeconds: -1, returnSeconds: 2 },
+    { holdSeconds: 1, returnSeconds: 0 },
+  ])('스태프 복구 시간 %o는 범위 오류다', (recovery) => {
+    const errors = validateShow(show, performers, [makeStaff({ recovery })], equipment)
+    expect(errors.join('\n')).toContain('복구 시간 범위 오류')
+  })
+
   it.each([0, -0.5, 1.5])('chance %s는 확률 범위 오류다', (chance) => {
     const withChance = [
       makePerformer('a', { reactions: [reactionWith({ chance })] }),

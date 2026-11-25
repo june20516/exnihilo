@@ -39,6 +39,7 @@ import type {
 import { validateShow } from '@/content/validate'
 import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame } from './broadcast'
+import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
 import { describeEvent, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
@@ -57,6 +58,7 @@ import {
   type InputRecord,
   type LogLine,
   type Phase,
+  type StaffView,
 } from './engineTypes'
 import { updateGaze } from './gaze'
 import { validateInputs } from './inputValidation'
@@ -121,7 +123,7 @@ export class Broadcast {
   private readonly log = new EventLog()
   private readonly cooldowns = new CooldownTable()
   private readonly cameras = new Map<string, CameraDef>()
-  private readonly cameraAngles: Record<string, number> = {}
+  private readonly rig: CameraRig
   private readonly staff = new Map<string, StaffDef>()
   private readonly equipment = new Map<string, EquipmentDef>()
   /** 부서진 장비 id → 부순 충격 이벤트. 떨어지는 장비가 일으킨 충격의 원인이 된다. */
@@ -170,9 +172,9 @@ export class Broadcast {
     this.onAirCameraId = firstCamera.id
     for (const camera of setup.show.cameras) {
       this.cameras.set(camera.id, camera)
-      this.cameraAngles[camera.id] = camera.defaultAngle
       this.names[camera.id] = camera.label
     }
+    this.rig = new CameraRig(setup.show.cameras, setup.staff)
     for (const member of setup.staff) {
       this.staff.set(member.id, member)
       this.names[member.id] = member.shortName
@@ -188,6 +190,11 @@ export class Broadcast {
     setup.performers.forEach((performer, index) => {
       this.addToStage(performer, setup.show.homeSpots[index])
     })
+    // 클로즈업이 시작 대상을 보게 한 뒤 처음부터 화면에 있던 출연자를 다시 센다.
+    this.updateCameraRig()
+    for (const member of this.cast.active()) {
+      member.wasOnAir = this.isOnAir(this.cast.position(member))
+    }
   }
 
   /** 콘텐츠를 검증하고(spec 9.6) 물리 월드를 만든다. */
@@ -258,7 +265,8 @@ export class Broadcast {
     this.stepPhysics()
     // 4. 직전 스텝 이벤트에 대한 반응(한 스텝에 한 단계)
     this.resolvePendingReactions()
-    // 5. 카메라 시선과 관객 흥분
+    // 5. 카메라 방향(추적, 놀람 복구), 시선과 관객 흥분
+    this.updateCameraRig()
     this.updateGaze()
     this.updateAudienceNoise()
     // 6. 송출 판정과 점수
@@ -299,7 +307,9 @@ export class Broadcast {
       phase: this.currentPhase,
       cornerIndex: this.cornerIndex(),
       onAirCameraId: this.onAirCameraId,
-      cameraAngles: { ...this.cameraAngles },
+      cameraAngles: this.rig.angles(),
+      cameraTargets: this.rig.targets(),
+      staff: this.rig.staffViews().map((view) => this.staffView(view)),
       actors: this.cast.all().map((member) => this.actorView(member)),
       equipment: [...this.equipment.keys()].map((id) => this.equipmentView(id)),
       viewers: this.score.viewers,
@@ -363,6 +373,9 @@ export class Broadcast {
       case 'ad':
         this.takeAd(input.effects)
         return
+      case 'track':
+        this.rig.setTarget(input.cameraId, input.actorId)
+        return
     }
   }
 
@@ -379,31 +392,30 @@ export class Broadcast {
   }
 
   private directStaff(staffId: string, directiveId: string): void {
-    const member = this.staff.get(staffId)
-    if (member === undefined) throw new Error(`알 수 없는 스태프입니다: ${staffId}`)
+    const member = this.requireStaff(staffId)
     const [result, rng] = this.director.directStaff(staffId, directiveId, this.rng)
     this.rng = rng
-    this.aimCamera(member.cameraId, result.aim)
+    // 엇나간 지시는 놀람과 같다(무작위 방향, 유지 뒤 자동 복구).
+    if (result.aim === 'random') {
+      this.rig.panic(staffId, this.randomAngle())
+      return
+    }
+    this.rig.direct(staffId, this.directedAim(member.cameraId, result.aim))
   }
 
-  private aimCamera(cameraId: string, aim: StaffDirectiveDef['aim'] | 'random'): void {
-    const camera = this.requireCamera(cameraId)
+  /** 관객석과 가장 가까운 출연자는 지시 순간의 방향으로 고정한다. 출연자가 없으면 기준으로 돌린다. */
+  private directedAim(cameraId: string, aim: StaffDirectiveDef['aim']): DirectedAim {
+    const { position } = this.requireCamera(cameraId)
     switch (aim) {
       case 'default':
-        this.cameraAngles[cameraId] = camera.defaultAngle
-        return
+        return { kind: 'default' }
       case 'audience':
-        this.cameraAngles[cameraId] = yawBetween(camera.position, this.locator.audiencePosition())
-        return
+        return { kind: 'yaw', yaw: yawBetween(position, this.locator.audiencePosition()) }
       case 'nearestPerformer': {
-        const nearest = this.cast.nearestActive(camera.position, null)
-        if (nearest === undefined) return
-        this.cameraAngles[cameraId] = yawBetween(camera.position, this.cast.position(nearest))
-        return
+        const nearest = this.cast.nearestActive(position, null)
+        if (nearest === undefined) return { kind: 'default' }
+        return { kind: 'yaw', yaw: yawBetween(position, this.cast.position(nearest)) }
       }
-      case 'random':
-        this.cameraAngles[cameraId] = this.randomAngle()
-        return
     }
   }
 
@@ -671,16 +683,31 @@ export class Broadcast {
     })
   }
 
-  /** 스태프 반응은 행동 대신 담당 카메라를 무작위 방향으로 돌린다(겁쟁이 카메라 감독). */
+  /** 스태프 반응은 행동 대신 담당 카메라를 무작위 방향으로 돌린다(겁쟁이 카메라 감독, spec 5.6). */
   private panicCamera(member: StaffDef, cause: PhenomenonEvent | null): void {
     const camera = this.requireCamera(member.cameraId)
-    this.cameraAngles[camera.id] = this.randomAngle()
+    this.rig.panic(member.id, this.randomAngle())
     this.addLine(
       `${withSubject(member.shortName)} 놀라 카메라를 휘둘렀다`,
       (cause?.depth ?? 0) + 1,
       null,
       camera.position,
     )
+  }
+
+  /** 이탈한 추적 대상을 다시 고르고 리그를 한 스텝 진행한다. 복구를 마친 스태프는 로그를 남긴다. */
+  private updateCameraRig(): void {
+    const active = this.cast.active()
+    this.rig.retarget(active.map((member) => member.def), this.setup.show.corners[0].startTag)
+    this.rig.update((actorId) => {
+      const member = this.cast.get(actorId)
+      return member === undefined ? null : this.cast.position(member)
+    })
+    for (const staffId of this.rig.settledStaffIds()) {
+      const member = this.requireStaff(staffId)
+      const text = `${withSubject(member.shortName)} 자리를 잡았다`
+      this.addLine(text, 1, null, this.requireCamera(member.cameraId).position)
+    }
   }
 
   private updateGaze(): void {
@@ -930,6 +957,12 @@ export class Broadcast {
     return roll * 360
   }
 
+  private requireStaff(staffId: string): StaffDef {
+    const member = this.staff.get(staffId)
+    if (member === undefined) throw new Error(`알 수 없는 스태프입니다: ${staffId}`)
+    return member
+  }
+
   private requireCamera(cameraId: string): CameraDef {
     const camera = this.cameras.get(cameraId)
     if (camera === undefined) throw new Error(`알 수 없는 카메라입니다: ${cameraId}`)
@@ -948,7 +981,7 @@ export class Broadcast {
   private isOnAir(point: Vec3): boolean {
     const camera = this.onAirCamera()
     return (
-      inFrame(camera, this.cameraAngles[camera.id], point) &&
+      inFrame(camera, this.rig.angle(camera.id), point) &&
       this.physics.lineOfSight(camera.position, point)
     )
   }
@@ -981,6 +1014,11 @@ export class Broadcast {
       departed: member.departedAt !== null,
       directivesLeft: Math.max(0, TOLERANCE_COUNT[member.def.tolerance] - used),
     }
+  }
+
+  private staffView(view: Omit<StaffView, 'name' | 'x' | 'y' | 'z'>): StaffView {
+    const member = this.requireStaff(view.id)
+    return { ...view, name: member.name, ...this.requireCamera(member.cameraId).position }
   }
 
   private equipmentView(id: string): EquipmentView {

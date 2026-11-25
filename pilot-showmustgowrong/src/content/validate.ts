@@ -1,5 +1,5 @@
 import type { FloorPoint } from '@/sim/vec'
-import { STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
+import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import type {
   ActionDef,
   EquipmentDef,
@@ -84,9 +84,21 @@ export function validateShow(
     }
   }
 
+  const operatedCameraIds = new Set<string>()
   for (const member of staff) {
     if (!knownCameraIds.has(member.cameraId)) {
       errors.push(`알 수 없는 카메라: ${member.cameraId} (${member.id})`)
+    }
+    if (operatedCameraIds.has(member.cameraId)) {
+      errors.push(`한 카메라를 두 스태프가 맡음: ${member.cameraId} (${member.id})`)
+    }
+    operatedCameraIds.add(member.cameraId)
+    const { recovery } = member
+    // 복귀는 적어도 한 스텝 걸려야 유지와 복귀 사이의 보간이 정의된다.
+    if (recovery !== undefined && (recovery.holdSeconds < 0 || recovery.returnSeconds < STEP_SECONDS)) {
+      errors.push(
+        `복구 시간 범위 오류: 유지 ${recovery.holdSeconds}초, 복귀 ${recovery.returnSeconds}초 (${member.id})`,
+      )
     }
     checkReactions(member.reactions, member.id)
   }

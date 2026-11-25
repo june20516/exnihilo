@@ -97,6 +97,13 @@ export interface StaffDef {
   cameraId: string
   reactions: ReactionDef[]
   directives: StaffDirectiveDef[]
+  /** 반응한 상태의 유지·복귀 시간(spec 5.6). 없으면 balance의 STAFF_RECOVERY. */
+  recovery?: StaffRecovery
+}
+
+export interface StaffRecovery {
+  holdSeconds: number
+  returnSeconds: number
 }
 
 /** 조명 position은 중심, 세트 벽 position.y는 바닥면이다(Ruling 12). */

@@ -46,6 +46,19 @@ export function validateInputs(inputs: readonly BroadcastInput[], deps: InputVal
         directed.set(input.actorId, directedInBatch + 1)
         break
       }
+      case 'track': {
+        const camera = deps.cameras.get(input.cameraId)
+        if (camera === undefined) throw new Error(`알 수 없는 카메라입니다: ${input.cameraId}`)
+        if (camera.tracking !== true) throw new Error(`추적 카메라가 아닙니다: ${input.cameraId}`)
+        const member = deps.cast.get(input.actorId)
+        if (member === undefined) throw new Error(`무대에 없는 출연자입니다: ${input.actorId}`)
+        // 같은 묶음의 앞선 지시로 내성을 넘겼으면 이미 이탈한 것이다.
+        const usedBefore = deps.director.directivesUsed(input.actorId) + (directed.get(input.actorId) ?? 0)
+        if (member.walkedOut || usedBefore > TOLERANCE_COUNT[member.def.tolerance]) {
+          throw new Error(`이탈한 출연자를 추적할 수 없습니다: ${input.actorId}`)
+        }
+        break
+      }
       case 'directStaff': {
         const member = deps.staff.get(input.staffId)
         if (member === undefined) throw new Error(`알 수 없는 스태프입니다: ${input.staffId}`)
