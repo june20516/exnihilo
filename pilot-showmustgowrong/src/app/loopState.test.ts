@@ -5,15 +5,40 @@ import {
   MAX_STEPS_PER_FRAME,
   STEP_SECONDS,
 } from '@/content/balance'
-import type { AutoSlowmo, BroadcastInput, Phase } from '@/sim/engineTypes'
+import type {
+  ActorView,
+  AutoSlowmo,
+  BroadcastInput,
+  BroadcastView,
+  Phase,
+} from '@/sim/engineTypes'
 import { BroadcastLoop, type LoopBroadcast } from './loopState'
 
 const FRAME = STEP_SECONDS
 
+function actor(id: string, overrides: Partial<ActorView> = {}): ActorView {
+  return {
+    id,
+    name: id,
+    x: 0,
+    y: 0,
+    angle: 0,
+    pose: 'idle',
+    onAir: false,
+    walkedOut: false,
+    departed: false,
+    directivesLeft: 3,
+    ...overrides,
+  }
+}
+
 /** 스텝마다 받은 입력을 기록하는 가짜 방송. ad 입력을 받으면 광고 phase로 바뀐다(Ruling 4). */
-class FakeBroadcast implements LoopBroadcast<{ phase: Phase; autoSlowmo: AutoSlowmo | null }> {
+type FakeView = Pick<BroadcastView, 'phase' | 'autoSlowmo' | 'actors'>
+
+class FakeBroadcast implements LoopBroadcast<FakeView> {
   phase: Phase = 'live'
   autoSlowmo: AutoSlowmo | null = null
+  actors: ActorView[] = [actor('rex'), actor('priya')]
   readonly steps: BroadcastInput[][] = []
   resumeCount = 0
 
@@ -28,8 +53,8 @@ class FakeBroadcast implements LoopBroadcast<{ phase: Phase; autoSlowmo: AutoSlo
     this.resumeCount += 1
   }
 
-  view(): { phase: Phase; autoSlowmo: AutoSlowmo | null } {
-    return { phase: this.phase, autoSlowmo: this.autoSlowmo }
+  view(): FakeView {
+    return { phase: this.phase, autoSlowmo: this.autoSlowmo, actors: this.actors.map((a) => ({ ...a })) }
   }
 }
 
@@ -137,11 +162,46 @@ describe('BroadcastLoop 개입', () => {
     expect(loop.snapshot().interventionOpen).toBe(true)
   })
 
+  it('이미 열린 개입을 다시 열면(다른 대상 클릭) 남은 시간을 그대로 둔다', () => {
+    const { loop } = setup()
+    loop.openIntervention()
+    runSeconds(loop, 1)
+    const left = loop.snapshot().interventionSecondsLeft
+    loop.openIntervention()
+    expect(loop.snapshot().interventionSecondsLeft).toBe(left)
+    expect(left).toBeCloseTo(INTERVENTION_REAL_SECONDS - 1, 5)
+  })
+
   it('직접 닫으면 개입으로 세지 않는다', () => {
     const { loop } = setup()
     loop.openIntervention()
     loop.closeIntervention()
     expect(loop.snapshot()).toMatchObject({ interventionOpen: false, interventionsIssued: 0 })
+  })
+})
+
+describe('BroadcastLoop 입력 재검증(Ruling 35)', () => {
+  it('큐에 쌓인 지시가 그사이 이탈한 출연자를 가리키면 넘기기 전에 버린다', () => {
+    const { broadcast, loop } = setup()
+    loop.openIntervention()
+    loop.send(DIRECT)
+    loop.send(SWITCH)
+    broadcast.actors = [actor('rex', { walkedOut: true }), actor('priya')]
+    // 느려진 상태가 아니므로 다음 프레임에 한 스텝. 그 전에 최신 view를 읽도록 한 프레임을 0초로 돌린다.
+    loop.frame(0)
+    loop.frame(FRAME)
+    expect(broadcast.steps[0]).toEqual([SWITCH])
+  })
+
+  it('물리에서 빠진(departed) 출연자에게 간 지시도 버리고, 무대에 있는 출연자 지시는 그대로 넘긴다', () => {
+    const { broadcast, loop } = setup()
+    const toPriya: BroadcastInput = { type: 'direct', actorId: 'priya', directiveId: 'laughBig' }
+    loop.send(DIRECT)
+    loop.send(toPriya)
+    broadcast.actors = [actor('rex', { walkedOut: true, departed: true }), actor('priya')]
+    loop.frame(0)
+    loop.frame(FRAME)
+    expect(broadcast.steps[0]).toEqual([toPriya])
   })
 })
 
