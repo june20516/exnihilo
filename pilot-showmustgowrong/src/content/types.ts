@@ -1,3 +1,5 @@
+import type { FloorPoint, Vec3 } from '@/sim/vec'
+
 export type PhenomenonKind =
   | 'gaze'
   | 'noise'
@@ -97,24 +99,29 @@ export interface StaffDef {
   directives: StaffDirectiveDef[]
 }
 
+/** 조명 position은 중심, 세트 벽 position.y는 바닥면이다(Ruling 12). */
 export interface EquipmentDef {
   id: string
   name: string
   kind: 'hangingLight' | 'setWall'
-  position: { x: number; y: number }
+  position: Vec3
   breakAt: Intensity
   onBreak: EmitDef[]
-  darknessZone?: { minX: number; maxX: number }
+  /** 조명이 부서지면 어두워지는 바닥 원 */
+  darknessZone?: { x: number; z: number; radius: number }
 }
 
 export interface CameraDef {
   id: string
   label: string
-  position: { x: number; y: number }
+  position: Vec3
+  /** 기본 방향 yaw(도). +x가 0도, +z가 90도. */
   defaultAngle: number
   fovDegrees: number
   range: number
   shotIntensity: Intensity
+  /** 대상 출연자를 따라 고개를 돌리는 카메라(클로즈업) */
+  tracking?: boolean
 }
 
 export interface CornerDef {
@@ -128,8 +135,9 @@ export interface ShowDef {
   rating: 'TV-PG' | 'TV-14' | 'TV-MA'
   corners: [CornerDef, CornerDef, CornerDef]
   cameras: CameraDef[]
-  homeSpots: { x: number }[]
-  benchSpot: { x: number }
-  exitX: number
-  audienceZone: { minX: number; maxX: number }
+  homeSpots: FloorPoint[]
+  benchSpot: FloorPoint
+  /** 이탈한 출연자가 걸어가는 바닥 위치 */
+  exit: FloorPoint
+  audienceZone: { minX: number; maxX: number; minZ: number; maxZ: number }
 }

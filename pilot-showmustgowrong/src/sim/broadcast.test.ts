@@ -7,7 +7,7 @@ import type { PhenomenonEvent } from './phenomena'
 const camera = (overrides: Partial<CameraDef> = {}): CameraDef => ({
   id: 'cam',
   label: '카메라',
-  position: { x: 0, y: 0 },
+  position: { x: 0, y: 0, z: 0 },
   defaultAngle: 0,
   fovDegrees: 60,
   range: 10,
@@ -26,6 +26,7 @@ const event = (overrides: Partial<PhenomenonEvent> = {}): PhenomenonEvent => ({
   targetId: null,
   x: 0,
   y: 0,
+  z: 0,
   step: 0,
   causeId: null,
   depth: 1,
@@ -33,41 +34,42 @@ const event = (overrides: Partial<PhenomenonEvent> = {}): PhenomenonEvent => ({
 })
 
 describe('inFrame', () => {
+  /** 바닥 평면(x, z) 위의 점. 높이는 판정에 쓰지 않는다. */
+  const at = (x: number, z: number, y = 0) => ({ x, y, z })
+
   it('부채꼴 안은 true, 밖은 false', () => {
-    expect(inFrame(camera(), 0, 5, 0)).toBe(true)
-    expect(inFrame(camera(), 0, 5, 5)).toBe(false)
-    expect(inFrame(camera(), 0, 11, 0)).toBe(false)
+    expect(inFrame(camera(), 0, at(5, 0))).toBe(true)
+    expect(inFrame(camera(), 0, at(5, 5))).toBe(false)
+    expect(inFrame(camera(), 0, at(11, 0))).toBe(false)
   })
 
   it('카메라 위치를 기준으로 계산한다', () => {
-    const cam = camera({ position: { x: 4, y: 2 } })
-    expect(inFrame(cam, 0, 9, 2)).toBe(true)
-    expect(inFrame(cam, 0, 4, 7)).toBe(false)
+    const cam = camera({ position: { x: 4, y: 3, z: 2 } })
+    expect(inFrame(cam, 0, at(9, 2))).toBe(true)
+    expect(inFrame(cam, 0, at(4, 7))).toBe(false)
   })
 
   it('각도와 거리 경계값을 포함한다', () => {
-    expect(inFrame(camera(), 0, 10, 0)).toBe(true)
+    expect(inFrame(camera(), 0, at(10, 0))).toBe(true)
     const edge = (30 * Math.PI) / 180
-    expect(inFrame(camera(), 0, 5 * Math.cos(edge), 5 * Math.sin(edge))).toBe(true)
-    expect(inFrame(camera(), 0, 5 * Math.cos(edge), -5 * Math.sin(edge))).toBe(true)
+    expect(inFrame(camera(), 0, at(5 * Math.cos(edge), 5 * Math.sin(edge)))).toBe(true)
+    expect(inFrame(camera(), 0, at(5 * Math.cos(edge), -5 * Math.sin(edge)))).toBe(true)
     const outside = (31 * Math.PI) / 180
-    expect(inFrame(camera(), 0, 5 * Math.cos(outside), 5 * Math.sin(outside))).toBe(false)
+    expect(inFrame(camera(), 0, at(5 * Math.cos(outside), 5 * Math.sin(outside)))).toBe(false)
   })
 
-  it('+y가 위인 반시계 각도를 쓴다', () => {
-    expect(inFrame(camera(), 90, 0, 5)).toBe(true)
-    expect(inFrame(camera(), 90, 0, -5)).toBe(false)
+  it('z 방향 화각을 판정하고 높이는 보지 않는다', () => {
+    const cam = camera({ fovDegrees: 40, range: 5 })
+    expect(inFrame(cam, 90, { x: 0, y: 3, z: 4 })).toBe(true)
+    expect(inFrame(cam, 90, { x: 3, y: 0, z: 1 })).toBe(false)
+    expect(inFrame(cam, 90, at(0, -5))).toBe(false)
   })
 
   it('±180도 경계를 정규화한다', () => {
-    const toward = (deg: number) => [
-      5 * Math.cos((deg * Math.PI) / 180),
-      5 * Math.sin((deg * Math.PI) / 180),
-    ]
-    const [x, y] = toward(-175)
-    expect(inFrame(camera(), 170, x, y)).toBe(true)
-    const [x2, y2] = toward(-155)
-    expect(inFrame(camera(), 170, x2, y2)).toBe(false)
+    const toward = (deg: number) =>
+      at(5 * Math.cos((deg * Math.PI) / 180), 5 * Math.sin((deg * Math.PI) / 180))
+    expect(inFrame(camera(), 170, toward(-175))).toBe(true)
+    expect(inFrame(camera(), 170, toward(-155))).toBe(false)
   })
 })
 

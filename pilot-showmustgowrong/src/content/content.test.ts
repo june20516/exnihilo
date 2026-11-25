@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { STEP_SECONDS } from './balance'
+import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_HEIGHT, STUDIO_WIDTH } from './balance'
 import { inFrame } from '@/sim/broadcast'
 import { STANDING_Y } from '@/sim/cast'
 import { Broadcast } from '@/sim/engine'
+import { initPhysics, PhysicsWorld } from '@/sim/physics'
+import { type FloorPoint, floorDistance } from '@/sim/vec'
 import { LINEUP } from './lineup'
 import { TALK_SHOW } from './talkShow'
 import type { ActionDef, PerformerDef, PhenomenonKind, Trigger } from './types'
@@ -90,35 +92,72 @@ describe('토크쇼 콘텐츠', () => {
       if (found === undefined) throw new Error(`카메라가 없습니다: ${id}`)
       return found
     }
-    const frames = (id: string, x: number) =>
-      inFrame(camera(id), camera(id).defaultAngle, x, STANDING_Y)
-    const audienceCenter = (TALK_SHOW.audienceZone.minX + TALK_SHOW.audienceZone.maxX) / 2
-    const homeXs = TALK_SHOW.homeSpots.map((spot) => spot.x)
+    const standing = (spot: FloorPoint) => ({ x: spot.x, y: STANDING_Y, z: spot.z })
+    const frames = (id: string, spot: FloorPoint) =>
+      inFrame(camera(id), camera(id).defaultAngle, standing(spot))
+    const zone = TALK_SHOW.audienceZone
+    const audienceCenter: FloorPoint = {
+      x: (zone.minX + zone.maxX) / 2,
+      z: (zone.minZ + zone.maxZ) / 2,
+    }
+    const homeSpots = TALK_SHOW.homeSpots
 
-    it('카메라는 스튜디오(16×9) 안에 있다', () => {
+    it('카메라는 스튜디오(16×9×10) 안에 있다', () => {
       for (const { position } of TALK_SHOW.cameras) {
         expect(position.x).toBeGreaterThanOrEqual(0)
-        expect(position.x).toBeLessThanOrEqual(16)
+        expect(position.x).toBeLessThanOrEqual(STUDIO_WIDTH)
         expect(position.y).toBeGreaterThanOrEqual(0)
-        expect(position.y).toBeLessThanOrEqual(9)
+        expect(position.y).toBeLessThanOrEqual(STUDIO_HEIGHT)
+        expect(position.z).toBeGreaterThanOrEqual(0)
+        expect(position.z).toBeLessThanOrEqual(STUDIO_DEPTH)
       }
     })
 
-    it('와이드는 home spot 전부를 잡고 관객석은 잡지 않는다', () => {
-      for (const x of homeXs) expect(frames('wide', x), `x ${x}`).toBe(true)
+    it('카메라는 모두 스튜디오 앞쪽(z ≥ 8)이나 옆에 있어 쿼터뷰에서 무대를 가리지 않는다', () => {
+      for (const { id, position } of TALK_SHOW.cameras) {
+        const front = position.z >= 8
+        const side = position.x <= 1 || position.x >= STUDIO_WIDTH - 1
+        expect(front || side, id).toBe(true)
+      }
+    })
+
+    it('와이드는 home spot 전부를 잡고 관객석 중앙은 잡지 않는다', () => {
+      for (const spot of homeSpots) expect(frames('wide', spot), `x ${spot.x}`).toBe(true)
       expect(frames('wide', audienceCenter)).toBe(false)
     })
 
-    it('클로즈업은 무대 쪽 일부만 잡는다', () => {
-      expect(homeXs.filter((x) => frames('close', x)).length).toBeGreaterThan(0)
-      expect(homeXs.filter((x) => frames('close', x)).length).toBeLessThan(homeXs.length)
-      expect(frames('close', audienceCenter)).toBe(false)
-      expect(camera('close').shotIntensity).toBe(2)
+    it('클로즈업은 추적 카메라이고 화각 24°, 기본 방향으로 첫 home spot을 잡는다', () => {
+      expect(camera('close')).toMatchObject({ tracking: true, fovDegrees: 24, shotIntensity: 2 })
+      expect(frames('close', homeSpots[0])).toBe(true)
     })
 
-    it('관객석 카메라는 관객 구역만 잡는다', () => {
+    it('관객석 카메라는 관객석 중앙을 잡고 home spot은 하나도 잡지 않는다', () => {
       expect(frames('audienceCam', audienceCenter)).toBe(true)
-      for (const x of homeXs) expect(frames('audienceCam', x), `x ${x}`).toBe(false)
+      for (const spot of homeSpots) expect(frames('audienceCam', spot), `x ${spot.x}`).toBe(false)
+    })
+
+    it('세트 벽과 조명은 와이드와 home spot 사이를 가리지 않는다', async () => {
+      await initPhysics()
+      const world = new PhysicsWorld()
+      try {
+        for (const piece of LINEUP.equipment) world.addEquipment(piece)
+        world.step()
+        for (const spot of homeSpots) {
+          expect(world.lineOfSight(camera('wide').position, standing(spot)), `x ${spot.x}`).toBe(
+            true,
+          )
+        }
+      } finally {
+        world.dispose()
+      }
+    })
+
+    it('조명의 어둠 원은 home spot 2곳 이상을 덮는다', () => {
+      const light = LINEUP.equipment.find((piece) => piece.kind === 'hangingLight')
+      const darkness = light?.darknessZone
+      if (darkness === undefined) throw new Error('어둠 구역이 있는 조명이 없습니다.')
+      const covered = homeSpots.filter((spot) => floorDistance(spot, darkness) <= darkness.radius)
+      expect(covered.length).toBeGreaterThanOrEqual(2)
     })
   })
 })
@@ -157,9 +196,9 @@ describe('토크쇼 장비(Ruling 28)', () => {
   }
 
   it('라인업의 모가 조명 쪽으로 바디슬램하면 조명이 깨지고 어둠이 생긴다', async () => {
-    // 조명(x 8)을 사이에 두고 야유꾼(6.5)과 모(9.5)를 세운다
+    // 조명을 사이에 두고 야유꾼과 모를 조명 양옆 home spot(2번째, 3번째)에 세운다
     const broadcast = await Broadcast.create({
-      show: { ...TALK_SHOW, homeSpots: [{ x: 6.5 }, { x: 9.5 }] },
+      show: { ...TALK_SHOW, homeSpots: [TALK_SHOW.homeSpots[1], TALK_SHOW.homeSpots[2]] },
       performers: [HECKLER, performerById('mo')],
       bench: [],
       staff: [],

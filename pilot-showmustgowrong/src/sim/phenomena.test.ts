@@ -16,6 +16,7 @@ function makeEvent(overrides: Partial<PhenomenonEvent> = {}): PhenomenonEvent {
     targetId: null,
     x: 0,
     y: 0,
+    z: 0,
     step: 0,
     causeId: null,
     depth: 1,
@@ -24,7 +25,7 @@ function makeEvent(overrides: Partial<PhenomenonEvent> = {}): PhenomenonEvent {
 }
 
 function makePerceiver(overrides: Partial<Perceiver> = {}): Perceiver {
-  return { id: 'me', x: 0, y: 0, inDarkness: false, ...overrides }
+  return { id: 'me', x: 0, y: 0, z: 0, inDarkness: false, ...overrides }
 }
 
 describe('perceives', () => {
@@ -34,10 +35,16 @@ describe('perceives', () => {
     expect(perceives(event, makePerceiver({ x: 3.01 }))).toBe(false)
   })
 
-  it('소음 강도 3은 12m까지 들리고, 거리는 x와 y를 함께 잰다', () => {
+  it('소음 강도 3은 12m까지 들리고, 거리는 x와 z를 함께 잰다', () => {
     const event = makeEvent({ kind: 'noise', intensity: 3 })
-    expect(perceives(event, makePerceiver({ x: 6, y: 8 }))).toBe(true)
-    expect(perceives(event, makePerceiver({ x: 9, y: 9 }))).toBe(false)
+    expect(perceives(event, makePerceiver({ x: 6, z: 8 }))).toBe(true)
+    expect(perceives(event, makePerceiver({ x: 9, z: 9 }))).toBe(false)
+  })
+
+  it('소음 반경은 3D 거리다: 바닥 거리가 같아도 높이 차가 반경을 넘기면 듣지 못한다', () => {
+    const event = makeEvent({ kind: 'noise', intensity: 1 })
+    expect(perceives(event, makePerceiver({ x: 2, z: 0 }))).toBe(true)
+    expect(perceives(event, makePerceiver({ x: 2, y: 2.5, z: 0 }))).toBe(false)
   })
 
   it('웃음은 6m 이내에서 보이고, 어둠 속에서는 보이지 않는다', () => {
@@ -114,6 +121,7 @@ describe('EventLog', () => {
     targetId: null,
     x: 0,
     y: 0,
+    z: 0,
     step: 0,
     causeId: null,
   }

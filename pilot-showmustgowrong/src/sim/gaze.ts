@@ -1,6 +1,7 @@
 import { STEP_SECONDS } from '@/content/balance'
 import type { ReactionDef } from '@/content/types'
-import type { Cast, CastMember, Point } from './cast'
+import type { Cast, CastMember } from './cast'
+import type { Vec3 } from './vec'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 
@@ -16,7 +17,7 @@ export interface GazeCandidate {
  * - enter: 직전 스텝에 화면 밖이었다가 이번에 화면 안
  * - absentFor: 화면 밖 연속 시간이 seconds의 배수가 될 때마다
  */
-export function updateGaze(cast: Cast, isOnAir: (point: Point) => boolean): GazeCandidate[] {
+export function updateGaze(cast: Cast, isOnAir: (point: Vec3) => boolean): GazeCandidate[] {
   const candidates: GazeCandidate[] = []
   for (const member of cast.active()) {
     const onAir = isOnAir(cast.position(member))

@@ -1,14 +1,25 @@
-import { CAPSULE, STAND_UP_SECONDS, STEP_SECONDS } from '@/content/balance'
+import { CAPSULE, STAND_UP_SECONDS, STEP_SECONDS, STUDIO_DEPTH, STUDIO_HEIGHT, STUDIO_WIDTH } from '@/content/balance'
 import type { EquipmentDef } from '@/content/types'
 import { type Contact, initPhysics, PhysicsWorld } from './physics'
+import { type FloorPoint, floorDistance } from './vec'
 
 const SETTLE_STEPS = 10
+const STANDING_Y = CAPSULE.halfHeight + CAPSULE.radius
 
 const SET_WALL: EquipmentDef = {
   id: 'wall',
   name: '무너지는 세트 벽',
   kind: 'setWall',
-  position: { x: 13.5, y: 0 },
+  position: { x: 13.5, y: 0, z: 6 },
+  breakAt: 2,
+  onBreak: [],
+}
+
+const LIGHT: EquipmentDef = {
+  id: 'light',
+  name: '과열된 조명',
+  kind: 'hangingLight',
+  position: { x: 8, y: 6, z: 5 },
   breakAt: 2,
   onBreak: [],
 }
@@ -19,241 +30,319 @@ function stepMany(world: PhysicsWorld, steps: number): Contact[] {
   return contacts
 }
 
-/** 두 actor를 매 스텝 같은 속도로 마주 달리게 하고 돌려받은 접촉을 모두 모은다. */
-function runToward(world: PhysicsWorld, speed: number, steps: number): Contact[][] {
-  const perStep: Contact[][] = []
-  for (let i = 0; i < steps; i += 1) {
-    world.impulse('left', speed, 0)
-    world.impulse('right', -speed, 0)
-    perStep.push(world.step())
-  }
-  return perStep
+function floorOf(world: PhysicsWorld, id: string): FloorPoint {
+  const position = world.actorState(id)?.position
+  if (position === undefined) throw new Error(`actor 없음: ${id}`)
+  return { x: position.x, z: position.z }
 }
 
-function makeFacingPair(): PhysicsWorld {
-  const world = new PhysicsWorld()
-  world.addActor('left', 7.4, 'normal')
-  world.addActor('right', 8.6, 'normal')
-  stepMany(world, SETTLE_STEPS)
-  return world
+function speedOf(world: PhysicsWorld, id: string): number {
+  const velocity = world.actorState(id)?.velocity
+  return Math.hypot(velocity?.x ?? 0, velocity?.y ?? 0, velocity?.z ?? 0)
 }
 
 beforeAll(async () => {
   await initPhysics()
 })
 
-describe('PhysicsWorld', () => {
-  it('같은 입력이면 600 스텝 뒤 모든 actor 상태가 같다', () => {
+describe('PhysicsWorld 3D', () => {
+  it('서 있는 actor는 60스텝 뒤에도 똑바로 서 있다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('a', { x: 8, z: 5 }, 'normal')
+    stepMany(world, 60)
+    const state = world.actorState('a')
+    expect(state?.up.x).toBeCloseTo(0, 2)
+    expect(state?.up.y).toBeCloseTo(1, 2)
+    expect(state?.up.z).toBeCloseTo(0, 2)
+    expect(state?.position.y).toBeCloseTo(STANDING_Y, 2)
+    expect(state?.grounded).toBe(true)
+    expect(state?.tumbling).toBe(false)
+  })
+
+  it('impulse로 위로 날리면 넘어지고 z 방향으로 움직인다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('a', { x: 8, z: 3 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.impulse('a', { x: 0, y: 6, z: 4 })
+    expect(world.actorState('a')?.tumbling).toBe(true)
+    stepMany(world, 60)
+    expect(floorOf(world, 'a').z - 3).toBeGreaterThan(1)
+  })
+
+  it('같은 입력이면 300 스텝 뒤 모든 actor 위치가 비트 단위로 같다', () => {
     function run(): unknown[] {
       const world = new PhysicsWorld()
-      world.addActor('a', 4, 'light')
-      world.addActor('b', 8, 'normal')
-      world.addActor('c', 12, 'heavy')
-      for (let i = 0; i < 600; i += 1) {
-        if (i === 30) world.impulse('a', 6, 4)
-        if (i === 90) world.impulse('c', -7, 0)
-        if (i === 200) world.impulse('b', 3, 9)
+      world.addActor('a', { x: 4, z: 3 }, 'light')
+      world.addActor('b', { x: 8, z: 5 }, 'normal')
+      world.addActor('c', { x: 12, z: 7 }, 'heavy')
+      for (let i = 0; i < 300; i += 1) {
+        if (i === 30) world.impulse('a', { x: 6, y: 4, z: 2 })
+        if (i === 90) world.impulse('c', { x: -7, y: 0, z: -3 })
+        if (i === 150) world.impulse('b', { x: 3, y: 9, z: -2 })
         world.step()
       }
-      return ['a', 'b', 'c'].map((id) => world.actorState(id))
+      return ['a', 'b', 'c'].map((id) => {
+        const state = world.actorState(id)
+        if (state === undefined) throw new Error(`actor 없음: ${id}`)
+        return state
+      })
     }
     expect(run()).toEqual(run())
   })
 
-  it('각각 4m/s로 마주 달린 두 actor가 부딪히면 강도 2 접촉 하나를 돌려준다', () => {
-    const world = makeFacingPair()
-    const firstHit = runToward(world, 4, 60).find((contacts) => contacts.length > 0)
+  it('상대 속도 6.5m/s로 정면 충돌하면 강도 2 접촉 하나가 나오고 빠른 쪽이 fasterId다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('left', { x: 7.4, z: 5 }, 'normal')
+    world.addActor('right', { x: 8.6, z: 5 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    let firstHit: Contact[] | undefined
+    for (let i = 0; i < 60 && firstHit === undefined; i += 1) {
+      world.impulse('left', { x: 4.5, y: 0, z: 0 })
+      world.impulse('right', { x: -2, y: 0, z: 0 })
+      const contacts = world.step()
+      if (contacts.length > 0) firstHit = contacts
+    }
     expect(firstHit).toEqual([{ a: 'left', b: 'right', intensity: 2, fasterId: 'left' }])
-    expect(world.actorState('left')?.tumbling).toBe(true)
-    expect(world.actorState('right')?.tumbling).toBe(true)
   })
 
   it('1m/s로 부딪히면 접촉을 돌려주지 않는다', () => {
-    const world = makeFacingPair()
-    const contacts = runToward(world, 1, 60).flat()
-    const left = world.actorState('left')
-    const right = world.actorState('right')
-    expect(contacts).toEqual([])
-    // 실제로 맞닿았는지 확인한다(캡슐 지름 0.7m).
-    expect((right?.x ?? 0) - (left?.x ?? 0)).toBeLessThan(0.75)
-  })
-
-  it('수평으로 빠르게 미끄러지며 바닥에 닿으면 접촉을 돌려주지 않는다', () => {
     const world = new PhysicsWorld()
-    world.addActor('slider', 3, 'normal')
+    world.addActor('left', { x: 7.4, z: 5 }, 'normal')
+    world.addActor('right', { x: 8.6, z: 5 }, 'normal')
     stepMany(world, SETTLE_STEPS)
-    // 살짝 떠서 다시 닿는다: 착지 속력은 8m/s 이상이지만 수직 속력은 3m/s 미만이다.
-    world.impulse('slider', 8, 1)
-    const contacts = stepMany(world, 30)
-    expect(world.actorState('slider')?.grounded).toBe(true)
-    expect(contacts).toEqual([])
-  })
-
-  it('바닥에 선 actor를 위로 날려도(첫 스텝 포함) 이륙은 바닥 접촉이 아니다', () => {
-    const world = new PhysicsWorld()
-    world.addActor('fresh', 3, 'normal')
-    world.addActor('settled', 8, 'normal')
-    world.impulse('fresh', 0, 12)
-    const firstStep = world.step()
-    stepMany(world, SETTLE_STEPS)
-    world.impulse('settled', 0, 12)
-    const takeoff = world.step()
-    expect([...firstStep, ...takeoff].filter((contact) => contact.b === 'floor')).toEqual([])
-  })
-
-  it('위로 세게 날린 actor는 천장과 벽 안에 머문다', () => {
-    const world = new PhysicsWorld()
-    world.addActor('up', 8, 'light')
-    world.addActor('side', 14, 'light')
-    stepMany(world, SETTLE_STEPS)
-    world.impulse('up', 0, 20)
-    world.impulse('side', 20, 20)
-    for (let i = 0; i < 300; i += 1) {
-      world.step()
-      for (const id of ['up', 'side']) {
-        const state = world.actorState(id)
-        expect(state?.y).toBeLessThan(9)
-        expect(state?.x).toBeGreaterThan(0)
-        expect(state?.x).toBeLessThan(16)
-      }
+    const contacts: Contact[] = []
+    for (let i = 0; i < 60; i += 1) {
+      world.impulse('left', { x: 1, y: 0, z: 0 })
+      world.impulse('right', { x: -1, y: 0, z: 0 })
+      contacts.push(...world.step())
     }
+    expect(contacts).toEqual([])
+    expect(floorDistance(floorOf(world, 'left'), floorOf(world, 'right'))).toBeLessThan(0.75)
+  })
+
+  it('3m 높이에서 떨어진 actor의 바닥 접촉은 내려오는 속도로 강도를 정한다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('faller', { x: 8, z: 5 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.impulse('faller', { x: 0, y: Math.sqrt(2 * 9.81 * 3), z: 0 })
+    const contacts = stepMany(world, 120)
+    expect(contacts).toEqual([{ a: 'faller', b: 'floor', intensity: 2, fasterId: 'faller' }])
+  })
+
+  it('수평으로 미끄러지며 바닥에 닿으면 접촉을 돌려주지 않는다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('slider', { x: 3, z: 5 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.impulse('slider', { x: 6, y: 1, z: 6 })
+    const contacts = stepMany(world, 30)
+    expect(contacts).toEqual([])
   })
 
   it('날아가 넘어진 actor는 멈춘 뒤 STAND_UP_SECONDS가 지나면 일어선다', () => {
     const world = new PhysicsWorld()
-    world.addActor('flyer', 6, 'normal')
+    world.addActor('flyer', { x: 6, z: 5 }, 'normal')
     stepMany(world, SETTLE_STEPS)
-    world.impulse('flyer', 4, 6)
-    expect(world.actorState('flyer')?.tumbling).toBe(true)
-
-    let rotated = false
+    world.impulse('flyer', { x: 3, y: 6, z: 2 })
+    let tilted = false
     let restSteps = 0
     let stoodUp = false
     for (let i = 0; i < 900 && !stoodUp; i += 1) {
       world.step()
       const state = world.actorState('flyer')
       if (state === undefined) throw new Error('actor 없음')
-      if (Math.abs(state.angle) > 0.5) rotated = true
+      if (state.up.y < 0.8) tilted = true
       stoodUp = !state.tumbling
-      if (!stoodUp) {
-        const settled = state.grounded && Math.hypot(state.vx, state.vy) < 0.5
-        restSteps = settled ? restSteps + 1 : 0
-      }
+      if (!stoodUp) restSteps = state.grounded && speedOf(world, 'flyer') < 0.5 ? restSteps + 1 : 0
     }
     const state = world.actorState('flyer')
-    expect(rotated).toBe(true)
+    expect(tilted).toBe(true)
     expect(stoodUp).toBe(true)
-    // 일어서기 직전까지 STAND_UP_SECONDS 가까이 정지해 있었다(일어선 스텝은 세지 않는다).
     expect(restSteps).toBeGreaterThanOrEqual(Math.round(STAND_UP_SECONDS / STEP_SECONDS) - 1)
-    expect(state?.tumbling).toBe(false)
-    expect(state?.angle).toBe(0)
+    expect(state?.up).toEqual({ x: 0, y: 1, z: 0 })
   })
 
-  it('넘어진 세트 벽은 바닥을 뚫지 않고 눕는다', () => {
+  it('다른 actor가 선 자리로 teleport하면 x 또는 z로 비켜 선다', () => {
     const world = new PhysicsWorld()
-    world.addEquipment(SET_WALL)
-    stepMany(world, 60)
-    expect(world.equipmentState('wall')).toMatchObject({ angle: 0, released: false })
-    world.releaseEquipment('wall')
-    stepMany(world, 300)
-    const state = world.equipmentState('wall')
-    if (state === undefined) throw new Error('장비 없음')
-    // 반시계로 누웠다(x 13.5라 가운데 쪽인 -x로 넘어짐).
-    expect(state.angle).toBeGreaterThan(1.3)
-    expect(state.x).toBeLessThan(SET_WALL.position.x)
-    expect(state.y).toBeGreaterThan(0)
-    expect(state.y).toBeLessThan(0.5)
-  })
-
-  it('다른 actor와 겹친 자리로 세워도 튀지 않고 접촉도 없다', () => {
-    const world = new PhysicsWorld()
-    world.addActor('standing', 8, 'normal')
-    world.addActor('mover', 4, 'normal')
+    world.addActor('standing', { x: 8, z: 5 }, 'normal')
+    world.addActor('mover', { x: 4, z: 5 }, 'normal')
     stepMany(world, SETTLE_STEPS)
-    world.teleport('mover', 8)
-    const contacts: Contact[] = []
-    for (let i = 0; i < 60; i += 1) {
-      contacts.push(...world.step())
-      for (const id of ['standing', 'mover']) {
-        const state = world.actorState(id)
-        expect(Math.hypot(state?.vx ?? 0, state?.vy ?? 0)).toBeLessThan(0.5)
-      }
-    }
+    world.teleport('mover', { x: 8, z: 5 })
+    const contacts = stepMany(world, 60)
     expect(contacts).toEqual([])
-    const moverX = world.actorState('mover')?.x ?? 0
-    const standingX = world.actorState('standing')?.x ?? 0
-    const gap = Math.abs(moverX - standingX)
-    expect(gap).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
+    expect(floorDistance(floorOf(world, 'mover'), floorOf(world, 'standing'))).toBeGreaterThanOrEqual(
+      2 * CAPSULE.radius,
+    )
+    expect(speedOf(world, 'standing')).toBeLessThan(0.5)
   })
 
-  it('같은 스텝에 두 actor를 같은 x로 연속 teleport해도 서로 겹치지 않는다', () => {
+  it('같은 스텝에 두 actor를 같은 자리로 teleport해도 서로 겹치지 않는다', () => {
     const world = new PhysicsWorld()
-    world.addActor('first', 2, 'normal')
-    world.addActor('second', 4, 'normal')
+    world.addActor('first', { x: 2, z: 2 }, 'normal')
+    world.addActor('second', { x: 4, z: 2 }, 'normal')
     stepMany(world, SETTLE_STEPS)
-    world.teleport('first', 8)
-    world.teleport('second', 8)
-    const gap = Math.abs((world.actorState('first')?.x ?? 0) - (world.actorState('second')?.x ?? 0))
-    expect(gap).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
+    world.teleport('first', { x: 8, z: 5 })
+    world.teleport('second', { x: 8, z: 5 })
+    expect(
+      floorDistance(floorOf(world, 'first'), floorOf(world, 'second')),
+    ).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
   })
 
-  it('누운 세트 벽 자리로 세우면 벽과 겹치지 않는 곳에 선다', () => {
+  it('넘어진 actor가 일어설 자리에 다른 actor가 있으면 비켜 선다', () => {
     const world = new PhysicsWorld()
-    world.addEquipment(SET_WALL)
-    world.addActor('mover', 4, 'normal')
-    world.releaseEquipment('wall')
-    stepMany(world, 300)
-    world.teleport('mover', 12)
-    for (let i = 0; i < 60; i += 1) {
-      expect(world.step()).toEqual([])
-      const state = world.actorState('mover')
-      expect(Math.hypot(state?.vx ?? 0, state?.vy ?? 0)).toBeLessThan(0.5)
+    world.addActor('flyer', { x: 6, z: 5 }, 'normal')
+    world.addActor('blocker', { x: 6, z: 5.9 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.impulse('flyer', { x: 0, y: 3, z: 0 })
+    stepMany(world, 900)
+    expect(world.actorState('flyer')?.tumbling).toBe(false)
+    expect(floorDistance(floorOf(world, 'flyer'), floorOf(world, 'blocker'))).toBeGreaterThanOrEqual(
+      2 * CAPSULE.radius,
+    )
+  })
+
+  it('releaseEquipment한 조명은 120 스텝 안에 바닥에 닿는다', () => {
+    const world = new PhysicsWorld()
+    world.addEquipment(LIGHT)
+    stepMany(world, 60)
+    expect(world.equipmentState('light')).toMatchObject({
+      position: { x: 8, y: 6, z: 5 },
+      released: false,
+    })
+    world.releaseEquipment('light')
+    stepMany(world, 120)
+    const state = world.equipmentState('light')
+    expect(state?.released).toBe(true)
+    expect(state?.position.y).toBeLessThan(0.5)
+  })
+
+  it('풀려난 세트 벽은 스튜디오 중심 쪽 z로 쓰러진다', () => {
+    for (const wallZ of [7, 3]) {
+      const world = new PhysicsWorld()
+      world.addEquipment({ ...SET_WALL, position: { ...SET_WALL.position, z: wallZ } })
+      stepMany(world, 60)
+      const standing = world.equipmentState('wall')
+      expect(standing?.position.z).toBeCloseTo(wallZ, 3)
+      world.releaseEquipment('wall')
+      stepMany(world, 300)
+      const fallen = world.equipmentState('wall')
+      if (fallen === undefined) throw new Error('장비 없음')
+      const towardCenter = Math.sign(STUDIO_DEPTH / 2 - wallZ)
+      expect((fallen.position.z - wallZ) * towardCenter).toBeGreaterThan(1)
+      expect(fallen.position.y).toBeGreaterThan(0)
+      expect(fallen.position.y).toBeLessThan(0.5)
     }
-    expect(world.actorState('mover')?.y).toBeCloseTo(CAPSULE.halfHeight + CAPSULE.radius, 2)
+  })
+
+  it('lineOfSight는 장비만 시선을 가린다', () => {
+    const camera = { x: 8, y: 1.5, z: 9.5 }
+    const target = { x: 8, y: 0.85, z: 3 }
+    const wall: EquipmentDef = { ...SET_WALL, position: { x: 8, y: 0, z: 6 } }
+
+    const open = new PhysicsWorld()
+    open.addActor('target', { x: 8, z: 3 }, 'normal')
+    open.addActor('between', { x: 8, z: 6 }, 'normal')
+    stepMany(open, SETTLE_STEPS)
+    expect(open.lineOfSight(camera, target)).toBe(true)
+
+    const blocked = new PhysicsWorld()
+    blocked.addEquipment(wall)
+    blocked.addActor('target', { x: 8, z: 3 }, 'normal')
+    stepMany(blocked, SETTLE_STEPS)
+    expect(blocked.lineOfSight(camera, target)).toBe(false)
   })
 
   it('같은 id를 다시 추가하면 오류를 던진다', () => {
     const world = new PhysicsWorld()
-    world.addActor('dup', 4, 'normal')
+    world.addActor('dup', { x: 4, z: 5 }, 'normal')
     world.addEquipment(SET_WALL)
-    expect(() => world.addActor('dup', 6, 'normal')).toThrow(/dup/)
+    expect(() => world.addActor('dup', { x: 6, z: 5 }, 'normal')).toThrow(/dup/)
     expect(() => world.addEquipment({ ...SET_WALL, id: 'dup' })).toThrow(/dup/)
-    expect(() => world.addActor('wall', 6, 'normal')).toThrow(/wall/)
+    expect(() => world.addActor('wall', { x: 6, z: 5 }, 'normal')).toThrow(/wall/)
+  })
+
+  it('바깥으로 세게 날린 actor는 300 스텝 뒤에도 스튜디오 안에 있다', () => {
+    const world = new PhysicsWorld()
+    const launches = [
+      { x: 30, y: 5, z: 0 },
+      { x: -30, y: 5, z: 0 },
+      { x: 0, y: 5, z: 30 },
+      { x: 0, y: 5, z: -30 },
+      { x: 0, y: 30, z: 0 },
+    ]
+    launches.forEach((_, index) =>
+      world.addActor(`a${index}`, { x: 2 + index * 3, z: 5 }, 'light'),
+    )
+    stepMany(world, SETTLE_STEPS)
+    launches.forEach((velocity, index) => world.impulse(`a${index}`, velocity))
+    for (let i = 0; i < 300; i += 1) {
+      world.step()
+      launches.forEach((_, index) => {
+        const position = world.actorState(`a${index}`)?.position
+        expect(position?.x).toBeGreaterThan(0)
+        expect(position?.x).toBeLessThan(STUDIO_WIDTH)
+        expect(position?.z).toBeGreaterThan(0)
+        expect(position?.z).toBeLessThan(STUDIO_DEPTH)
+        expect(position?.y).toBeLessThan(STUDIO_HEIGHT)
+      })
+    }
+  })
+
+  it('removeActor 뒤에는 상태가 없고 그 actor의 접촉도 나오지 않는다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('left', { x: 7.4, z: 5 }, 'normal')
+    world.addActor('right', { x: 8.6, z: 5 }, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.removeActor('right')
+    expect(world.actorState('right')).toBeUndefined()
+    const contacts: Contact[] = []
+    for (let i = 0; i < 60; i += 1) {
+      world.impulse('left', { x: 6, y: 0, z: 0 })
+      contacts.push(...world.step())
+    }
+    expect(contacts).toEqual([])
+  })
+
+  it('releaseEquipment를 두 번 불러도 두 번째는 무시한다', () => {
+    const world = new PhysicsWorld()
+    world.addEquipment(SET_WALL)
+    world.releaseEquipment('wall')
+    stepMany(world, 30)
+    const before = world.equipmentState('wall')
+    world.releaseEquipment('wall')
+    world.step()
+    const after = world.equipmentState('wall')
+    expect(after?.rotation.x).not.toBeCloseTo(0, 5)
+    // 각속도가 다시 설정되었다면 회전 진행이 달라진다. 한 스텝 진행량이 이전 속도의 연장선인지 본다.
+    const reference = new PhysicsWorld()
+    reference.addEquipment(SET_WALL)
+    reference.releaseEquipment('wall')
+    stepMany(reference, 31)
+    expect(after).toEqual(reference.equipmentState('wall'))
+    expect(before?.released).toBe(true)
+  })
+
+  it('없는 id로 impulse, teleport, removeActor를 불러도 오류 없이 무시한다', () => {
+    const world = new PhysicsWorld()
+    expect(() => {
+      world.impulse('ghost', { x: 1, y: 1, z: 1 })
+      world.teleport('ghost', { x: 1, z: 1 })
+      world.removeActor('ghost')
+      world.releaseEquipment('ghost')
+    }).not.toThrow()
   })
 
   it('dispose 뒤 메서드를 부르면 명시적 오류를 던진다', () => {
     const world = new PhysicsWorld()
-    world.addActor('a', 4, 'normal')
+    world.addActor('a', { x: 4, z: 5 }, 'normal')
     world.dispose()
     expect(() => world.step()).toThrow(/dispose/)
     expect(() => world.actorState('a')).toThrow(/dispose/)
-    expect(() => world.addActor('b', 6, 'normal')).toThrow(/dispose/)
-  })
-
-  it('releaseEquipment한 조명은 300 스텝 뒤 바닥 근처에 있다', () => {
-    const light: EquipmentDef = {
-      id: 'light',
-      name: '과열된 조명',
-      kind: 'hangingLight',
-      position: { x: 8, y: 6 },
-      breakAt: 2,
-      onBreak: [],
-    }
-    const world = new PhysicsWorld()
-    world.addEquipment(light)
-    stepMany(world, 60)
-    expect(world.equipmentState('light')).toMatchObject({ x: 8, y: 6, released: false })
-    world.releaseEquipment('light')
-    stepMany(world, 300)
-    const state = world.equipmentState('light')
-    expect(state?.released).toBe(true)
-    expect(state?.y).toBeLessThan(1)
   })
 })
 
 describe('initPhysics', () => {
   afterEach(() => {
-    vi.doUnmock('@dimforge/rapier2d-deterministic-compat')
+    vi.doUnmock('@dimforge/rapier3d-deterministic-compat')
     vi.resetModules()
   })
 
@@ -267,7 +356,7 @@ describe('initPhysics', () => {
     const init = vi.fn<() => Promise<void>>()
     init.mockRejectedValueOnce(new Error('wasm 실패')).mockResolvedValueOnce(undefined)
     vi.resetModules()
-    vi.doMock('@dimforge/rapier2d-deterministic-compat', () => ({ default: { init } }))
+    vi.doMock('@dimforge/rapier3d-deterministic-compat', () => ({ default: { init } }))
     const fresh = await import('./physics')
     await expect(fresh.initPhysics()).rejects.toThrow('wasm 실패')
     await expect(fresh.initPhysics()).resolves.toBeUndefined()

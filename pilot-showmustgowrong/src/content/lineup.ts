@@ -239,23 +239,26 @@ const OVERHEATED_LIGHT: EquipmentDef = {
   id: 'overheatedLight',
   name: '과열된 조명',
   kind: 'hangingLight',
-  // 조명의 position은 중심이다(Ruling 12). 아래면 2.3m: 서 있는 출연자(머리 1.7m)는 지나가고,
-  // 모의 바디슬램(leap 8, 머리가 약 2.9m까지 오름)이나 날아간 출연자는 닿는다(Ruling 28).
-  position: { x: 8, y: 2.5 },
+  // 조명의 position은 중심이다(Ruling 12). 두 번째와 세 번째 home spot(x 7, 10) 사이 무대 줄 위.
+  // 아래면 2.3m: 서 있는 출연자(머리 1.7m)는 지나가고, 모의 바디슬램(leap 8, 머리가 약 2.9m까지
+  // 오름)이나 날아간 출연자는 닿는다(Ruling 28).
+  position: { x: 8.5, y: 2.5, z: 4 },
   breakAt: 2,
   onBreak: [
     { kind: 'impact', intensity: 3, target: 'none' },
     { kind: 'noise', intensity: 3, target: 'none' },
   ],
-  darknessZone: { minX: 6, maxX: 10 },
+  // 두 home spot(x 7, 10)을 덮는다(각 1.5m 거리).
+  darknessZone: { x: 8.5, z: 4, radius: 2 },
 }
 
 const COLLAPSING_SET_WALL: EquipmentDef = {
   id: 'setWall',
   name: '무너지는 세트 벽',
   kind: 'setWall',
-  // 세트 벽의 position.y는 바닥면이다(Ruling 12).
-  position: { x: 13.5, y: 0 },
+  // 세트 벽의 position.y는 바닥면이다(Ruling 12). 무대 뒤쪽(z 2.5)에 x 12~15로 서서 앞쪽 카메라의
+  // 시선을 가리지 않는다. 풀려나면 앞(+z)으로 쓰러져 네 번째 home spot(12.5, 4)을 덮친다.
+  position: { x: 13.5, y: 0, z: 2.5 },
   breakAt: 2,
   onBreak: [
     { kind: 'impact', intensity: 3, target: 'none' },

@@ -1,12 +1,13 @@
 import type { CameraDef, ShowDef, TargetSelector } from '@/content/types'
-import { STANDING_Y, type Cast, type Point } from './cast'
+import { STANDING_Y, type Cast } from './cast'
 import type { PhenomenonEvent } from './phenomena'
 import type { PhysicsWorld } from './physics'
+import type { Vec3 } from './vec'
 
 /** 이름이 있는 대상. 위치가 없으면 이동 방향을 정하지 않는다. */
 export interface Target {
   id: string | null
-  position: Point | null
+  position: Vec3 | null
 }
 
 export const NO_TARGET: Target = { id: null, position: null }
@@ -14,12 +15,7 @@ export const NO_TARGET: Target = { id: null, position: null }
 /** 행동을 하거나 현상을 내뿜는 주체 */
 export interface Emitter {
   id: string
-  position: Point
-}
-
-/** from에서 to를 보는 각도(도). +x가 0도, 반시계로 증가한다(Ruling 15). */
-export function angleBetween(from: Point, to: Point): number {
-  return (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI
+  position: Vec3
 }
 
 interface StageLocatorDeps {
@@ -65,16 +61,20 @@ export class StageLocator {
   }
 
   /** 출연자(떠났으면 떠난 자리), 장비, 카메라의 위치 */
-  entityPosition(id: string): Point | undefined {
+  entityPosition(id: string): Vec3 | undefined {
     const member = this.deps.cast.get(id)
     if (member !== undefined) return this.deps.cast.position(member)
     const equipment = this.deps.physics.equipmentState(id)
-    if (equipment !== undefined) return { x: equipment.x, y: equipment.y }
+    if (equipment !== undefined) {
+      const { x, y, z } = equipment.position
+      return { x, y, z }
+    }
     return this.deps.cameras.get(id)?.position
   }
 
-  audiencePosition(): Point {
+  /** 관객 구역 바닥 중앙, 서 있는 높이 */
+  audiencePosition(): Vec3 {
     const zone = this.deps.audienceZone
-    return { x: (zone.minX + zone.maxX) / 2, y: STANDING_Y }
+    return { x: (zone.minX + zone.maxX) / 2, y: STANDING_Y, z: (zone.minZ + zone.maxZ) / 2 }
   }
 }

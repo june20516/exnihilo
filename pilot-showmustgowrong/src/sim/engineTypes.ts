@@ -7,6 +7,7 @@ import type {
   StaffDef,
 } from '@/content/types'
 import type { AdEffect } from './director'
+import type { Vec3 } from './vec'
 
 export type BroadcastInput =
   | { type: 'switch'; cameraId: string }
@@ -30,7 +31,9 @@ export interface ActorView {
   name: string
   x: number
   y: number
-  angle: number
+  z: number
+  /** 몸의 위 방향 단위 벡터. 서 있으면 (0, 1, 0). */
+  up: Vec3
   pose: Pose
   onAir: boolean
   walkedOut: boolean
@@ -44,7 +47,8 @@ export interface EquipmentView {
   kind: EquipmentDef['kind']
   x: number
   y: number
-  angle: number
+  z: number
+  rotation: { x: number; y: number; z: number; w: number }
   released: boolean
 }
 
@@ -58,6 +62,7 @@ export interface LogLine {
   eventId: number | null
   x: number
   y: number
+  z: number
 }
 
 /** 가장 최근의 자동 슬로모션 계기. step으로 새 계기인지 구분한다. */
@@ -72,6 +77,7 @@ export interface BroadcastView {
   phase: Phase
   cornerIndex: 0 | 1 | 2
   onAirCameraId: string
+  /** 카메라별 현재 yaw(도) */
   cameraAngles: Record<string, number>
   actors: ActorView[]
   equipment: EquipmentView[]

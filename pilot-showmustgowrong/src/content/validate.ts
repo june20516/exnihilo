@@ -1,3 +1,5 @@
+import type { FloorPoint } from '@/sim/vec'
+import { STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import type {
   ActionDef,
   EquipmentDef,
@@ -28,6 +30,11 @@ function findDuplicates(ids: string[]): string[] {
     seen.add(id)
   }
   return [...duplicates]
+}
+
+/** 바닥 평면(x 0~STUDIO_WIDTH, z 0~STUDIO_DEPTH) 안이면 true. 경계는 포함한다. */
+function isInsideStudio(point: FloorPoint): boolean {
+  return point.x >= 0 && point.x <= STUDIO_WIDTH && point.z >= 0 && point.z <= STUDIO_DEPTH
 }
 
 /** 오류 메시지 목록을 돌려준다. 빈 배열이면 통과. performers는 무대와 대기 출연자를 합친 전체다. */
@@ -86,6 +93,16 @@ export function validateShow(
 
   for (const piece of equipment) {
     for (const emit of piece.onBreak) checkTarget(emit.target, piece.id)
+  }
+
+  const placements: [string, FloorPoint][] = [
+    ...show.homeSpots.map((spot, index): [string, FloorPoint] => [`home spot ${index + 1}`, spot]),
+    ['bench spot', show.benchSpot],
+    ...equipment.map((piece): [string, FloorPoint] => [`장비 ${piece.id}`, piece.position]),
+    ...show.cameras.map((camera): [string, FloorPoint] => [`카메라 ${camera.id}`, camera.position]),
+  ]
+  for (const [label, point] of placements) {
+    if (!isInsideStudio(point)) errors.push(`스튜디오 밖 좌표: ${label} (${point.x}, ${point.z})`)
   }
 
   return errors

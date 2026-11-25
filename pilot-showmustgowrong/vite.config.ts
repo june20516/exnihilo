@@ -6,8 +6,9 @@ import { defineConfig, type Plugin } from 'vite'
 /** 청크 크기 경고 기준(kB). 기본은 Vite와 같은 500이고, 더 나눌 수 없는 청크만 근거와 함께 따로 둔다. */
 const DEFAULT_CHUNK_BUDGET_KB = 500
 const CHUNK_BUDGETS_KB: Record<string, number> = {
-  // rapier2d-deterministic-compat은 물리 wasm을 base64로 JS에 인라인한다(약 3.4MB). 나눌 수 없다.
-  rapier: 3600,
+  // rapier3d-deterministic-compat은 물리 wasm을 base64로 JS에 인라인한다. 나눌 수 없다.
+  // 2026-11-26 빌드 실측 4,365kB(gzip 1,677kB) + 5%.
+  rapier3d: 4583,
   // pixi.js v8 코어 렌더러 한 덩어리(약 570kB). 더 쪼개도 첫 화면에서 모두 필요하다.
   pixi: 650,
 }
@@ -39,14 +40,14 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   build: {
-    // 청크별 예산은 chunkSizeBudget이 검사한다(가장 큰 rapier 예산보다 크게 두어 중복 경고를 끈다).
-    chunkSizeWarningLimit: CHUNK_BUDGETS_KB.rapier,
+    // 청크별 예산은 chunkSizeBudget이 검사한다(가장 큰 rapier3d 예산과 같게 두어 중복 경고를 끈다).
+    chunkSizeWarningLimit: CHUNK_BUDGETS_KB.rapier3d,
     rolldownOptions: {
       output: {
         // Vite 8(rolldown)에서 manualChunks는 deprecated라 codeSplitting.groups로 라이브러리를 나눈다.
         codeSplitting: {
           groups: [
-            { name: 'rapier', test: /node_modules[\\/]@dimforge[\\/]/ },
+            { name: 'rapier3d', test: /node_modules[\\/]@dimforge[\\/]rapier3d/ },
             { name: 'pixi', test: /node_modules[\\/](pixi\.js|@pixi)[\\/]/ },
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
           ],

@@ -9,6 +9,7 @@ export interface ReactorView {
   id: string
   x: number
   y: number
+  z: number
   inDarkness: boolean
   reactions: ReactionDef[]
   walkedOut: boolean

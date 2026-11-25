@@ -10,6 +10,7 @@ import {
   MOTION_CAUSE_SECONDS,
   REACTION_COOLDOWN_SECONDS,
   STEP_SECONDS,
+  WALKOUT_SECONDS,
 } from '@/content/balance'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
@@ -31,7 +32,7 @@ const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 
 const camera = (overrides: Partial<CameraDef> & { id: string }): CameraDef => ({
   label: overrides.id,
-  position: { x: 0, y: 0 },
+  position: { x: 0, y: 0, z: 0 },
   defaultAngle: 0,
   fovDegrees: 60,
   range: 10,
@@ -49,19 +50,20 @@ const SHOW: ShowDef = {
     { label: '게임', startTag: 'host' },
   ],
   cameras: [
-    // 무대 전체와 스튜디오 가운데를 잡고 관객석(x 1.5)은 잡지 않는다
+    // 앞쪽에서 무대(z 4 줄) 전체를 잡고 관객석 중앙(1.5, 4)은 잡지 않는다
     camera({
       id: 'wide',
       label: '와이드',
-      position: { x: 8, y: 8 },
+      position: { x: 8, y: 6, z: 9.5 },
       defaultAngle: -90,
       fovDegrees: 80,
       range: 12,
     }),
+    // 관객석 가장자리에서 +x로 무대 왼쪽을 본다
     camera({
       id: 'close',
       label: '클로즈업',
-      position: { x: 2, y: 1 },
+      position: { x: 2, y: 1, z: 4 },
       fovDegrees: 30,
       range: 6,
       shotIntensity: 2,
@@ -70,16 +72,21 @@ const SHOW: ShowDef = {
     camera({
       id: 'audienceCam',
       label: '관객석',
-      position: { x: 1.5, y: 4 },
+      position: { x: 1.5, y: 4, z: 9.5 },
       defaultAngle: -90,
       fovDegrees: 40,
-      range: 4,
+      range: 6,
     }),
   ],
-  homeSpots: [{ x: 4 }, { x: 6.5 }, { x: 9.5 }, { x: 12 }],
-  benchSpot: { x: 15 },
-  exitX: 15.8,
-  audienceZone: { minX: 0, maxX: 3 },
+  homeSpots: [
+    { x: 4, z: 4 },
+    { x: 6.5, z: 4 },
+    { x: 9.5, z: 4 },
+    { x: 12, z: 4 },
+  ],
+  benchSpot: { x: 15, z: 6 },
+  exit: { x: 15.8, z: 4 },
+  audienceZone: { minX: 0, maxX: 3, minZ: 1, maxZ: 7 },
 }
 
 const directive = (id: string, action: ActionDef): DirectiveDef => ({ id, label: id, action })
@@ -172,13 +179,13 @@ const LIGHT: EquipmentDef = {
   id: 'light',
   name: '과열된 조명',
   kind: 'hangingLight',
-  position: { x: 8, y: 6 },
+  position: { x: 8, y: 6, z: 4 },
   breakAt: 2,
   onBreak: [
     { kind: 'impact', intensity: 3, target: 'none' },
     { kind: 'noise', intensity: 3, target: 'none' },
   ],
-  darknessZone: { minX: 6, maxX: 10 },
+  darknessZone: { x: 8, z: 4, radius: 2 },
 }
 
 const setup = (overrides: Partial<BroadcastSetup> = {}): BroadcastSetup => ({
@@ -277,8 +284,21 @@ describe('Broadcast.create', () => {
       walkedOut: false,
       directivesLeft: 3,
     })
+    expect(view.actors.map((actor) => [actor.id, actor.z])).toEqual([
+      ['rex', 4],
+      ['mo', 4],
+    ])
+    expect(view.actors[0].up).toEqual({ x: 0, y: 1, z: 0 })
     expect(view.equipment).toEqual([
-      { id: 'light', kind: 'hangingLight', x: 8, y: 6, angle: 0, released: false },
+      {
+        id: 'light',
+        kind: 'hangingLight',
+        x: 8,
+        y: 6,
+        z: 4,
+        rotation: { x: 0, y: 0, z: 0, w: 1 },
+        released: false,
+      },
     ])
     expect(view.limits).toEqual({ sexual: 70, violence: 70, drugs: 60, language: 50 })
     expect(view.benchLeft).toBe(1)
@@ -587,6 +607,115 @@ describe('이탈', () => {
   })
 })
 
+describe('3D 이동', () => {
+  it('dash는 대상 쪽 바닥 방향(x와 z 둘 다)으로 움직인다', async () => {
+    const dasher = performer({ id: 'rex', tags: ['host'], directives: [SHOUT, CALM] })
+    const diagonalShow: ShowDef = {
+      ...SHOW,
+      homeSpots: [
+        { x: 4, z: 2 },
+        { x: 8, z: 6 },
+      ],
+    }
+    const broadcast = await open(
+      quietSetup({ show: diagonalShow, performers: [dasher, performer({ id: 'mo', tags: ['guest'] })] }),
+    )
+    run(broadcast, 1)
+    const rexOf = () => {
+      const rex = broadcast.view().actors.find((actor) => actor.id === 'rex')
+      if (rex === undefined) throw new Error('렉스가 없습니다.')
+      return rex
+    }
+    const start = rexOf()
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'shout' }])
+    run(broadcast, 5)
+    const end = rexOf()
+    const dx = end.x - start.x
+    const dz = end.z - start.z
+    expect(dx).toBeGreaterThan(0.2)
+    expect(dz).toBeGreaterThan(0.2)
+    // 대상이 (+4, +4) 쪽이므로 x와 z로 같은 만큼 움직인다
+    expect(dz / dx).toBeCloseTo(1, 1)
+  })
+
+  it('이탈한 출연자는 exit 쪽 바닥 방향으로 걸어가 WALKOUT_SECONDS 뒤 사라진다', async () => {
+    const walkoutSteps = Math.round(WALKOUT_SECONDS * STEPS_PER_SECOND)
+    const lowRex = performer({ id: 'rex', shortName: '렉스', tolerance: 'low', tags: ['host'] })
+    // 렉스의 home (4, 4)에서 출구까지 +z 방향으로 곧게 걷는다
+    const frontExitShow: ShowDef = { ...SHOW, exit: { x: 4, z: 9.5 } }
+    const broadcast = await open(
+      quietSetup({ show: frontExitShow, performers: [lowRex, performer({ id: 'mo', tags: ['guest'] })] }),
+    )
+    const rexOf = () => {
+      const rex = broadcast.view().actors.find((actor) => actor.id === 'rex')
+      if (rex === undefined) throw new Error('렉스가 없습니다.')
+      return rex
+    }
+    run(broadcast, 1)
+    const walkoutStep = broadcast.currentStep
+    const calm: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'calm' }
+    broadcast.step([calm, calm, calm])
+    run(broadcast, STEPS_PER_SECOND / 2)
+
+    const walking = rexOf()
+    expect(walking).toMatchObject({ walkedOut: true, departed: false })
+    expect(walking.z).toBeGreaterThan(5)
+    expect(walking.x).toBeCloseTo(4, 1)
+
+    run(broadcast, walkoutStep + walkoutSteps - broadcast.currentStep)
+    expect(rexOf().departed).toBe(false)
+    run(broadcast, 1)
+    expect(rexOf()).toMatchObject({ walkedOut: true, departed: true, onAir: false })
+  })
+})
+
+describe('송출 가림', () => {
+  const WALL: EquipmentDef = {
+    id: 'wall',
+    name: '세트 벽',
+    kind: 'setWall',
+    // 와이드(8, 6, 9.5)와 렉스(8, 4) 사이. 시선은 z 5.5에서 높이 약 2.3m로 벽(높이 3m)에 걸린다.
+    position: { x: 8, y: 0, z: 5.5 },
+    breakAt: 3,
+    onBreak: [],
+  }
+  const LAUGH = directive('laugh', {
+    pose: 'laugh',
+    emits: [{ kind: 'laughter', intensity: 1, target: 'none' }],
+  })
+  const wallShow: ShowDef = {
+    ...SHOW,
+    homeSpots: [
+      { x: 8, z: 4 },
+      { x: 12, z: 4 },
+    ],
+  }
+  const laughers = [
+    performer({ id: 'rex', tags: ['host'], directives: [LAUGH, CALM] }),
+    performer({ id: 'mo', tags: ['guest'], directives: [LAUGH, CALM] }),
+  ]
+  const onAirOf = (broadcast: Broadcast) =>
+    Object.fromEntries(broadcast.view().actors.map((actor) => [actor.id, actor.onAir]))
+
+  it('세트 벽이 와이드와 출연자 사이를 막으면 그 출연자의 현상은 송출로 세지 않는다', async () => {
+    const broadcast = await open(quietSetup({ show: wallShow, performers: laughers, equipment: [WALL] }))
+    run(broadcast, 2)
+    expect(onAirOf(broadcast)).toEqual({ rex: false, mo: true })
+
+    const before = broadcast.view().viewers
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'laugh' }])
+    expect(broadcast.view().viewers).toBe(before)
+    broadcast.step([{ type: 'direct', actorId: 'mo', directiveId: 'laugh' }])
+    expect(broadcast.view().viewers).toBeGreaterThan(before)
+  })
+
+  it('대조: 벽이 없으면 같은 자리의 출연자도 잡힌다', async () => {
+    const broadcast = await open(quietSetup({ show: wallShow, performers: laughers }))
+    run(broadcast, 2)
+    expect(onAirOf(broadcast)).toEqual({ rex: true, mo: true })
+  })
+})
+
 describe('광고', () => {
   const FLASH = directive('flash', {
     pose: 'laugh',
@@ -779,7 +908,7 @@ describe('반응과 시선', () => {
 })
 
 describe('장비 파손 연쇄', () => {
-  // 조명(x 8, y 6) 바로 아래에서 수직으로 뛰는 출연자. 접촉 때 상대 속도가 강도 2에 이른다.
+  // 조명(8, 6, 4) 바로 아래에서 수직으로 뛰는 출연자. 접촉 때 상대 속도가 강도 2에 이른다.
   const JUMP = directive('jump', {
     pose: 'laugh',
     move: { type: 'leap', toward: 'none', speed: 20 },
@@ -791,10 +920,18 @@ describe('장비 파손 연쇄', () => {
   )
   const lightSetup = () =>
     quietSetup({
-      show: { ...SHOW, rating: 'TV-MA', homeSpots: [{ x: 8 }, { x: 6.5 }, { x: 13 }] },
+      show: {
+        ...SHOW,
+        rating: 'TV-MA',
+        homeSpots: [
+          { x: 8, z: 4 },
+          { x: 6.5, z: 4 },
+          { x: 13, z: 4 },
+        ],
+      },
       performers: [
         performer({ id: 'jumper', directives: [JUMP] }),
-        // 어둠 구역(6~10) 안과 밖
+        // 어둠 원(중심 (8, 4), 반경 2) 안과 밖
         performer({ id: 'inside', reactions: [darknessPanic] }),
         performer({ id: 'outside', reactions: [darknessPanic] }),
       ],
@@ -821,7 +958,7 @@ describe('장비 파손 연쇄', () => {
     expect(kindsOf(onBreak)).toEqual(['impact', 'noise', 'darkness'])
     for (const event of onBreak) expect(event.causeId).toBe(breakImpact.id)
     const darkness = onBreak[2]
-    expect(darkness).toMatchObject({ intensity: 2, x: 8, y: STANDING_Y })
+    expect(darkness).toMatchObject({ intensity: 2, x: 8, y: STANDING_Y, z: 4 })
 
     // 어둠은 구역 안(inDarkness)의 출연자만 지각한다
     broadcast.step([])
@@ -856,6 +993,7 @@ describe('관객(Ruling 17)', () => {
         targetId: null,
         x: 1.5,
         y: STANDING_Y,
+        z: 4,
         step: NOISE_STEPS - 1,
         causeId: null,
       }),
@@ -897,7 +1035,7 @@ describe('관객(Ruling 17)', () => {
       pose: 'laugh',
       emits: [{ kind: 'laughter', intensity: 1, target: 'none' }],
     })
-    // home x 4는 관객 구역 중앙(1.5)에서 SIGHT_RADIUS 안이다
+    // home (4, 4)는 관객 구역 중앙(1.5, 4)에서 SIGHT_RADIUS 안이다
     const laugher = performer({ id: 'priya', tags: ['host'], directives: [LAUGH, CALM] })
     const other = performer({ id: 'mo', tags: ['guest'] })
     const broadcast = await open(quietSetup({ performers: [laugher, other] }))
@@ -914,6 +1052,7 @@ describe('관객(Ruling 17)', () => {
         intensity: 1,
         targetId: null,
         x: 1.5,
+        z: 4,
         causeId: first.id,
         depth: 2,
         step: 1,
@@ -947,7 +1086,13 @@ describe('관객(Ruling 17)', () => {
     const far = performer({ id: 'far', tags: ['guest'], directives: [LAUGH, CALM] })
     const broadcast = await open(
       quietSetup({
-        show: { ...SHOW, homeSpots: [{ x: 4 }, { x: 12 }] },
+        show: {
+          ...SHOW,
+          homeSpots: [
+            { x: 4, z: 4 },
+            { x: 12, z: 4 },
+          ],
+        },
         performers: [performer({ id: 'rex', tags: ['host'] }), far],
       }),
     )

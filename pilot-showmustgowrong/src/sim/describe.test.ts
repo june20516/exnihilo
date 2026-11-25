@@ -19,6 +19,7 @@ const event = (overrides: Partial<PhenomenonEvent>): PhenomenonEvent => ({
   targetId: null,
   x: 0,
   y: 0,
+  z: 0,
   step: 0,
   causeId: null,
   depth: 1,

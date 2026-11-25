@@ -17,7 +17,7 @@ function reaction(
 }
 
 function reactor(id: string, reactions: ReactionDef[], overrides: Partial<ReactorView> = {}): ReactorView {
-  return { id, x: 0, y: 0, inDarkness: false, reactions, walkedOut: false, ...overrides }
+  return { id, x: 0, y: 0, z: 0, inDarkness: false, reactions, walkedOut: false, ...overrides }
 }
 
 function event(overrides: Partial<PhenomenonEvent> & Pick<PhenomenonEvent, 'id'>): PhenomenonEvent {
@@ -28,6 +28,7 @@ function event(overrides: Partial<PhenomenonEvent> & Pick<PhenomenonEvent, 'id'>
     targetId: 'A',
     x: 1,
     y: 0,
+    z: 0,
     step: 0,
     causeId: null,
     depth: 1,

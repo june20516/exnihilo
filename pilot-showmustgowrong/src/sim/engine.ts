@@ -11,6 +11,7 @@ import {
   RATING_LIMITS,
   SILENCE_SECONDS,
   STEP_SECONDS,
+  STUDIO_DEPTH,
   STUDIO_HEIGHT,
   STUDIO_WIDTH,
   TOLERANCE_COUNT,
@@ -38,7 +39,7 @@ import type {
 import { validateShow } from '@/content/validate'
 import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame } from './broadcast'
-import { Cast, STANDING_Y, type CastMember, type Point } from './cast'
+import { Cast, STANDING_Y, type CastMember } from './cast'
 import { describeEvent, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
 import { EventLog, type PhenomenonEvent } from './phenomena'
@@ -60,7 +61,8 @@ import {
 import { updateGaze } from './gaze'
 import { validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
-import { StageLocator, angleBetween, type Emitter } from './targeting'
+import { StageLocator, type Emitter } from './targeting'
+import { type FloorPoint, floorDistance, type Vec3, yawBetween } from './vec'
 
 export * from './engineTypes'
 
@@ -98,6 +100,13 @@ function isPhenomenonShown(event: PhenomenonEvent): boolean {
   return event.kind !== 'gaze' && event.kind !== 'silence'
 }
 
+/** from에서 to로 향하는 바닥 평면 단위 벡터. 같은 자리면 null. */
+function floorDirection(from: FloorPoint, to: FloorPoint): FloorPoint | null {
+  const distance = floorDistance(from, to)
+  if (distance === 0) return null
+  return { x: (to.x - from.x) / distance, z: (to.z - from.z) / distance }
+}
+
 /**
  * 생방송 한 회의 시뮬레이션. 모든 상태 변화는 BroadcastInput과 시드 rng로만 일어난다.
  * 이벤트는 생긴 다음 스텝에 반응으로 판정되므로 한 스텝에 한 단계만 전파된다.
@@ -117,7 +126,7 @@ export class Broadcast {
   private readonly equipment = new Map<string, EquipmentDef>()
   /** 부서진 장비 id → 부순 충격 이벤트. 떨어지는 장비가 일으킨 충격의 원인이 된다. */
   private readonly brokenEquipment = new Map<string, PhenomenonEvent>()
-  private readonly darkZones: { minX: number; maxX: number }[] = []
+  private readonly darkZones: NonNullable<EquipmentDef['darknessZone']>[] = []
   private readonly benchQueue: PerformerDef[]
   private readonly names: Record<string, string> = {}
 
@@ -177,7 +186,7 @@ export class Broadcast {
       this.names[performer.id] = performer.shortName
     }
     setup.performers.forEach((performer, index) => {
-      this.addToStage(performer, setup.show.homeSpots[index].x)
+      this.addToStage(performer, setup.show.homeSpots[index])
     })
   }
 
@@ -384,12 +393,12 @@ export class Broadcast {
         this.cameraAngles[cameraId] = camera.defaultAngle
         return
       case 'audience':
-        this.cameraAngles[cameraId] = angleBetween(camera.position, this.locator.audiencePosition())
+        this.cameraAngles[cameraId] = yawBetween(camera.position, this.locator.audiencePosition())
         return
       case 'nearestPerformer': {
         const nearest = this.cast.nearestActive(camera.position, null)
         if (nearest === undefined) return
-        this.cameraAngles[cameraId] = angleBetween(camera.position, this.cast.position(nearest))
+        this.cameraAngles[cameraId] = yawBetween(camera.position, this.cast.position(nearest))
         return
       }
       case 'random':
@@ -433,7 +442,7 @@ export class Broadcast {
     const members = this.cast.active()
     // 아직 옛 자리에 있는 다른 출연자와 겹치면 옆으로 비켜 서므로, 모두 옮긴 뒤 한 번 더 세운다.
     for (let pass = 0; pass < 2; pass++) {
-      for (const member of members) this.physics.teleport(member.def.id, member.homeX)
+      for (const member of members) this.physics.teleport(member.def.id, member.home)
     }
     for (const member of members) {
       member.pose = 'idle'
@@ -451,13 +460,15 @@ export class Broadcast {
   private bringInBench(): void {
     const performer = this.benchQueue.shift()
     if (performer === undefined) throw new Error('투입할 대기 출연자가 없습니다.')
-    const taken = new Set(this.cast.active().map((member) => member.homeX))
-    const spot = this.setup.show.homeSpots.find((candidate) => !taken.has(candidate.x))
-    this.addToStage(performer, spot?.x ?? this.setup.show.benchSpot.x)
+    const taken = this.cast.active().map((member) => member.home)
+    const spot = this.setup.show.homeSpots.find(
+      (candidate) => !taken.some((home) => home.x === candidate.x && home.z === candidate.z),
+    )
+    this.addToStage(performer, spot ?? this.setup.show.benchSpot)
   }
 
-  private addToStage(performer: PerformerDef, homeX: number): void {
-    const member = this.cast.add(performer, homeX)
+  private addToStage(performer: PerformerDef, home: FloorPoint): void {
+    const member = this.cast.add(performer, home)
     // 처음부터 화면에 있던 출연자는 '새로 잡힘'으로 치지 않는다.
     member.wasOnAir = this.isOnAir(this.cast.position(member))
   }
@@ -496,12 +507,17 @@ export class Broadcast {
     }
   }
 
+  /** 출구 쪽 바닥 방향으로 걷는다. 출구와 같은 자리면 수평으로는 멈춘다. */
   private walkTowardExit(member: CastMember): void {
     const state = this.physics.actorState(member.def.id)
     if (state === undefined || state.tumbling) return
-    const direction = Math.sign(this.setup.show.exitX - state.x)
+    const direction = floorDirection(state.position, this.setup.show.exit) ?? { x: 0, z: 0 }
     // 위로 속도를 주면 넘어지므로 수직 속도는 떨어지는 쪽만 유지한다.
-    this.physics.impulse(member.def.id, direction * WALKOUT_SPEED, Math.min(state.vy, 0))
+    this.physics.impulse(member.def.id, {
+      x: direction.x * WALKOUT_SPEED,
+      y: Math.min(state.velocity.y, 0),
+      z: direction.z * WALKOUT_SPEED,
+    })
   }
 
   // ── 코너, 물리, 반응, 시선 ─────────────────────────────
@@ -567,8 +583,9 @@ export class Broadcast {
       intensity: LIGHT_DARKNESS_INTENSITY,
       sourceId: piece.id,
       targetId: null,
-      x: (zone.minX + zone.maxX) / 2,
+      x: zone.x,
       y: STANDING_Y,
+      z: zone.z,
       causeId: impact.id,
     })
   }
@@ -750,6 +767,7 @@ export class Broadcast {
       targetId: null,
       x: STUDIO_WIDTH / 2,
       y: STUDIO_HEIGHT / 2,
+      z: STUDIO_DEPTH / 2,
       causeId: null,
     })
   }
@@ -804,20 +822,29 @@ export class Broadcast {
   ): void {
     const id = member.def.id
     if (move.type === 'home') {
-      this.physics.teleport(id, member.homeX)
+      this.physics.teleport(id, member.home)
       return
     }
+    // 대상까지의 바닥 방향 단위 벡터. 대상이 없거나 같은 자리면 수평으로 움직이지 않는다.
     const target = this.locator.resolveTarget(move.toward, emitter, cause).position
-    const direction = target === null ? 0 : Math.sign(target.x - emitter.position.x)
+    const direction = target === null ? null : floorDirection(emitter.position, target)
+    const horizontal = (sign: 1 | -1, speed: number): Vec3 => ({
+      x: sign * (direction?.x ?? 0) * speed,
+      y: 0,
+      z: sign * (direction?.z ?? 0) * speed,
+    })
     switch (move.type) {
       case 'dash':
-        if (direction !== 0) this.physics.impulse(id, direction * move.speed, 0)
+        if (direction !== null) this.physics.impulse(id, horizontal(1, move.speed))
         return
       case 'leap':
-        this.physics.impulse(id, direction * move.speed, move.speed * LEAP_VERTICAL_RATIO)
+        this.physics.impulse(id, {
+          ...horizontal(1, move.speed),
+          y: move.speed * LEAP_VERTICAL_RATIO,
+        })
         return
       case 'flee':
-        if (direction !== 0) this.physics.impulse(id, -direction * move.speed, 0)
+        if (direction !== null) this.physics.impulse(id, horizontal(-1, move.speed))
         return
     }
   }
@@ -873,7 +900,7 @@ export class Broadcast {
     return event
   }
 
-  private addLine(text: string, depth: number, eventId: number | null, position: Point): void {
+  private addLine(text: string, depth: number, eventId: number | null, position: Vec3): void {
     this.lines.push({
       index: this.lines.length,
       step: this.stepCount,
@@ -882,6 +909,7 @@ export class Broadcast {
       eventId,
       x: position.x,
       y: position.y,
+      z: position.z,
     })
   }
 
@@ -912,13 +940,21 @@ export class Broadcast {
     return this.requireCamera(this.onAirCameraId)
   }
 
-  private isOnAir(point: Point): boolean {
+  /**
+   * 송출 카메라의 시야 안이고 장비가 시선을 가리지 않으면 송출된다(spec 3.1).
+   * lineOfSight는 직전 물리 step의 장비 위치를 쓰므로 물리 step 뒤에 부른다.
+   */
+  private isOnAir(point: Vec3): boolean {
     const camera = this.onAirCamera()
-    return inFrame(camera, this.cameraAngles[camera.id], point.x, point.y)
+    return (
+      inFrame(camera, this.cameraAngles[camera.id], point) &&
+      this.physics.lineOfSight(camera.position, point)
+    )
   }
 
-  private inDarkness(point: Point): boolean {
-    return this.darkZones.some((zone) => point.x >= zone.minX && point.x <= zone.maxX)
+  /** 어둠 구역은 바닥 원이다. 높이와 관계없이 원 안에 서 있거나 떠 있으면 어둠 속이다. */
+  private inDarkness(point: Vec3): boolean {
+    return this.darkZones.some((zone) => floorDistance(point, zone) <= zone.radius)
   }
 
   private cornerIndex(): 0 | 1 | 2 {
@@ -930,14 +966,16 @@ export class Broadcast {
     const placement = this.cast.placement(member)
     const pose: Pose = placement.tumbling ? (placement.grounded ? 'fallen' : 'flying') : member.pose
     const used = this.director.directivesUsed(member.def.id)
+    const { position, up } = placement
     return {
       id: member.def.id,
       name: member.def.name,
-      x: placement.x,
-      y: placement.y,
-      angle: placement.angle,
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      up: { ...up },
       pose,
-      onAir: member.departedAt === null && this.isOnAir(placement),
+      onAir: member.departedAt === null && this.isOnAir(position),
       walkedOut: member.walkedOut,
       departed: member.departedAt !== null,
       directivesLeft: Math.max(0, TOLERANCE_COUNT[member.def.tolerance] - used),
@@ -949,7 +987,16 @@ export class Broadcast {
     if (state === undefined) throw new Error(`물리 월드에 없는 장비입니다: ${id}`)
     const def = this.equipment.get(id)
     if (def === undefined) throw new Error(`정의에 없는 장비입니다: ${id}`)
-    return { id, kind: def.kind, ...state }
+    const { position, rotation } = state
+    return {
+      id,
+      kind: def.kind,
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      rotation: { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
+      released: state.released,
+    }
   }
 }
 

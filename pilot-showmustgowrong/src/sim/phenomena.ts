@@ -1,5 +1,6 @@
 import { NOISE_RADIUS, SIGHT_RADIUS } from '@/content/balance'
 import type { Intensity, PhenomenonKind } from '@/content/types'
+import { distance3 } from './vec'
 
 export interface PhenomenonEvent {
   id: number
@@ -10,6 +11,7 @@ export interface PhenomenonEvent {
   targetId: string | null
   x: number
   y: number
+  z: number
   step: number
   causeId: number | null
   depth: number
@@ -19,11 +21,8 @@ export interface Perceiver {
   id: string
   x: number
   y: number
+  z: number
   inDarkness: boolean
-}
-
-function distanceBetween(event: PhenomenonEvent, perceiver: Perceiver): number {
-  return Math.hypot(event.x - perceiver.x, event.y - perceiver.y)
 }
 
 export function targetsSelf(event: PhenomenonEvent, perceiverId: string): boolean {
@@ -36,7 +35,7 @@ export function perceives(event: PhenomenonEvent, perceiver: Perceiver): boolean
   }
   if (event.sourceId === perceiver.id) return false
 
-  const distance = distanceBetween(event, perceiver)
+  const distance = distance3(event, perceiver)
   switch (event.kind) {
     case 'noise':
       return distance <= NOISE_RADIUS[event.intensity]

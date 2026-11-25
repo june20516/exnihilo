@@ -11,6 +11,8 @@ import {
   capsuleEndpoints,
   capsuleVerticalExtent,
   distanceToSegment,
+  sideViewRotation,
+  sideViewTilt,
   toScreen,
 } from './geometry'
 
@@ -166,7 +168,7 @@ export class StudioRenderer {
     const reach = CAPSULE.radius * PIXELS_PER_METER + ACTOR_HIT_PADDING_PX
     for (const actor of this.lastActors) {
       if (actor.walkedOut) continue
-      const [a, b] = capsuleEndpoints(actor.x, actor.y, actor.angle)
+      const [a, b] = capsuleEndpoints(actor.x, actor.y, sideViewTilt(actor.up))
       const distance = distanceToSegment({ x: px, y: py }, a, b)
       if (distance <= reach && distance < bestDistance) {
         bestId = actor.id
@@ -201,7 +203,7 @@ export class StudioRenderer {
   }
 
   private buildBackground(): Graphics {
-    const { audienceZone, exitX, homeSpots, benchSpot } = this.show
+    const { audienceZone, exit, homeSpots, benchSpot } = this.show
     const floorY = toScreen(0, 0).y
     const background = new Graphics()
 
@@ -217,7 +219,7 @@ export class StudioRenderer {
         alpha: AUDIENCE_LINE_ALPHA,
       })
 
-    const exitLeft = exitX * PIXELS_PER_METER
+    const exitLeft = exit.x * PIXELS_PER_METER
     const exitHeight = EXIT_HEIGHT_METERS * PIXELS_PER_METER
     background
       .rect(exitLeft, floorY - exitHeight, CANVAS_WIDTH - exitLeft, exitHeight)
@@ -317,7 +319,7 @@ export class StudioRenderer {
         .fill(item.released ? COLORS.equipmentReleased : baseColor)
       const position = toScreen(item.x, item.y)
       shape.position.set(position.x, position.y)
-      shape.rotation = -item.angle
+      shape.rotation = -sideViewRotation(item.rotation)
     }
   }
 
@@ -384,11 +386,12 @@ export class StudioRenderer {
     }
     const center = toScreen(actor.x, actor.y)
     sprite.root.position.set(center.x, center.y)
-    sprite.root.rotation = -actor.angle
+    const tilt = sideViewTilt(actor.up)
+    sprite.root.rotation = -tilt
     sprite.root.alpha = actor.walkedOut ? WALKED_OUT_ALPHA : 1
     // 글자는 몸과 함께 돌지 않고, 캡슐이 화면에서 위로 차지하는 폭만큼 떨어진 곳에 둔다.
     // 바닥(y=0)이 캔버스 아래 끝이라 몸 아래에 쓰면 잘리므로 이름은 머리 위, 포즈 기호는 그 위에 둔다.
-    const extent = capsuleVerticalExtent(actor.angle)
+    const extent = capsuleVerticalExtent(tilt)
     if (sprite.label.text !== actor.name) sprite.label.text = actor.name
     const labelBottom = center.y - extent - TEXT_GAP
     sprite.label.position.set(center.x, labelBottom)

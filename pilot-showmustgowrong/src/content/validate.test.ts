@@ -52,17 +52,20 @@ const show: ShowDef = {
     {
       id: 'cam1',
       label: '1번 카메라',
-      position: { x: 8, y: 2 },
-      defaultAngle: 0,
+      position: { x: 8, y: 2, z: 9 },
+      defaultAngle: -90,
       fovDegrees: 60,
       range: 12,
       shotIntensity: 1,
     },
   ],
-  homeSpots: [{ x: 4 }, { x: 12 }],
-  benchSpot: { x: 1 },
-  exitX: -1,
-  audienceZone: { minX: 0, maxX: 16 },
+  homeSpots: [
+    { x: 4, z: 4 },
+    { x: 12, z: 4 },
+  ],
+  benchSpot: { x: 1, z: 6 },
+  exit: { x: -1, z: 4 },
+  audienceZone: { minX: 0, maxX: 16, minZ: 8, maxZ: 10 },
 }
 
 const equipment: EquipmentDef[] = [
@@ -70,7 +73,7 @@ const equipment: EquipmentDef[] = [
     id: 'light1',
     name: '조명',
     kind: 'hangingLight',
-    position: { x: 8, y: 7 },
+    position: { x: 8, y: 7, z: 5 },
     breakAt: 2,
     onBreak: [{ kind: 'noise', intensity: 2, target: 'none' }],
   },
@@ -226,5 +229,46 @@ describe('validateShow', () => {
       }),
     ]
     expect(validateShow(noTagShow, withCorner, [makeStaff()], equipment)).toEqual([])
+  })
+
+  describe('스튜디오 밖 좌표', () => {
+    it.each([
+      { x: -0.1, z: 4 },
+      { x: 16.1, z: 4 },
+      { x: 4, z: -0.1 },
+      { x: 4, z: 10.1 },
+    ])('home spot (%o)는 오류다', (spot) => {
+      const outside = { ...show, homeSpots: [show.homeSpots[0], spot] }
+      const errors = validateShow(outside, performers, [makeStaff()], equipment)
+      expect(errors.join('\n')).toContain('스튜디오 밖 좌표: home spot 2')
+    })
+
+    it.each([
+      { x: 17, y: 7, z: 5 },
+      { x: 8, y: 7, z: 11 },
+    ])('장비 (%o)는 오류다', (position) => {
+      const errors = validateShow(show, performers, [makeStaff()], [{ ...equipment[0], position }])
+      expect(errors.join('\n')).toContain('스튜디오 밖 좌표: 장비 light1')
+    })
+
+    it.each([
+      { x: -1, y: 2, z: 9 },
+      { x: 8, y: 2, z: 10.5 },
+    ])('카메라 (%o)는 오류다', (position) => {
+      const outside = { ...show, cameras: [{ ...show.cameras[0], position }] }
+      const errors = validateShow(outside, performers, [makeStaff()], equipment)
+      expect(errors.join('\n')).toContain('스튜디오 밖 좌표: 카메라 cam1')
+    })
+
+    it('경계 위(x 0·16, z 0·10)는 허용한다', () => {
+      const edge = {
+        ...show,
+        homeSpots: [
+          { x: 0, z: 0 },
+          { x: 16, z: 10 },
+        ],
+      }
+      expect(validateShow(edge, performers, [makeStaff()], equipment)).toEqual([])
+    })
   })
 })

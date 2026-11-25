@@ -2,14 +2,12 @@ import { CAPSULE } from '@/content/balance'
 import type { PerformerDef, Pose } from '@/content/types'
 import type { PhenomenonEvent } from './phenomena'
 import type { PhysicsWorld } from './physics'
+import { distance3, type FloorPoint, type Vec3 } from './vec'
 
-export interface Point {
-  x: number
-  y: number
-}
-
-interface Placement extends Point {
-  angle: number
+interface Placement {
+  position: Vec3
+  /** 몸의 위 방향 단위 벡터. 서 있으면 (0, 1, 0). */
+  up: Vec3
   tumbling: boolean
   grounded: boolean
 }
@@ -19,7 +17,7 @@ export const STANDING_Y = CAPSULE.halfHeight + CAPSULE.radius
 
 export interface CastMember {
   readonly def: PerformerDef
-  homeX: number
+  home: FloorPoint
   pose: Pose
   walkedOut: boolean
   /** 이탈한 스텝. 이탈하지 않았으면 null */
@@ -45,11 +43,11 @@ export class Cast {
     this.physics = physics
   }
 
-  add(def: PerformerDef, homeX: number): CastMember {
-    this.physics.addActor(def.id, homeX, def.weight)
+  add(def: PerformerDef, home: FloorPoint): CastMember {
+    this.physics.addActor(def.id, home, def.weight)
     const member: CastMember = {
       def,
-      homeX,
+      home: { x: home.x, z: home.z },
       pose: 'idle',
       walkedOut: false,
       walkoutStep: null,
@@ -82,17 +80,22 @@ export class Cast {
     return this.all().filter((member) => member.departedAt === null)
   }
 
-  /** 물리 상태 또는 떠난 자리 */
+  /** 물리 상태 또는 떠난 자리. 물리 엔진의 벡터 객체를 쓰지 않도록 평범한 객체로 복사한다. */
   placement(member: CastMember): Placement {
     if (member.departedAt !== null) return member.departedAt
     const state = this.physics.actorState(member.def.id)
     if (state === undefined) throw new Error(`물리 월드에 없는 출연자입니다: ${member.def.id}`)
-    return state
+    const { position, up } = state
+    return {
+      position: { x: position.x, y: position.y, z: position.z },
+      up: { x: up.x, y: up.y, z: up.z },
+      tumbling: state.tumbling,
+      grounded: state.grounded,
+    }
   }
 
-  position(member: CastMember): Point {
-    const { x, y } = this.placement(member)
-    return { x, y }
+  position(member: CastMember): Vec3 {
+    return this.placement(member).position
   }
 
   /** 물리 월드에서 뺀다. 마지막 자리는 view용으로 남긴다. */
@@ -103,14 +106,13 @@ export class Cast {
   }
 
   /** from에서 가장 가까운 이탈하지 않은 출연자. 같은 거리면 먼저 오른 출연자. */
-  nearestActive(from: Point, excludeId: string | null, tag?: string): CastMember | undefined {
+  nearestActive(from: Vec3, excludeId: string | null, tag?: string): CastMember | undefined {
     let nearest: CastMember | undefined
     let nearestDistance = Infinity
     for (const member of this.active()) {
       if (member.def.id === excludeId) continue
       if (tag !== undefined && !member.def.tags.includes(tag)) continue
-      const position = this.position(member)
-      const distance = Math.hypot(position.x - from.x, position.y - from.y)
+      const distance = distance3(this.position(member), from)
       if (distance < nearestDistance) {
         nearest = member
         nearestDistance = distance

@@ -1,4 +1,5 @@
 import { CAPSULE, STUDIO_HEIGHT, STUDIO_WIDTH } from '@/content/balance'
+import type { Vec3 } from '@/sim/vec'
 
 /** 1m당 픽셀 수. 16m × 9m가 1280×720이 된다. */
 export const PIXELS_PER_METER = 80
@@ -84,4 +85,17 @@ export function distanceToSegment(point: Point, a: Point, b: Point): number {
       ? 0
       : Math.min(1, Math.max(0, ((point.x - a.x) * abx + (point.y - a.y) * aby) / lengthSquared))
   return Math.hypot(point.x - (a.x + abx * t), point.y - (a.y + aby * t))
+}
+
+/**
+ * 임시(Plan 2 Task 5에서 쿼터뷰로 교체): 몸의 위 방향을 사이드뷰(x-y 평면)의 기울기로 바꾼다.
+ * 라디안, 반시계(+y 위). 서 있으면(0, 1, 0) 0이다.
+ */
+export function sideViewTilt(up: Vec3): number {
+  return Math.atan2(-up.x, up.y)
+}
+
+/** 임시(Task 5에서 교체): 회전 쿼터니언의 z축 성분 각도(라디안, 반시계)로 사이드뷰 회전을 근사한다. */
+export function sideViewRotation(q: { x: number; y: number; z: number; w: number }): number {
+  return Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 }

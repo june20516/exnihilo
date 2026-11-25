@@ -14,21 +14,19 @@ import {
 import { GAUGE_KINDS } from '@/content/types'
 import type { CameraDef, GaugeKind, ShowDef } from '@/content/types'
 import type { PhenomenonEvent } from './phenomena'
-import { normalizeDegrees } from './vec'
+import { floorDistance, normalizeDegrees, type Vec3, yawBetween } from './vec'
 
 const BOUNDARY_EPSILON = 1e-9
 
 /**
- * (x, y)가 카메라 화면 안인지 판정한다.
- * 각도는 도 단위이며 +x가 0도, 반시계(+y가 위)로 증가한다. 경계값은 포함한다.
+ * point가 카메라 시야(바닥 평면 위의 부채꼴) 안인지 판정한다. 높이는 보지 않는다.
+ * yaw는 도 단위이며 +x가 0도, +z가 90도다. 경계값은 포함한다. 가림은 엔진이 따로 판정한다.
  */
-export function inFrame(camera: CameraDef, angle: number, x: number, y: number): boolean {
-  const dx = x - camera.position.x
-  const dy = y - camera.position.y
-  if (Math.hypot(dx, dy) > camera.range + BOUNDARY_EPSILON) return false
-  if (dx === 0 && dy === 0) return true
-  const direction = (Math.atan2(dy, dx) * 180) / Math.PI
-  const difference = Math.abs(normalizeDegrees(direction - angle))
+export function inFrame(camera: CameraDef, yaw: number, point: Vec3): boolean {
+  const distance = floorDistance(camera.position, point)
+  if (distance > camera.range + BOUNDARY_EPSILON) return false
+  if (distance === 0) return true
+  const difference = Math.abs(normalizeDegrees(yawBetween(camera.position, point) - yaw))
   return difference <= camera.fovDegrees / 2 + BOUNDARY_EPSILON
 }
 
