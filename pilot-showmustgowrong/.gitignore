@@ -23,8 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-
-
 # Playwright 산출물
 playwright-report/
 test-results/
