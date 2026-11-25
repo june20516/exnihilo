@@ -27,6 +27,8 @@ export interface ActorView {
   pose: Pose
   onAir: boolean
   walkedOut: boolean
+  /** 이탈 뒤 물리 월드에서 빠졌다. walkedOut이지만 departed가 아니면 아직 출구로 걸어가는 중이다. */
+  departed: boolean
   directivesLeft: number
 }
 

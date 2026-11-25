@@ -911,6 +911,7 @@ export class Broadcast {
       pose,
       onAir: member.departedAt === null && this.isOnAir(placement),
       walkedOut: member.walkedOut,
+      departed: member.departedAt !== null,
       directivesLeft: Math.max(0, TOLERANCE_COUNT[member.def.tolerance] - used),
     }
   }

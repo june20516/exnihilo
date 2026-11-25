@@ -1,4 +1,4 @@
-import type { Pose } from "@/content/types";
+import type { Pose } from '@/content/types'
 
 /** 렌더링 색 모음. 0xRRGGBB. */
 export const COLORS = {
@@ -21,7 +21,7 @@ export const COLORS = {
   bubbleFill: 0xffffff,
   bubbleText: 0x1a1a22,
   vignette: 0x000000,
-} as const;
+} as const
 
 export const POSE_COLORS: Record<Pose, number> = {
   idle: 0x9aa7b8,
@@ -30,13 +30,13 @@ export const POSE_COLORS: Record<Pose, number> = {
   panic: 0xb07ee0,
   flying: 0x56c2e6,
   fallen: 0x6f6a78,
-};
+}
 
 export const POSE_SYMBOLS: Record<Pose, string> = {
-  idle: "",
-  laugh: "ㅋ",
-  angry: "#",
-  panic: "!",
-  flying: "~",
-  fallen: "@",
-};
+  idle: '',
+  laugh: 'ㅋ',
+  angry: '#',
+  panic: '!',
+  flying: '~',
+  fallen: '@',
+}

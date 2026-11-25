@@ -466,7 +466,11 @@ describe('이탈', () => {
       ['anger', 2, 'rex'],
       ['noise', 2, 'rex'],
     ])
-    expect(broadcast.view().actors[0]).toMatchObject({ walkedOut: true, directivesLeft: 0 })
+    expect(broadcast.view().actors[0]).toMatchObject({
+      walkedOut: true,
+      departed: false,
+      directivesLeft: 0,
+    })
 
     // 모는 렉스의 분노에 반응하지만 원인(렉스)이 이탈했으므로 대상은 없다
     broadcast.step([])
@@ -475,9 +479,14 @@ describe('이탈', () => {
       .find((event) => event.step === 11 && event.sourceId === 'mo')
     expect(moReaction).toMatchObject({ kind: 'anger', targetId: null, intensity: 3 })
 
-    run(broadcast, 2 * STEPS_PER_SECOND)
+    run(broadcast, 2 * STEPS_PER_SECOND - 2)
+    expect(broadcast.view().actors.find((actor) => actor.id === 'rex')).toMatchObject({
+      walkedOut: true,
+      departed: false,
+    })
+    run(broadcast, 2)
     const rex = broadcast.view().actors.find((actor) => actor.id === 'rex')
-    expect(rex).toMatchObject({ walkedOut: true, onAir: false })
+    expect(rex).toMatchObject({ walkedOut: true, departed: true, onAir: false })
 
     // 이탈자를 tag로 찾는 지시도 오류 없이 대상 없음으로 처리한다
     const chargeStep = broadcast.currentStep
