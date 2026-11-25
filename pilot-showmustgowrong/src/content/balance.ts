@@ -50,9 +50,12 @@ export const STAND_UP_CLEARANCE = 0.02
 /** 일어설 빈자리를 좌우로 찾는 간격(m) */
 export const STAND_UP_SEARCH_STEP = 0.05
 export const GRAVITY = { x: 0, y: -9.81 }
+export const GRAVITY3 = { x: 0, y: -9.81, z: 0 }
 /** 스튜디오 크기(m). 바닥 y=0, 위가 +y. */
 export const STUDIO_WIDTH = 16
 export const STUDIO_HEIGHT = 9
+/** 스튜디오 깊이(m). z 0~10. */
+export const STUDIO_DEPTH = 10
 /** 바닥·벽·천장 collider의 두께(m). 빠른 actor가 뚫지 않도록 넉넉히 둔다. */
 export const BOUNDARY_THICKNESS = 1
 export const ACTOR_FRICTION = 0.5
@@ -60,9 +63,13 @@ export const ACTOR_RESTITUTION = 0.1
 export const FLOOR_FRICTION = 0.6
 /** 매달린 조명 cuboid의 반 크기(m) */
 export const LIGHT_HALF_EXTENTS = { hx: 0.4, hy: 0.2 }
+/** 매달린 조명 cuboid의 반 크기(m, 3D) */
+export const LIGHT_HALF_EXTENTS3 = { hx: 0.4, hy: 0.2, hz: 0.4 }
 export const LIGHT_DENSITY = 2
 /** 세트 벽 cuboid의 반 크기(m) */
 export const SET_WALL_HALF_EXTENTS = { hx: 0.1, hy: 1.5 }
+/** 세트 벽 cuboid의 반 크기(m, 3D). x 방향으로 길다. */
+export const SET_WALL_HALF_EXTENTS3 = { hx: 1.5, hy: 1.5, hz: 0.1 }
 export const SET_WALL_DENSITY = 3
 /** 풀려난 세트 벽이 스튜디오 가운데 쪽으로 쓰러지기 시작하는 각속도(rad/s) */
 export const SET_WALL_TOPPLE_ANGVEL = 1.2

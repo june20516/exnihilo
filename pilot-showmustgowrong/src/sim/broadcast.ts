@@ -14,14 +14,9 @@ import {
 import { GAUGE_KINDS } from '@/content/types'
 import type { CameraDef, GaugeKind, ShowDef } from '@/content/types'
 import type { PhenomenonEvent } from './phenomena'
+import { normalizeDegrees } from './vec'
 
 const BOUNDARY_EPSILON = 1e-9
-
-/** 각도를 -180~180도 범위로 정규화한다. */
-function normalizeDegrees(degrees: number): number {
-  const wrapped = (((degrees + 180) % 360) + 360) % 360
-  return wrapped - 180
-}
 
 /**
  * (x, y)가 카메라 화면 안인지 판정한다.
