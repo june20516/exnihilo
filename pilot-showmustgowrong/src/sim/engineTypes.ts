@@ -1,4 +1,11 @@
-import type { EquipmentDef, GaugeKind, PerformerDef, Pose, ShowDef, StaffDef } from '@/content/types'
+import type {
+  EquipmentDef,
+  GaugeKind,
+  PerformerDef,
+  Pose,
+  ShowDef,
+  StaffDef,
+} from '@/content/types'
 import type { AdEffect } from './director'
 
 export type BroadcastInput =
@@ -34,6 +41,7 @@ export interface ActorView {
 
 export interface EquipmentView {
   id: string
+  kind: EquipmentDef['kind']
   x: number
   y: number
   angle: number
@@ -42,6 +50,8 @@ export interface EquipmentView {
 
 /** 사고 로그 한 줄. eventId가 null이면 현상이 아닌 서술(이탈, 스태프 행동)이다. */
 export interface LogLine {
+  /** 방송 시작부터 이어지는 줄 번호. 같은 문장이 반복돼도 줄을 구분한다. */
+  index: number
   step: number
   text: string
   depth: number

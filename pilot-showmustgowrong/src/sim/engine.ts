@@ -854,7 +854,15 @@ export class Broadcast {
   }
 
   private addLine(text: string, depth: number, eventId: number | null, position: Point): void {
-    this.lines.push({ step: this.stepCount, text, depth, eventId, x: position.x, y: position.y })
+    this.lines.push({
+      index: this.lines.length,
+      step: this.stepCount,
+      text,
+      depth,
+      eventId,
+      x: position.x,
+      y: position.y,
+    })
   }
 
   private describe(event: PhenomenonEvent): string {
@@ -919,7 +927,9 @@ export class Broadcast {
   private equipmentView(id: string): EquipmentView {
     const state = this.physics.equipmentState(id)
     if (state === undefined) throw new Error(`물리 월드에 없는 장비입니다: ${id}`)
-    return { id, ...state }
+    const def = this.equipment.get(id)
+    if (def === undefined) throw new Error(`정의에 없는 장비입니다: ${id}`)
+    return { id, kind: def.kind, ...state }
   }
 }
 

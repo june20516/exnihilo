@@ -276,7 +276,9 @@ describe('Broadcast.create', () => {
       walkedOut: false,
       directivesLeft: 3,
     })
-    expect(view.equipment).toEqual([{ id: 'light', x: 8, y: 6, angle: 0, released: false }])
+    expect(view.equipment).toEqual([
+      { id: 'light', kind: 'hangingLight', x: 8, y: 6, angle: 0, released: false },
+    ])
     expect(view.limits).toEqual({ sexual: 70, violence: 70, drugs: 60, language: 50 })
     expect(view.benchLeft).toBe(1)
   })
@@ -347,13 +349,16 @@ describe('코너', () => {
     const broadcast = await open(setup())
     broadcast.step([])
     expect(broadcast.view().log).toEqual([
-      expect.objectContaining({ step: 0, text: '렉스 쪽에서 소리가 난다', depth: 1 }),
+      expect.objectContaining({ index: 0, step: 0, text: '렉스 쪽에서 소리가 난다', depth: 1 }),
     ])
     expect(broadcast.view().cornerIndex).toBe(0)
 
     run(broadcast, CORNER_STEPS)
     const view = broadcast.view()
     expect(view.cornerIndex).toBe(1)
+    const indexes = view.log.map((line) => line.index)
+    expect(indexes).toEqual([...indexes].sort((a, b) => a - b))
+    expect(new Set(indexes).size).toBe(indexes.length)
     expect(view.log.filter((line) => line.step === CORNER_STEPS)).toEqual([
       expect.objectContaining({ text: '모 쪽에서 소리가 난다', depth: 1 }),
     ])

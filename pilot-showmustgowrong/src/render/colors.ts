@@ -17,6 +17,7 @@ export const COLORS = {
   cameraOnAirFan: 0xff5a5a,
   cameraOnAirStroke: 0xe5252a,
   cameraBody: 0xcfd6e0,
+  actorOutline: 0x000000,
   nameText: 0xffffff,
   bubbleFill: 0xffffff,
   bubbleText: 0x1a1a22,
