@@ -34,6 +34,8 @@ function member(reactions: ReactionDef[], absentSteps = 0): CastMember {
     motionCauseStep: 0,
     wasOnAir: false,
     absentSteps,
+    poseStep: 0,
+    walkGoal: null,
   }
 }
 

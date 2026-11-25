@@ -24,6 +24,8 @@ interface StageLocatorDeps {
   cameras: ReadonlyMap<string, CameraDef>
   audienceZone: ShowDef['audienceZone']
   onAirCamera: () => CameraDef
+  /** 송출 카메라가 지금 보는 방향의 화면 안쪽 바닥 지점(서 있는 높이) */
+  onAirFramePoint: () => Vec3
 }
 
 /** 무대 위 요소(출연자, 장비, 카메라, 관객)의 위치와 TargetSelector 해석 */
@@ -42,6 +44,9 @@ export class StageLocator {
     if (selector === 'onAirCamera') {
       const camera = this.deps.onAirCamera()
       return { id: camera.id, position: camera.position }
+    }
+    if (selector === 'onAirFrame') {
+      return { id: this.deps.onAirCamera().id, position: this.deps.onAirFramePoint() }
     }
     const { cast } = this.deps
     const tag = selector === 'nearestPerformer' ? undefined : selector.tag

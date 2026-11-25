@@ -32,6 +32,17 @@ export interface CastMember {
   wasOnAir: boolean
   /** 송출 화면 밖에 연속으로 있었던 스텝 수 */
   absentSteps: number
+  /** 마지막으로 행동해 pose를 정한 스텝. 감정 포즈가 풀리는 시점을 잰다. */
+  poseStep: number
+  /** walk 이동의 목표. 도착하거나 넘어지거나 시간이 다 되면 null */
+  walkGoal: WalkGoal | null
+}
+
+export interface WalkGoal {
+  to: FloorPoint
+  speed: number
+  /** 이 스텝이 되면 도착하지 못했어도 멈춘다. */
+  untilStep: number
 }
 
 /** 무대에 오른 출연자들의 상태와 위치. 출연자 id는 물리 actor id와 같다. */
@@ -56,6 +67,8 @@ export class Cast {
       motionCauseStep: 0,
       wasOnAir: false,
       absentSteps: 0,
+      poseStep: 0,
+      walkGoal: null,
     }
     this.members.set(def.id, member)
     return member

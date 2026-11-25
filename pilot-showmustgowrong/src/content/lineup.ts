@@ -22,7 +22,8 @@ const REX: PerformerDef = {
   name: '렉스 캘러웨이',
   shortName: '렉스',
   role: 'MC',
-  tendency: '카메라 시선을 8초 못 받으면 카메라로 돌진. 웃음 2↑ 받으면 → 분노 3(욕설)',
+  tendency:
+    '카메라 시선을 8초 못 받으면 카메라로 돌진(분노 2). 화면에 잡히면 표정을 푼다. 웃음 2↑ 받으면 → 분노 3(욕설)',
   presence: 3,
   tolerance: 'high',
   weight: 'normal',
@@ -38,6 +39,10 @@ const REX: PerformerDef = {
       },
     },
     {
+      trigger: { kind: 'gaze', when: 'enter' },
+      action: { pose: 'idle', emits: [], line: '렉스가 카메라를 찾아 표정을 푼다' },
+    },
+    {
       trigger: { kind: 'laughter', min: 2, scope: 'targetsSelf' },
       action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 3, target: 'cause' }] },
     },
@@ -50,10 +55,10 @@ const REX: PerformerDef = {
     {
       id: 'stepUp',
       label: '카메라 앞으로 나오세요',
-      expect: '카메라로 돌진해 소음 1',
+      expect: '송출 화면 안으로 걸어 들어가 소음 1(잡히면 분노가 풀림)',
       action: {
         pose: 'idle',
-        move: { type: 'dash', toward: 'onAirCamera', speed: 5 },
+        move: { type: 'walk', toward: 'onAirFrame', speed: 4 },
         emits: [{ kind: 'noise', intensity: 1, target: 'none' }],
       },
     },
@@ -227,10 +232,10 @@ const JUNE: PerformerDef = {
     {
       id: 'stepUp',
       label: '카메라 앞으로 나오세요',
-      expect: '카메라 앞으로 천천히 이동',
+      expect: '송출 화면 안으로 천천히 걸어 들어감',
       action: {
         pose: 'idle',
-        move: { type: 'dash', toward: 'onAirCamera', speed: 3 },
+        move: { type: 'walk', toward: 'onAirFrame', speed: 2 },
         emits: [],
       },
     },

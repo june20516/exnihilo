@@ -9,7 +9,9 @@ import {
   LIGHT_DARKNESS_INTENSITY,
   BURST_WARNING_TENSION,
   MOTION_CAUSE_SECONDS,
+  ON_AIR_FRAME_DEPTH_RATIO,
   PHENOMENON_DISPLAY_SECONDS,
+  POSE_HOLD_SECONDS,
   RATING_LIMITS,
   SILENCE_SECONDS,
   STEP_SECONDS,
@@ -19,6 +21,8 @@ import {
   TOLERANCE_COUNT,
   VIEW_LOG_LINES,
   VIEWERS_START,
+  WALK_ARRIVE_RADIUS,
+  WALK_MAX_SECONDS,
   WALKOUT_INTENSITY,
   WALKOUT_SECONDS,
   WALKOUT_SPEED,
@@ -87,6 +91,12 @@ function secondsToSteps(seconds: number): number {
 
 const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
 const MOTION_CAUSE_STEPS = secondsToSteps(MOTION_CAUSE_SECONDS)
+const POSE_HOLD_STEPS = secondsToSteps(POSE_HOLD_SECONDS)
+const WALK_MAX_STEPS = secondsToSteps(WALK_MAX_SECONDS)
+/** 시간이 지나면 풀리는 감정 포즈. 넘어짐·놀람은 물리나 다른 행동이 끝낸다. */
+const FADING_POSES: ReadonlySet<Pose> = new Set(['angry', 'laugh'])
+/** onAirFrame 목표점이 스튜디오 벽에 붙지 않게 두는 여백(m) */
+const FLOOR_MARGIN = 0.5
 const PHENOMENON_DISPLAY_STEPS = secondsToSteps(PHENOMENON_DISPLAY_SECONDS)
 
 /** 관객은 고정 환경이라 콘텐츠가 아니라 balance 수치로 반응한다(spec 7.4, Ruling 17). */
@@ -175,6 +185,7 @@ export class Broadcast {
       cameras: this.cameras,
       audienceZone: setup.show.audienceZone,
       onAirCamera: () => this.onAirCamera(),
+      onAirFramePoint: () => this.onAirFramePoint(),
     })
 
     const [firstCamera] = setup.show.cameras
@@ -272,12 +283,14 @@ export class Broadcast {
       return
     }
     this.advanceWalkouts()
+    this.advanceWalks()
     // 2. 코너 시작
     this.startCornerIfDue()
     // 3. 물리와 충격, 장비 파손
     this.stepPhysics()
     // 4. 직전 스텝 이벤트에 대한 반응(한 스텝에 한 단계)
     this.resolvePendingReactions()
+    this.fadePoses()
     // 5. 카메라 방향(추적, 놀람 복구), 시선과 관객 흥분
     this.updateCameraRig()
     this.updateGaze()
@@ -489,6 +502,7 @@ export class Broadcast {
     }
     for (const member of members) {
       member.pose = 'idle'
+      member.walkGoal = null
       this.setMotionCause(member, null)
     }
     this.cooldowns.clear()
@@ -563,6 +577,52 @@ export class Broadcast {
       y: Math.min(state.velocity.y, 0),
       z: direction.z * WALKOUT_SPEED,
     })
+  }
+
+  /** walk 목표로 걷는다. 도착, 넘어짐, 시간 초과면 수평으로 멈추고 목표를 지운다. */
+  private advanceWalks(): void {
+    for (const member of this.cast.active()) {
+      const goal = member.walkGoal
+      if (goal === null) continue
+      const state = this.physics.actorState(member.def.id)
+      if (state === undefined || state.tumbling) {
+        member.walkGoal = null
+        continue
+      }
+      const arrived = floorDistance(state.position, goal.to) <= WALK_ARRIVE_RADIUS
+      const direction = floorDirection(state.position, goal.to)
+      const done = arrived || direction === null || this.stepCount >= goal.untilStep
+      if (done) member.walkGoal = null
+      const speed = done ? 0 : goal.speed
+      // 위로 속도를 주면 넘어지므로 수직 속도는 떨어지는 쪽만 유지한다.
+      this.physics.impulse(member.def.id, {
+        x: (direction?.x ?? 0) * speed,
+        y: Math.min(state.velocity.y, 0),
+        z: (direction?.z ?? 0) * speed,
+      })
+    }
+  }
+
+  /** 새 행동 없이 POSE_HOLD_SECONDS가 지난 감정 포즈는 idle로 돌아온다. */
+  private fadePoses(): void {
+    for (const member of this.cast.active()) {
+      if (!FADING_POSES.has(member.pose)) continue
+      if (this.stepCount - member.poseStep >= POSE_HOLD_STEPS) member.pose = 'idle'
+    }
+  }
+
+  /** 송출 카메라가 지금 보는 방향으로 사거리 × ON_AIR_FRAME_DEPTH_RATIO 떨어진 바닥점(스튜디오 안). */
+  private onAirFramePoint(): Vec3 {
+    const camera = this.onAirCamera()
+    const radians = (this.rig.angle(camera.id) * Math.PI) / 180
+    const depth = camera.range * ON_AIR_FRAME_DEPTH_RATIO
+    const clamp = (value: number, max: number) =>
+      Math.min(max - FLOOR_MARGIN, Math.max(FLOOR_MARGIN, value))
+    return {
+      x: clamp(camera.position.x + Math.cos(radians) * depth, STUDIO_WIDTH),
+      y: STANDING_Y,
+      z: clamp(camera.position.z + Math.sin(radians) * depth, STUDIO_DEPTH),
+    }
   }
 
   // ── 코너, 물리, 반응, 시선 ─────────────────────────────
@@ -871,8 +931,13 @@ export class Broadcast {
     cause: PhenomenonEvent | null,
   ): void {
     member.pose = action.pose
+    member.poseStep = this.stepCount
     this.setMotionCause(member, cause)
     const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
+    if (action.line !== undefined) {
+      const depth = cause === null ? 1 : cause.depth + 1
+      this.addLine(action.line, depth, null, emitter.position)
+    }
     if (action.move !== undefined) this.move(member, emitter, action.move, cause)
     this.emitAll(emitter, action.emits, cause)
   }
@@ -890,6 +955,17 @@ export class Broadcast {
     }
     // 대상까지의 바닥 방향 단위 벡터. 대상이 없거나 같은 자리면 수평으로 움직이지 않는다.
     const target = this.locator.resolveTarget(move.toward, emitter, cause).position
+    if (move.type === 'walk') {
+      member.walkGoal =
+        target === null
+          ? null
+          : {
+              to: { x: target.x, z: target.z },
+              speed: move.speed,
+              untilStep: this.stepCount + WALK_MAX_STEPS,
+            }
+      return
+    }
     const direction = target === null ? null : floorDirection(emitter.position, target)
     const horizontal = (sign: 1 | -1, speed: number): Vec3 => ({
       x: sign * (direction?.x ?? 0) * speed,

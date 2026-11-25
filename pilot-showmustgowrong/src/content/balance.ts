@@ -25,6 +25,14 @@ export const REACTION_COOLDOWN_SECONDS = 1
 export const LEAP_VERTICAL_RATIO = 0.6
 /** 이탈한 출연자가 출구로 걸어가는 수평 속도(m/s) */
 export const WALKOUT_SPEED = 5
+/** walk 이동이 목표에 도착했다고 보는 바닥 거리(m) */
+export const WALK_ARRIVE_RADIUS = 0.3
+/** walk 이동을 포기하는 시간(초). 막혀서 도착하지 못해도 계속 걷지 않게 한다. */
+export const WALK_MAX_SECONDS = 6
+/** onAirFrame 목표점: 송출 카메라가 보는 방향으로 사거리의 이 비율만큼 떨어진 바닥 */
+export const ON_AIR_FRAME_DEPTH_RATIO = 0.5
+/** 화난 포즈와 웃는 포즈가 새 행동 없이 유지되는 시간(초). 지나면 idle로 돌아온다. */
+export const POSE_HOLD_SECONDS = 4
 /** 이탈 뒤 물리 월드에서 빠지기까지 걸리는 시간 */
 export const WALKOUT_SECONDS = 2
 /** 이탈할 때 내뿜는 분노와 소음의 강도 */

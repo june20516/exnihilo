@@ -220,3 +220,11 @@ describe('CooldownTable', () => {
     expect(table.ready('A', 'k', 6)).toBe(true)
   })
 })
+
+describe('cooldownKey', () => {
+  it('시선 반응은 화면에 잡힘과 오래 화면 밖을 따로 센다', () => {
+    expect(cooldownKey({ kind: 'gaze', when: 'enter' })).not.toBe(
+      cooldownKey({ kind: 'gaze', when: 'absentFor', seconds: 8 }),
+    )
+  })
+})

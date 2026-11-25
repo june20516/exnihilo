@@ -23,6 +23,8 @@ export type TargetSelector =
   | 'self'
   | 'none'
   | 'onAirCamera'
+  /** 송출 카메라가 지금 보는 방향의 화면 안쪽 바닥 지점(카메라 앞으로) */
+  | 'onAirFrame'
   | 'nearestPerformer'
   | { tag: string }
 
@@ -42,8 +44,11 @@ export interface EmitDef {
   target: TargetSelector
 }
 
+/**
+ * dash·leap·flee는 한 번 미는 충격이고, walk는 목표에 도착할 때까지(최대 WALK_MAX_SECONDS) 매 스텝 걷는다.
+ */
 export interface MoveDef {
-  type: 'dash' | 'leap' | 'flee' | 'home'
+  type: 'dash' | 'leap' | 'flee' | 'home' | 'walk'
   toward: TargetSelector
   speed: number
 }
@@ -52,6 +57,8 @@ export interface ActionDef {
   pose: Pose
   move?: MoveDef
   emits: EmitDef[]
+  /** 행동할 때 사고 로그에 남기는 한 줄(현상이 없는 행동도 무엇을 했는지 보이게 한다) */
+  line?: string
 }
 
 export interface ReactionDef {
