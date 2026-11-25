@@ -172,6 +172,17 @@ describe('PhysicsWorld', () => {
     expect(gap).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
   })
 
+  it('같은 스텝에 두 actor를 같은 x로 연속 teleport해도 서로 겹치지 않는다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('first', 2, 'normal')
+    world.addActor('second', 4, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.teleport('first', 8)
+    world.teleport('second', 8)
+    const gap = Math.abs((world.actorState('first')?.x ?? 0) - (world.actorState('second')?.x ?? 0))
+    expect(gap).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
+  })
+
   it('누운 세트 벽 자리로 세우면 벽과 겹치지 않는 곳에 선다', () => {
     const world = new PhysicsWorld()
     world.addEquipment(SET_WALL)

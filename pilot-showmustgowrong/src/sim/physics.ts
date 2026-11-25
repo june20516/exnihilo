@@ -113,6 +113,11 @@ export class PhysicsWorld {
   private readonly owners = new Map<number, ColliderOwner>()
   private readonly ceilingHandle: number
   private disposed = false
+  /**
+   * 마지막 world.step 뒤에 세운 자리(collider handle → x). scene query의 BVH는 step에서만
+   * 갱신되므로(Rapier JS 0.21에는 따로 갱신하는 API가 없다) 같은 스텝에 세운 actor끼리는 이 목록으로 피한다.
+   */
+  private readonly standSpotsSinceStep = new Map<number, number>()
 
   constructor() {
     if (!physicsReady) {
@@ -150,6 +155,7 @@ export class PhysicsWorld {
     this.actors.clear()
     this.equipment.clear()
     this.owners.clear()
+    this.standSpotsSinceStep.clear()
   }
 
   addActor(id: string, x: number, weight: Weight): void {
@@ -221,6 +227,7 @@ export class PhysicsWorld {
     const entry = this.actors.get(id)
     if (entry === undefined) return
     this.owners.delete(entry.collider.handle)
+    this.standSpotsSinceStep.delete(entry.collider.handle)
     this.world.removeRigidBody(entry.body)
     this.actors.delete(id)
   }
@@ -246,6 +253,7 @@ export class PhysicsWorld {
     this.assertAlive()
     const previous = this.recordVelocities()
     this.world.step(this.events)
+    this.standSpotsSinceStep.clear()
 
     const contacts: Contact[] = []
     this.events.drainCollisionEvents((handle1, handle2, started) => {
@@ -314,11 +322,15 @@ export class PhysicsWorld {
 
   private standUp(entry: ActorEntry, x: number): void {
     const { body } = entry
-    body.setTranslation({ x: this.freeStandingX(entry.collider, x), y: STANDING_Y }, true)
+    const standX = this.freeStandingX(entry.collider, x)
+    body.setTranslation({ x: standX, y: STANDING_Y }, true)
     body.setRotation(0, true)
     body.setLinvel({ x: 0, y: 0 }, true)
     body.setAngvel(0, true)
     body.lockRotations(true, true)
+    // collider 위치를 바로 맞춰서 query가 옛 위치의 collider를 장애물로 보지 않게 한다.
+    this.world.propagateModifiedBodyPositionsToColliders()
+    this.standSpotsSinceStep.set(entry.collider.handle, standX)
     entry.tumbling = false
     entry.restSteps = 0
   }
@@ -333,7 +345,13 @@ export class PhysicsWorld {
       const owner = this.owners.get(collider.handle)
       return owner?.kind === 'actor' || owner?.kind === 'equipment'
     }
+    const minGap = 2 * (CAPSULE.radius + STAND_UP_CLEARANCE)
+    const clearOfNewSpots = (candidate: number): boolean =>
+      [...this.standSpotsSinceStep].every(
+        ([handle, spotX]) => handle === self.handle || Math.abs(spotX - candidate) >= minGap,
+      )
     const isFree = (candidate: number): boolean =>
+      clearOfNewSpots(candidate) &&
       this.world.intersectionWithShape(
         { x: candidate, y: STANDING_Y },
         0,
