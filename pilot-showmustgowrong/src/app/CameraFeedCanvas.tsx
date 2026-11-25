@@ -43,6 +43,11 @@ interface PendingLabel {
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`
 
+/** 화면 픽셀 밀도. Retina처럼 2 이상이면 그만큼 큰 캔버스에 그려 흐리지 않게 한다. */
+function pixelRatio(): number {
+  return typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1)
+}
+
 interface CameraFeedCanvasProps {
   view: FeedView
   camera: CameraDef
@@ -62,6 +67,7 @@ export function CameraFeedCanvas({
   shortNames,
 }: CameraFeedCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const ratio = pixelRatio()
 
   useEffect(() => {
     const context = canvasRef.current?.getContext('2d')
@@ -69,14 +75,17 @@ export function CameraFeedCanvas({
     const items = cameraFeed(view, camera, audienceZone).map((item) =>
       item.kind === 'actor' ? { ...item, label: shortNames?.get(item.id) ?? item.label } : item,
     )
+    // 캔버스 픽셀은 CSS 크기 x ratio이고, 그리기는 CSS 픽셀 좌표로 한다.
+    context.setTransform(ratio, 0, 0, ratio, 0, 0)
     drawFeed(context, items, width, height)
-  }, [view, camera, audienceZone, width, height, shortNames])
+  }, [view, camera, audienceZone, width, height, shortNames, ratio])
 
   return (
     <canvas
       ref={canvasRef}
-      width={width}
-      height={height}
+      width={Math.round(width * ratio)}
+      height={Math.round(height * ratio)}
+      style={{ width, height }}
       role="img"
       aria-label={`${camera.label} 카메라 화면`}
     />
