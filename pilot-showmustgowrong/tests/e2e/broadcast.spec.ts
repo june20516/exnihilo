@@ -3,6 +3,12 @@ import { INTERVENTION_REAL_SECONDS } from '../../src/content/balance'
 
 const SCREENSHOT_PATH = 'tests/screens/broadcast-1280x720.png'
 const INTERVENTION_SCREENSHOT_PATH = 'tests/screens/broadcast-intervention-1280x720.png'
+/** 커밋된 기준 스크린샷은 UPDATE_SCREENSHOTS=1로 돌릴 때만 다시 쓴다(실행마다 바이너리 diff가 나지 않게). */
+const UPDATE_SCREENSHOTS = process.env.UPDATE_SCREENSHOTS === '1'
+
+async function saveScreenshot(page: Page, path: string): Promise<void> {
+  if (UPDATE_SCREENSHOTS) await page.screenshot({ path })
+}
 const GAUGES = ['sexual', 'violence', 'drugs', 'language'] as const
 const SWITCHERS = ['wide', 'close', 'audienceCam'] as const
 
@@ -47,7 +53,7 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
   expect(scroll.width).toBeLessThanOrEqual(1280)
   // 캔버스가 실제로 붙었는지(렌더러 생성 완료)
   await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
-  await page.screenshot({ path: SCREENSHOT_PATH })
+  await saveScreenshot(page, SCREENSHOT_PATH)
 })
 
 test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', async ({ page }) => {
@@ -80,6 +86,29 @@ async function actorAnchor(page: Page, actorId: string): Promise<{ x: number; y:
   const anchors: Record<string, [number, number]> = JSON.parse(raw ?? '{}')
   const [x, y] = anchors[actorId]
   return { x, y }
+}
+
+/** 사고 로그에 보이는 가장 최근 줄 번호. 줄이 없으면 -1 */
+async function newestLogIndex(page: Page): Promise<number> {
+  const indexes = await page
+    .getByTestId('event-log')
+    .locator('li[data-log-index]')
+    .evaluateAll((items) => items.map((item) => Number(item.getAttribute('data-log-index'))))
+  return Math.max(-1, ...indexes)
+}
+
+/** 사고 로그에서 줄 번호가 after보다 큰 줄들의 문구 */
+async function logTextsAfter(page: Page, after: number): Promise<string[]> {
+  return page
+    .getByTestId('event-log')
+    .locator('li[data-log-index]')
+    .evaluateAll(
+      (items, minIndex) =>
+        items
+          .filter((item) => Number(item.getAttribute('data-log-index')) > minIndex)
+          .map((item) => item.querySelector('[title]')?.getAttribute('title') ?? ''),
+      after,
+    )
 }
 
 test('Space를 누르면 개입 패널이 열리고 개입 시간이 지나면 닫힌다', async ({ page }) => {
@@ -134,10 +163,6 @@ test('개입 버튼 → 출연자 클릭 → 카드와 줄어드는 남은 시�
   await openBroadcast(page)
   const studio = page.getByTestId('studio')
   await expect(studio.locator('canvas')).toHaveCount(1)
-  const noiseLines = page.getByTestId('event-log').getByText('렉스 쪽에서 소리가 난다')
-  // 첫 코너 시작 때 렉스가 내는 소음 한 줄(lineup.ts의 corner 반응)
-  await expect(noiseLines).toHaveCount(1)
-
   await page.getByTestId('intervene-button').click()
   const panel = page.getByTestId('intervention-panel')
   await expect(panel).toBeVisible()
@@ -154,13 +179,66 @@ test('개입 버튼 → 출연자 클릭 → 카드와 줄어드는 남은 시�
   expect(first).toBeLessThanOrEqual(INTERVENTION_REAL_SECONDS)
   expect(first).toBeGreaterThan(INTERVENTION_REAL_SECONDS - 2)
   await expect.poll(readSeconds, { timeout: 3_000 }).toBeLessThan(first - 0.5)
-  await page.screenshot({ path: INTERVENTION_SCREENSHOT_PATH })
+  await saveScreenshot(page, INTERVENTION_SCREENSHOT_PATH)
 
-  // stepUp: 카메라로 돌진하며 소음 1을 낸다(lineup.ts). 로그에 그 소음 줄이 하나 더 남는다.
+  // stepUp: 카메라로 돌진하며 소음 1을 낸다(lineup.ts). 지시 뒤에 생긴 줄(data-log-index가 더 큰 줄)에
+  // 그 소음이 남는다. 줄 개수는 로그가 밀리면 흔들리므로 세지 않는다.
+  const lastIndexBefore = await newestLogIndex(page)
   await card.getByTestId('directive-stepUp').click()
   await expect(panel).toBeHidden()
-  await expect(page.getByTestId('event-log')).toBeVisible()
-  await expect(noiseLines).toHaveCount(2)
+  await expect
+    .poll(() => logTextsAfter(page, lastIndexBefore), { timeout: 3_000 })
+    .toContain('렉스 쪽에서 소리가 난다')
+  // 지시가 반영돼 내성이 하나 줄었다
   await page.keyboard.press('Space')
   await expect(page.getByTestId('target-rex')).toContainText('내성 4')
+})
+
+test('창 크기를 바꾼 뒤에도 출연자를 클릭하면 ON AIR와 미리보기의 클로즈업 대상이 바뀐다', async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  const widthBefore = (await host.boundingBox())?.width ?? 0
+  const anchorsBefore = await host.getAttribute('data-actor-anchors')
+  await page.setViewportSize({ width: 1600, height: 900 })
+  // 스튜디오가 새 크기로 바뀌고 앵커도 새 배율로 다시 실릴 때까지 기다린다.
+  await expect.poll(async () => (await host.boundingBox())?.width ?? 0).not.toBe(widthBefore)
+  await expect.poll(() => host.getAttribute('data-actor-anchors')).not.toBe(anchorsBefore)
+
+  await page.keyboard.press('2')
+  const label = page.getByTestId('on-air-label')
+  await expect(label).toContainText('대상 렉스')
+  await host.click({ position: await actorAnchor(page, 'priya') })
+  await expect(label).toContainText('대상 프리야')
+
+  // 클로즈업이 미리보기일 때도 클릭이 대상을 바꾸고 미리보기 이름표에 보인다.
+  await page.keyboard.press('1')
+  const preview = page.getByTestId('switcher-close').getByTestId('preview-target')
+  await expect(preview).toContainText('대상 프리야')
+  await host.click({ position: await actorAnchor(page, 'okafor') })
+  await expect(preview).toContainText('대상 오카포')
+  await expect(page.getByTestId('intervention-panel')).toBeHidden()
+})
+
+test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 출연자 클릭으로 추적이 돌아온다", async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  await page.keyboard.press('2')
+  const label = page.getByTestId('on-air-label')
+  await expect(label).toHaveAttribute('data-aim-mode', 'tracking')
+
+  await page.keyboard.press('Space')
+  const panel = page.getByTestId('intervention-panel')
+  await panel.getByTestId('target-cameraOperator').click()
+  await panel.getByTestId('target-card').getByTestId('directive-aimAudience').click()
+  await expect(panel).toBeHidden()
+  await expect(label).toHaveAttribute('data-aim-mode', 'directed')
+  await expect(label).toContainText('대상 렉스 · 지시로 고정 (출연자 클릭 시 추적)')
+  await expectInViewport(page, 'on-air-label')
+
+  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'rex') })
+  await expect(label).toHaveAttribute('data-aim-mode', 'tracking')
+  await expect(label).not.toContainText('지시로 고정')
 })

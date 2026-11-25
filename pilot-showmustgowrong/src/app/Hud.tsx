@@ -150,6 +150,7 @@ export function EventLog({ log, highlightedEventId }: EventLogProps) {
         {recent.map((line) => (
           <li
             key={line.index}
+            data-log-index={line.index}
             className={`flex rounded-sm ${
               line.eventId !== null && line.eventId === highlightedEventId
                 ? 'bg-amber-500/30 text-amber-100'
