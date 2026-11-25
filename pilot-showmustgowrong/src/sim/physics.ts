@@ -114,8 +114,9 @@ export class PhysicsWorld {
   private readonly ceilingHandle: number
   private disposed = false
   /**
-   * 마지막 world.step 뒤에 세운 자리(collider handle → x). scene query의 BVH는 step에서만
-   * 갱신되므로(Rapier JS 0.21에는 따로 갱신하는 API가 없다) 같은 스텝에 세운 actor끼리는 이 목록으로 피한다.
+   * 마지막 world.step 뒤에 세운 자리(collider handle → x). 공개 API
+   * `propagateModifiedBodyPositionsToColliders()`는 collider 위치만 갱신하고, scene query가 쓰는
+   * BVH는 step 밖에서 갱신되지 않는다. 그래서 같은 스텝에 세운 actor끼리는 이 목록으로 피한다.
    */
   private readonly standSpotsSinceStep = new Map<number, number>()
 
