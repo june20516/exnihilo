@@ -77,6 +77,15 @@ describe('토크쇼 콘텐츠', () => {
     for (const corner of TALK_SHOW.corners) expect(stageTags).toContain(corner.startTag)
   })
 
+  it('스태프의 기준 방향 지시 설명은 성향 문구처럼 기준 방향(추적 중이면 대상)으로 쓴다', () => {
+    for (const member of LINEUP.staff) {
+      for (const directive of member.directives.filter((entry) => entry.aim === 'default')) {
+        expect(directive.expect).toContain('기준 방향(추적 중이면 대상)')
+      }
+      expect(member.tendency).toContain('기준 방향')
+    }
+  })
+
   it('출연자 이름은 한글 전체 표기와 짧은 이름을 가진다', () => {
     const hangul = /[가-힣]/
     for (const performer of allPerformers) {

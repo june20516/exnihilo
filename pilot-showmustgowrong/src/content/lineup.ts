@@ -258,7 +258,12 @@ const COWARD_CAMERA_OPERATOR: StaffDef = {
       expect: '카메라를 관객석으로 돌려 유지',
       aim: 'audience',
     },
-    { id: 'calmDown', label: '침착하세요', expect: '카메라를 기본 방향으로 되돌림', aim: 'default' },
+    {
+      id: 'calmDown',
+      label: '침착하세요',
+      expect: '카메라를 기준 방향(추적 중이면 대상)으로 되돌림',
+      aim: 'default',
+    },
   ],
 }
 
