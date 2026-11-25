@@ -28,14 +28,15 @@ export const TALK_SHOW: ShowDef = {
       shotIntensity: 1,
     },
     // 앞쪽 왼편 어깨높이에서 출연자 한 명을 따라간다. 기본 방향은 첫 home spot(4.5, 4)이고,
-    // 좁은 화각이라 옆 home spot(7, 4)은 약 22° 떨어져 빠진다.
+    // 좁은 화각이라 옆 home spot(7, 4)은 약 22° 떨어져 빠진다. 사거리는 가장 먼 대기석(15, 6)까지
+    // 약 12m에 1m를 더해, 어느 home spot이나 대기석의 출연자를 따라가도 잡힌다(Ruling 56).
     {
       id: 'close',
       label: '클로즈업',
       position: { x: 3.5, y: 1.5, z: 9.5 },
       defaultAngle: -80,
       fovDegrees: 24,
-      range: 8,
+      range: 13,
       shotIntensity: 2,
       tracking: true,
     },

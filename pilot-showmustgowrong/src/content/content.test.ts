@@ -4,7 +4,7 @@ import { inFrame } from '@/sim/broadcast'
 import { STANDING_Y } from '@/sim/cast'
 import { Broadcast } from '@/sim/engine'
 import { initPhysics, PhysicsWorld } from '@/sim/physics'
-import { type FloorPoint, floorDistance } from '@/sim/vec'
+import { type FloorPoint, floorDistance, yawBetween } from '@/sim/vec'
 import { LINEUP } from './lineup'
 import { TALK_SHOW } from './talkShow'
 import type { ActionDef, PerformerDef, PhenomenonKind, Trigger } from './types'
@@ -133,6 +133,15 @@ describe('토크쇼 콘텐츠', () => {
     it('클로즈업은 추적 카메라이고 화각 24°, 기본 방향으로 첫 home spot을 잡는다', () => {
       expect(camera('close')).toMatchObject({ tracking: true, fovDegrees: 24, shotIntensity: 2 })
       expect(frames('close', homeSpots[0])).toBe(true)
+    })
+
+    it('클로즈업은 home spot 4곳과 대기석 모두에 닿는다(그 자리를 대상으로 추적했을 때 inFrame)', () => {
+      const close = camera('close')
+      for (const spot of [...homeSpots, TALK_SHOW.benchSpot]) {
+        const target = standing(spot)
+        const trackedYaw = yawBetween(close.position, target)
+        expect(inFrame(close, trackedYaw, target), `x ${spot.x}, z ${spot.z}`).toBe(true)
+      }
     })
 
     it('관객석 카메라는 관객석 중앙을 잡고 home spot은 하나도 잡지 않는다', () => {
