@@ -821,8 +821,9 @@ describe('관객(Ruling 17)', () => {
       }),
     ])
 
-    // 쿨다운 끝 직전(첫 전염 뒤 COOLDOWN_STEPS - 1 스텝)에 판정하는 웃음은 막힌다.
-    // 자기 웃음에도 반응하지 않는다.
+    // 웃음은 낸 다음 스텝에 판정된다. step contagionStep + C - 2(첫 전염 뒤 C - 2)에 낸 웃음은
+    // step contagionStep + C - 1에 판정되어, 첫 전염과의 간격이 C - 1이라 쿨다운에 막힌다
+    // (C = COOLDOWN_STEPS). 자기 웃음에도 반응하지 않는다.
     const contagionStep = 1
     run(broadcast, contagionStep + COOLDOWN_STEPS - 2 - broadcast.currentStep)
     broadcast.step([laugh])
@@ -830,7 +831,8 @@ describe('관객(Ruling 17)', () => {
     expect(broadcast.currentStep).toBe(contagionStep + COOLDOWN_STEPS)
     expect(fromAudience(broadcast, 'laughter')).toHaveLength(1)
 
-    // 정확히 COOLDOWN_STEPS 뒤에 판정하는 웃음에는 다시 전염된다
+    // step contagionStep + C - 1에 낸 웃음은 step contagionStep + C에 판정되어,
+    // 간격이 정확히 C라 다시 전염된다
     broadcast.step([])
     expect(fromAudience(broadcast, 'laughter')).toEqual([
       expect.objectContaining({ step: contagionStep }),
