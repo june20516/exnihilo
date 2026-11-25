@@ -55,15 +55,18 @@ test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', asy
 
 test('Space를 누르면 개입 패널이 열리고 4초 뒤 닫힌다', async ({ page }) => {
   await openBroadcast(page)
+  const pressedAt = Date.now()
   await page.keyboard.press('Space')
   const panel = page.getByTestId('intervention-panel')
   await expect(panel).toBeVisible()
   // 스태프도 대상 목록에 있다
   await expect(panel.getByTestId('target-cameraOperator')).toBeVisible()
   await expectInViewport(page, 'intervention-panel')
-  await page.waitForTimeout(2_500)
-  await expect(panel).toBeVisible()
-  await expect(panel).toBeHidden({ timeout: 4_000 })
+  // 개입은 실제 4초. 누른 지 3.5초에는 아직 열려 있고, 5초(약 4.5초 ± 0.5초) 안에 닫힌다.
+  // 여유는 프레임 지연(CI 흔들림)을 감안한 값이다.
+  await page.waitForTimeout(3_500 - (Date.now() - pressedAt))
+  await expect(panel).toBeVisible({ timeout: 100 })
+  await expect(panel).toBeHidden({ timeout: 5_000 - (Date.now() - pressedAt) })
 })
 
 test('광고 효과 2개를 골라 확정하면 남은 광고가 0회가 된다', async ({ page }) => {
