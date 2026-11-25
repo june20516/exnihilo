@@ -18,6 +18,11 @@ export const WALKOUT_SECONDS = 2
 export const WALKOUT_INTENSITY: Intensity = 2
 /** 조명이 부서질 때 구역 중앙에 생기는 어둠의 강도 */
 export const LIGHT_DARKNESS_INTENSITY: Intensity = 2
+/** 관객석이 송출되는 동안 관객이 흥분해 소음을 내는 주기(초) */
+export const AUDIENCE_NOISE_SECONDS = 3
+export const AUDIENCE_NOISE_INTENSITY: Intensity = 1
+/** 관객이 시야 안의 웃음에 전염되어 내는 웃음의 강도 */
+export const AUDIENCE_LAUGHTER_INTENSITY: Intensity = 1
 /** BroadcastView.log에 담는 최근 줄 수 */
 export const VIEW_LOG_LINES = 50
 

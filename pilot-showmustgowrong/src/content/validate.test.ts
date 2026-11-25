@@ -196,6 +196,21 @@ describe('validateShow', () => {
     expect(errors.join('\n')).toContain('중복 id: 카메라 cam1')
   })
 
+  it('엔진이 고정 환경 source로 쓰는 예약 id(audience, broadcast)를 보고한다', () => {
+    const reservedShow = {
+      ...show,
+      cameras: [show.cameras[0], { ...show.cameras[0], id: 'audience' }],
+    }
+    const errors = validateShow(
+      reservedShow,
+      [makePerformer('broadcast'), makePerformer('b')],
+      [makeStaff()],
+      equipment,
+    )
+    expect(errors).toContain('예약된 id: 카메라 audience')
+    expect(errors).toContain('예약된 id: 출연자 broadcast')
+  })
+
   it('출연자가 없는 코너 startTag와 corner 트리거 태그는 허용한다', () => {
     const noTagShow = {
       ...show,

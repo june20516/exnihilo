@@ -17,6 +17,9 @@ function* reactionTargets(reactions: ReactionDef[]): Generator<TargetSelector> {
   for (const reaction of reactions) yield* actionTargets(reaction.action)
 }
 
+/** 엔진이 고정 환경 source로 쓰는 id(관객, 방송). 콘텐츠 요소가 쓰면 이벤트의 주체가 섞인다. */
+export const RESERVED_IDS: readonly string[] = ['audience', 'broadcast']
+
 function findDuplicates(ids: string[]): string[] {
   const seen = new Set<string>()
   const duplicates = new Set<string>()
@@ -44,6 +47,9 @@ export function validateShow(
   ]
   for (const [label, ids] of idGroups) {
     for (const id of findDuplicates(ids)) errors.push(`중복 id: ${label} ${id}`)
+    for (const id of new Set(ids)) {
+      if (RESERVED_IDS.includes(id)) errors.push(`예약된 id: ${label} ${id}`)
+    }
   }
 
   const knownTags = new Set(performers.flatMap((p) => p.tags))

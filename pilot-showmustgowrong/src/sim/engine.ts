@@ -1,5 +1,8 @@
 import {
   AD_GAUGE_RELIEF,
+  AUDIENCE_LAUGHTER_INTENSITY,
+  AUDIENCE_NOISE_INTENSITY,
+  AUDIENCE_NOISE_SECONDS,
   BROADCAST_STEPS,
   CORNER_STEPS,
   LEAP_VERTICAL_RATIO,
@@ -65,10 +68,25 @@ const WALKOUT_STEPS = Math.round(WALKOUT_SECONDS / STEP_SECONDS)
 const INTENSITIES: readonly Intensity[] = [1, 2, 3]
 const MAX_INTENSITY: Intensity = 3
 const LAST_CORNER_INDEX = 2
+/** 관객 이벤트의 sourceId. validateShow가 콘텐츠 id로 쓰지 못하게 막는다(RESERVED_IDS). */
+const AUDIENCE_ID = 'audience'
 
 function secondsToSteps(seconds: number): number {
   return Math.max(1, Math.round(seconds * STEPS_PER_SECOND))
 }
+
+const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
+
+/** 관객은 고정 환경이라 콘텐츠가 아니라 balance 수치로 반응한다(spec 7.4, Ruling 17). */
+const AUDIENCE_REACTIONS: ReactionDef[] = [
+  {
+    trigger: { kind: 'laughter', min: 1, scope: 'perceived' },
+    action: {
+      pose: 'laugh',
+      emits: [{ kind: 'laughter', intensity: AUDIENCE_LAUGHTER_INTENSITY, target: 'none' }],
+    },
+  },
+]
 
 function cloneInput(input: BroadcastInput): BroadcastInput {
   return input.type === 'ad' ? { type: 'ad', effects: [...input.effects] } : { ...input }
@@ -110,6 +128,8 @@ export class Broadcast {
   /** 이번 스텝에 생긴 이벤트. 광고로 멈춘 스텝은 재개 뒤에도 이어서 쌓는다. */
   private currentEvents: PhenomenonEvent[] = []
   private silentSteps = 0
+  /** 관객석이 송출 화면에 연속으로 잡힌 스텝 수 */
+  private audienceOnAirSteps = 0
   private readonly lines: LogLine[] = []
   private deepestEvent: PhenomenonEvent | null = null
   private autoSlowmo: AutoSlowmo | null = null
@@ -220,8 +240,9 @@ export class Broadcast {
     this.stepPhysics()
     // 4. 직전 스텝 이벤트에 대한 반응(한 스텝에 한 단계)
     this.resolvePendingReactions()
-    // 5. 카메라 시선
+    // 5. 카메라 시선과 관객 흥분
     this.updateGaze()
+    this.updateAudienceNoise()
     // 6. 송출 판정과 점수
     const aired = this.scoreAiredEvents()
     // 7. 정적
@@ -548,6 +569,7 @@ export class Broadcast {
         reactions: member.reactions,
         walkedOut: false,
       })),
+      this.audienceReactor(),
     ]
     const [planned, rng] = resolveReactions(
       this.pendingEvents,
@@ -566,8 +588,46 @@ export class Broadcast {
         continue
       }
       const staffMember = this.staff.get(plan.actorId)
-      if (staffMember !== undefined) this.panicCamera(staffMember, plan.cause)
+      if (staffMember !== undefined) {
+        this.panicCamera(staffMember, plan.cause)
+        continue
+      }
+      if (plan.actorId === AUDIENCE_ID) {
+        const emitter: Emitter = { id: AUDIENCE_ID, position: this.locator.audiencePosition() }
+        this.emitAll(emitter, plan.action.emits, plan.cause)
+      }
     }
+  }
+
+  /** 관객도 다른 요소처럼 반응 판정과 쿨다운(현상 종류 단위)을 거친다. */
+  private audienceReactor(): ReactorView {
+    const position = this.locator.audiencePosition()
+    return {
+      id: AUDIENCE_ID,
+      ...position,
+      inDarkness: this.inDarkness(position),
+      reactions: AUDIENCE_REACTIONS,
+      walkedOut: false,
+    }
+  }
+
+  /** 송출 화면이 관객 구역 중앙을 잡고 있는 동안 AUDIENCE_NOISE_SECONDS마다 관객이 소음을 낸다. */
+  private updateAudienceNoise(): void {
+    const position = this.locator.audiencePosition()
+    if (!this.isOnAir(position)) {
+      this.audienceOnAirSteps = 0
+      return
+    }
+    this.audienceOnAirSteps += 1
+    if (this.audienceOnAirSteps % AUDIENCE_NOISE_STEPS !== 0) return
+    this.emit({
+      kind: 'noise',
+      intensity: AUDIENCE_NOISE_INTENSITY,
+      sourceId: AUDIENCE_ID,
+      targetId: null,
+      ...position,
+      causeId: null,
+    })
   }
 
   /** 스태프 반응은 행동 대신 담당 카메라를 무작위 방향으로 돌린다(겁쟁이 카메라 감독). */

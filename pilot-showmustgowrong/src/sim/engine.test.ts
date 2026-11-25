@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { AD_GAUGE_RELIEF, CORNER_STEPS, STEP_SECONDS } from '@/content/balance'
+import {
+  AD_GAUGE_RELIEF,
+  AUDIENCE_NOISE_SECONDS,
+  CORNER_STEPS,
+  REACTION_COOLDOWN_SECONDS,
+  STEP_SECONDS,
+} from '@/content/balance'
 import type {
   ActionDef,
   CameraDef,
@@ -36,13 +42,13 @@ const SHOW: ShowDef = {
     { label: '게임', startTag: 'host' },
   ],
   cameras: [
-    // 무대 전체와 스튜디오 가운데를 잡는다
+    // 무대 전체와 스튜디오 가운데를 잡고 관객석(x 1.5)은 잡지 않는다
     camera({
       id: 'wide',
       label: '와이드',
       position: { x: 8, y: 8 },
       defaultAngle: -90,
-      fovDegrees: 140,
+      fovDegrees: 80,
       range: 12,
     }),
     camera({
@@ -53,14 +59,14 @@ const SHOW: ShowDef = {
       range: 6,
       shotIntensity: 2,
     }),
-    // 무대의 누구도 잡지 않는다
+    // 관객 구역만 잡고 무대의 누구도 잡지 않는다
     camera({
-      id: 'audience',
+      id: 'audienceCam',
       label: '관객석',
       position: { x: 1.5, y: 4 },
       defaultAngle: -90,
       fovDegrees: 40,
-      range: 3,
+      range: 4,
     }),
   ],
   homeSpots: [{ x: 4 }, { x: 6.5 }, { x: 9.5 }, { x: 12 }],
@@ -255,7 +261,7 @@ describe('Broadcast.create', () => {
     expect(view.step).toBe(0)
     expect(view.phase).toBe('live')
     expect(view.onAirCameraId).toBe('wide')
-    expect(view.cameraAngles).toEqual({ wide: -90, close: 0, audience: -90 })
+    expect(view.cameraAngles).toEqual({ wide: -90, close: 0, audienceCam: -90 })
     expect(view.actors.map((actor) => [actor.id, actor.x])).toEqual([
       ['rex', 4],
       ['mo', 6.5],
@@ -438,7 +444,7 @@ describe('송출 중 게이지', () => {
     run(broadcast, STEPS_PER_SECOND)
     expect(broadcast.view().gauges.drugs).toBeCloseTo(6)
 
-    broadcast.step([{ type: 'switch', cameraId: 'audience' }])
+    broadcast.step([{ type: 'switch', cameraId: 'audienceCam' }])
     run(broadcast, STEPS_PER_SECOND)
     expect(broadcast.view().gauges.drugs).toBeCloseTo(6)
   })
@@ -625,10 +631,15 @@ describe('반응과 시선', () => {
     })
     const other = performer({ id: 'mo', tags: ['guest'] })
     const broadcast = await open(quietSetup({ performers: [watched, other] }))
-    broadcast.step([{ type: 'switch', cameraId: 'audience' }])
+    broadcast.step([{ type: 'switch', cameraId: 'audienceCam' }])
     run(broadcast, 2 * STEPS_PER_SECOND)
     const absent = broadcast.events().find((event) => event.kind === 'anger')
-    expect(absent).toMatchObject({ sourceId: 'rex', targetId: 'audience', causeId: null, depth: 1 })
+    expect(absent).toMatchObject({
+      sourceId: 'rex',
+      targetId: 'audienceCam',
+      causeId: null,
+      depth: 1,
+    })
     expect(broadcast.view().log.map((line) => line.text)).toContain(
       '렉스가 한동안 화면에 잡히지 않았다',
     )
@@ -725,5 +736,97 @@ describe('장비 파손 연쇄', () => {
       (event) => event.kind === 'impact' && event.sourceId === 'light' && event.targetId !== null,
     )
     expect(fallingHit).toMatchObject({ targetId: 'jumper', causeId: breakImpact.id, depth: 2 })
+  })
+})
+
+describe('관객(Ruling 17)', () => {
+  const NOISE_STEPS = Math.round(AUDIENCE_NOISE_SECONDS * STEPS_PER_SECOND)
+  const COOLDOWN_STEPS = Math.round(REACTION_COOLDOWN_SECONDS * STEPS_PER_SECOND)
+  const fromAudience = (broadcast: Broadcast, kind: PhenomenonEvent['kind']) =>
+    broadcast.events().filter((event) => event.sourceId === 'audience' && event.kind === kind)
+
+  it('관객석이 송출되는 동안 AUDIENCE_NOISE_SECONDS마다 관객 구역 중앙에서 소음 1을 낸다', async () => {
+    const broadcast = await open(quietSetup())
+    broadcast.step([{ type: 'switch', cameraId: 'audienceCam' }])
+    run(broadcast, 2 * NOISE_STEPS - 1)
+    expect(fromAudience(broadcast, 'noise')).toEqual([
+      expect.objectContaining({
+        intensity: 1,
+        targetId: null,
+        x: 1.5,
+        y: STANDING_Y,
+        step: NOISE_STEPS - 1,
+        causeId: null,
+      }),
+      expect.objectContaining({ step: 2 * NOISE_STEPS - 1 }),
+    ])
+    expect(broadcast.view().log.map((line) => line.text)).toContain('관객 쪽에서 소리가 난다')
+
+    // 관객석이 화면에서 빠지면 소음도 멈춘다
+    broadcast.step([{ type: 'switch', cameraId: 'wide' }])
+    run(broadcast, 2 * NOISE_STEPS)
+    expect(fromAudience(broadcast, 'noise')).toHaveLength(2)
+  })
+
+  it('송출 화면이 관객석을 잡지 않으면 소음을 내지 않는다', async () => {
+    const broadcast = await open(quietSetup())
+    run(broadcast, 2 * NOISE_STEPS)
+    expect(fromAudience(broadcast, 'noise')).toEqual([])
+  })
+
+  it('시야 안의 웃음에 다음 스텝에 웃음 1로 전염되고, 같은 현상 반응은 1초 쿨다운이다', async () => {
+    const LAUGH = directive('laugh', {
+      pose: 'laugh',
+      emits: [{ kind: 'laughter', intensity: 1, target: 'none' }],
+    })
+    // home x 4는 관객 구역 중앙(1.5)에서 SIGHT_RADIUS 안이다
+    const laugher = performer({ id: 'priya', tags: ['host'], directives: [LAUGH, CALM] })
+    const other = performer({ id: 'mo', tags: ['guest'] })
+    const broadcast = await open(quietSetup({ performers: [laugher, other] }))
+    const laugh: BroadcastInput = { type: 'direct', actorId: 'priya', directiveId: 'laugh' }
+
+    broadcast.step([laugh])
+    const first = broadcast.events().find((event) => event.sourceId === 'priya')
+    if (first === undefined) throw new Error('웃음 이벤트가 없습니다.')
+    expect(fromAudience(broadcast, 'laughter')).toEqual([])
+
+    broadcast.step([])
+    expect(fromAudience(broadcast, 'laughter')).toEqual([
+      expect.objectContaining({
+        intensity: 1,
+        targetId: null,
+        x: 1.5,
+        causeId: first.id,
+        depth: 2,
+        step: 1,
+      }),
+    ])
+
+    // 쿨다운 안의 웃음에는 다시 웃지 않는다(자기 웃음에도 반응하지 않는다)
+    broadcast.step([laugh])
+    run(broadcast, COOLDOWN_STEPS - 3)
+    expect(fromAudience(broadcast, 'laughter')).toHaveLength(1)
+
+    // 쿨다운이 지나면 다시 전염된다
+    broadcast.step([laugh])
+    broadcast.step([])
+    expect(fromAudience(broadcast, 'laughter')).toHaveLength(2)
+  })
+
+  it('시야 밖의 웃음에는 반응하지 않는다', async () => {
+    const LAUGH = directive('laugh', {
+      pose: 'laugh',
+      emits: [{ kind: 'laughter', intensity: 1, target: 'none' }],
+    })
+    const far = performer({ id: 'far', tags: ['guest'], directives: [LAUGH, CALM] })
+    const broadcast = await open(
+      quietSetup({
+        show: { ...SHOW, homeSpots: [{ x: 4 }, { x: 12 }] },
+        performers: [performer({ id: 'rex', tags: ['host'] }), far],
+      }),
+    )
+    broadcast.step([{ type: 'direct', actorId: 'far', directiveId: 'laugh' }])
+    run(broadcast, 2)
+    expect(fromAudience(broadcast, 'laughter')).toEqual([])
   })
 })
