@@ -1490,3 +1490,40 @@ describe('판단 정보 view', () => {
     expect(broadcast.view().viewersTrend).toBe(-1)
   })
 })
+
+describe('카메라별 잡힌 대상', () => {
+  const WALL_BETWEEN: EquipmentDef = {
+    id: 'wall',
+    name: '세트 벽',
+    kind: 'setWall',
+    position: { x: 8, y: 0, z: 5.5 },
+    breakAt: 3,
+    onBreak: [],
+  }
+  const wallShow: ShowDef = {
+    ...SHOW,
+    homeSpots: [
+      { x: 8, z: 4 },
+      { x: 12, z: 4 },
+    ],
+  }
+
+  it('송출 카메라의 잡힌 출연자는 onAir 출연자와 같다(벽에 가린 출연자 제외)', async () => {
+    const broadcast = await open(quietSetup({ show: wallShow, equipment: [WALL_BETWEEN] }))
+    run(broadcast, 2)
+    const view = broadcast.view()
+    const onAirActors = view.actors.filter((actor) => actor.onAir).map((actor) => actor.id)
+    const caught = (view.cameraSubjects[view.onAirCameraId] ?? []).filter((id) => id !== 'wall')
+    expect(onAirActors).toEqual(['mo'])
+    expect(caught).toEqual(onAirActors)
+  })
+
+  it('카메라마다 목록을 싣고 시야 안의 장비도 담는다', async () => {
+    const broadcast = await open(quietSetup({ show: wallShow, equipment: [WALL_BETWEEN] }))
+    run(broadcast, 2)
+    const { cameraSubjects } = broadcast.view()
+    expect(Object.keys(cameraSubjects).sort()).toEqual(['audienceCam', 'close', 'wide'])
+    expect(cameraSubjects.wide).toContain('wall')
+    expect(cameraSubjects.audienceCam).toEqual([])
+  })
+})

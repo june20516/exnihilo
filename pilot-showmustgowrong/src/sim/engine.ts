@@ -321,6 +321,7 @@ export class Broadcast {
       onAirCameraId: this.onAirCameraId,
       cameraAngles: this.rig.angles(),
       cameraTargets: this.rig.targets(),
+      cameraSubjects: this.cameraSubjects(),
       staff: this.rig.staffViews().map((view) => this.staffView(view)),
       actors: this.cast.all().map((member) => this.actorView(member, recentEvents)),
       equipment: [...this.equipment.keys()].map((id) => this.equipmentView(id)),
@@ -1005,6 +1006,31 @@ export class Broadcast {
       inFrame(camera, this.rig.angle(camera.id), point) &&
       this.physics.lineOfSight(camera.position, point)
     )
+  }
+
+  /**
+   * 카메라마다 지금 시야에 잡힌 출연자와 장비 id. 출연자는 송출 판정(isOnAir)과 같은 기준이다.
+   * 장비는 자기 collider가 시선을 막으므로 시야(inFrame)만 본다. 이탈한 출연자는 없다.
+   */
+  private cameraSubjects(): Record<string, string[]> {
+    const subjects: Record<string, string[]> = {}
+    for (const camera of this.cameras.values()) {
+      const yaw = this.rig.angle(camera.id)
+      const actors = this.cast
+        .all()
+        .filter((member) => {
+          if (member.departedAt !== null) return false
+          const position = this.cast.position(member)
+          return inFrame(camera, yaw, position) && this.physics.lineOfSight(camera.position, position)
+        })
+        .map((member) => member.def.id)
+      const equipment = [...this.equipment.keys()].filter((id) => {
+        const state = this.physics.equipmentState(id)
+        return state !== undefined && inFrame(camera, yaw, state.position)
+      })
+      subjects[camera.id] = [...actors, ...equipment]
+    }
+    return subjects
   }
 
   /** 어둠 구역은 바닥 원이다. 높이와 관계없이 원 안에 서 있거나 떠 있으면 어둠 속이다. */

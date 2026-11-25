@@ -131,6 +131,8 @@ export interface BroadcastView {
   cameraAngles: Record<string, number>
   /** 추적 카메라의 대상 출연자 id. 추적 카메라가 아니거나 대상이 없으면 null */
   cameraTargets: Record<string, string | null>
+  /** 카메라별로 지금 시야에 잡힌 출연자와 장비 id(출연자는 장비 가림까지 반영). 이탈한 출연자는 없다. */
+  cameraSubjects: Record<string, string[]>
   staff: StaffView[]
   actors: ActorView[]
   equipment: EquipmentView[]
