@@ -1504,6 +1504,48 @@ describe('판단 정보 view', () => {
     expect(peeked.view().log).toEqual(plain.view().log)
   })
 
+  it('물리 접촉이 일어나는 긴 방송에서도 매 스텝 view를 읽은 실행과 읽지 않은 실행이 같다', async () => {
+    const STEPS = 2400
+    const trackingShow: ShowDef = {
+      ...SHOW,
+      cameras: SHOW.cameras.map((entry) =>
+        entry.id === 'close' ? { ...entry, tracking: true } : entry,
+      ),
+    }
+    const longSetup = () => setup({ show: trackingShow })
+    const charge: BroadcastInput = { type: 'direct', actorId: 'mo', directiveId: 'charge' }
+    const shout: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'shout' }
+    const inputs = new Map<number, BroadcastInput[]>([
+      [20, [{ type: 'switch', cameraId: 'close' }]],
+      [40, [charge]],
+      [200, [{ type: 'directStaff', staffId: 'cammy', directiveId: 'audience' }]],
+      [260, [{ type: 'track', cameraId: 'close', actorId: 'mo' }]],
+      [400, [shout, { type: 'switch', cameraId: 'wide' }]],
+      [700, [charge, { type: 'directStaff', staffId: 'cammy', directiveId: 'calm' }]],
+      [1100, [{ type: 'track', cameraId: 'close', actorId: 'rex' }]],
+      [1400, [charge, { type: 'switch', cameraId: 'audienceCam' }]],
+      [1900, [shout, { type: 'directStaff', staffId: 'cammy', directiveId: 'audience' }]],
+    ])
+    const plain = await open(longSetup())
+    const peeked = await open(longSetup())
+    for (let step = 0; step < STEPS && plain.phase !== 'ended'; step++) {
+      const batch = inputs.get(step) ?? []
+      plain.step(batch)
+      peeked.step(batch)
+      peeked.view()
+      if (plain.phase === 'adBreak') plain.resumeFromAd()
+      if (peeked.phase === 'adBreak') peeked.resumeFromAd()
+    }
+    // 출연자끼리나 출연자와 장비가 부딪힌 접촉(바닥 충돌 제외)이 실제로 일어났다
+    const contacts = plain
+      .events()
+      .filter((event) => event.kind === 'impact' && event.targetId !== null)
+    expect(contacts.length).toBeGreaterThan(0)
+    expect(JSON.stringify(peeked.view())).toBe(JSON.stringify(plain.view()))
+    expect(peeked.events()).toEqual(plain.events())
+    expect(peeked.inputLog()).toEqual(plain.inputLog())
+  })
+
   it('최근 현상은 생긴 스텝부터 90스텝 들어 있고 그 뒤에 빠지며 문구는 로그와 같다', async () => {
     const displaySteps = Math.round(PHENOMENON_DISPLAY_SECONDS * STEPS_PER_SECOND)
     expect(displaySteps).toBe(90)
