@@ -77,7 +77,7 @@ export function OnAirColumn({
           <span
             data-testid="on-air-label"
             data-aim-mode={view.cameraAimModes[onAir.id] ?? 'fixed'}
-            className="min-w-0 text-sm leading-tight font-bold text-slate-100"
+            className="min-w-0 text-sm leading-tight font-bold break-keep text-slate-100"
           >
             {cameraName(show.cameras, onAir)}
             {onAirTarget !== null && ` · ${onAirTarget}`}
@@ -130,7 +130,7 @@ export function OnAirColumn({
                 <span
                   data-testid="preview-target"
                   data-aim-mode={view.cameraAimModes[camera.id] ?? 'fixed'}
-                  className="text-[11px] leading-tight text-amber-300"
+                  className="text-[11px] leading-tight break-keep text-amber-300"
                 >
                   {target}
                 </span>
