@@ -14,6 +14,8 @@ import {
   SET_WALL_HALF_EXTENTS,
   SET_WALL_TOPPLE_ANGVEL,
   SETTLED_SPEED,
+  STAND_UP_CLEARANCE,
+  STAND_UP_SEARCH_STEP,
   STAND_UP_SECONDS,
   STEP_SECONDS,
   STUDIO_HEIGHT,
@@ -26,12 +28,21 @@ const STANDING_Y = CAPSULE.halfHeight + CAPSULE.radius
 const STAND_UP_STEPS = Math.round(STAND_UP_SECONDS / STEP_SECONDS)
 const INTENSITIES_DESCENDING: readonly Intensity[] = [3, 2, 1]
 
-let initialized: Promise<void> | undefined
+let physicsReady = false
+let pendingInit: Promise<void> | undefined
 
-/** Rapier wasm을 한 번만 초기화한다. */
+/** Rapier wasm을 한 번만 초기화한다. 실패하면 다음 호출에서 다시 시도한다. */
 export function initPhysics(): Promise<void> {
-  initialized ??= RAPIER.init()
-  return initialized
+  pendingInit ??= RAPIER.init().then(
+    () => {
+      physicsReady = true
+    },
+    (error: unknown) => {
+      pendingInit = undefined
+      throw error
+    },
+  )
+  return pendingInit
 }
 
 export interface Contact {
@@ -49,6 +60,7 @@ export interface ActorState {
   vx: number
   vy: number
   tumbling: boolean
+  /** 천장을 제외한 무언가(바닥, 다른 actor, 장비, 옆벽)에 받쳐져 있음. 바닥 착지만 뜻하지 않는다. */
   grounded: boolean
 }
 
@@ -95,13 +107,18 @@ function clampToStudio(x: number): number {
 
 export class PhysicsWorld {
   private readonly world: RAPIER.World
-  private readonly events = new RAPIER.EventQueue(true)
+  private readonly events: RAPIER.EventQueue
   private readonly actors = new Map<string, ActorEntry>()
   private readonly equipment = new Map<string, EquipmentEntry>()
   private readonly owners = new Map<number, ColliderOwner>()
   private readonly ceilingHandle: number
+  private disposed = false
 
   constructor() {
+    if (!physicsReady) {
+      throw new Error('Rapier가 초기화되지 않았습니다. initPhysics()를 먼저 await하세요.')
+    }
+    this.events = new RAPIER.EventQueue(true)
     this.world = new RAPIER.World(GRAVITY)
     this.world.timestep = STEP_SECONDS
 
@@ -124,7 +141,19 @@ export class PhysicsWorld {
     }
   }
 
+  /** wasm 메모리(World, EventQueue)를 해제한다. 이후 다른 메서드는 오류를 던진다. 두 번째 호출은 무시한다. */
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.events.free()
+    this.world.free()
+    this.actors.clear()
+    this.equipment.clear()
+    this.owners.clear()
+  }
+
   addActor(id: string, x: number, weight: Weight): void {
+    this.assertNewId(id)
     const body = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(clampToStudio(x), STANDING_Y)
@@ -146,16 +175,19 @@ export class PhysicsWorld {
 
   /** 조명은 공중에 고정(kinematic), 세트 벽은 position.x에서 바닥(position.y)에 세운 직육면체다. */
   addEquipment(def: EquipmentDef): void {
+    this.assertNewId(def.id)
     const isLight = def.kind === 'hangingLight'
     const extents = isLight ? LIGHT_HALF_EXTENTS : SET_WALL_HALF_EXTENTS
     const bodyDesc = isLight
       ? RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(def.position.x, def.position.y)
-      : RAPIER.RigidBodyDesc.dynamic()
-          .setTranslation(def.position.x, def.position.y + extents.hy)
-          // 풀려나기 전에는 밀리거나 넘어지지 않는다.
-          .lockRotations()
-          .lockTranslations()
+      : RAPIER.RigidBodyDesc.dynamic().setTranslation(def.position.x, def.position.y + extents.hy)
     const body = this.world.createRigidBody(bodyDesc.setCcdEnabled(true).setCanSleep(false))
+    if (!isLight) {
+      // 풀려나기 전에는 밀리거나 넘어지지 않는다. desc 단계에서 이동을 잠그면
+      // 나중에 풀어도 움직이지 않아서(Rapier 0.21) 생성 뒤에 잠근다.
+      body.lockTranslations(true, false)
+      body.lockRotations(true, false)
+    }
     const collider = this.world.createCollider(
       RAPIER.ColliderDesc.cuboid(extents.hx, extents.hy)
         .setDensity(isLight ? LIGHT_DENSITY : SET_WALL_DENSITY)
@@ -168,6 +200,7 @@ export class PhysicsWorld {
 
   /** 조명은 떨어뜨리고, 세트 벽은 스튜디오 가운데 쪽으로 쓰러뜨린다. 두 번째 호출은 무시한다. */
   releaseEquipment(id: string): void {
+    this.assertAlive()
     const entry = this.equipment.get(id)
     if (entry === undefined || entry.released) return
     entry.released = true
@@ -184,6 +217,7 @@ export class PhysicsWorld {
   }
 
   removeActor(id: string): void {
+    this.assertAlive()
     const entry = this.actors.get(id)
     if (entry === undefined) return
     this.owners.delete(entry.collider.handle)
@@ -193,6 +227,7 @@ export class PhysicsWorld {
 
   /** 속도를 직접 정한다. 위로 날리면 회전 잠금을 풀어 넘어질 수 있게 한다. */
   impulse(id: string, vx: number, vy: number): void {
+    this.assertAlive()
     const entry = this.actors.get(id)
     if (entry === undefined) return
     entry.body.setLinvel({ x: vx, y: vy }, true)
@@ -201,12 +236,14 @@ export class PhysicsWorld {
 
   /** 바닥에 세워서 x로 옮기고 회전을 잠근다. */
   teleport(id: string, x: number): void {
+    this.assertAlive()
     const entry = this.actors.get(id)
     if (entry === undefined) return
     this.standUp(entry, x)
   }
 
   step(): Contact[] {
+    this.assertAlive()
     const previous = this.recordVelocities()
     this.world.step(this.events)
 
@@ -229,6 +266,7 @@ export class PhysicsWorld {
   }
 
   actorState(id: string): ActorState | undefined {
+    this.assertAlive()
     const entry = this.actors.get(id)
     if (entry === undefined) return undefined
     const position = entry.body.translation()
@@ -245,10 +283,23 @@ export class PhysicsWorld {
   }
 
   equipmentState(id: string): EquipmentState | undefined {
+    this.assertAlive()
     const entry = this.equipment.get(id)
     if (entry === undefined) return undefined
     const position = entry.body.translation()
     return { x: position.x, y: position.y, angle: entry.body.rotation(), released: entry.released }
+  }
+
+  private assertAlive(): void {
+    if (this.disposed) throw new Error('dispose된 PhysicsWorld입니다.')
+  }
+
+  /** actor와 장비는 접촉 보고에서 같은 id 공간을 쓰므로 겹치면 안 된다. */
+  private assertNewId(id: string): void {
+    this.assertAlive()
+    if (this.actors.has(id) || this.equipment.has(id)) {
+      throw new Error(`이미 있는 물리 id입니다: ${id}`)
+    }
   }
 
   private addBoundary(x: number, y: number, hx: number, hy: number): RAPIER.Collider {
@@ -263,13 +314,46 @@ export class PhysicsWorld {
 
   private standUp(entry: ActorEntry, x: number): void {
     const { body } = entry
-    body.setTranslation({ x: clampToStudio(x), y: STANDING_Y }, true)
+    body.setTranslation({ x: this.freeStandingX(entry.collider, x), y: STANDING_Y }, true)
     body.setRotation(0, true)
     body.setLinvel({ x: 0, y: 0 }, true)
     body.setAngvel(0, true)
     body.lockRotations(true, true)
     entry.tumbling = false
     entry.restSteps = 0
+  }
+
+  /**
+   * x에서 가장 가까운, 다른 actor나 장비와 겹치지 않고 설 수 있는 x.
+   * 겹친 채 세우면 solver가 밀어내며 튕기므로 옆으로 비켜 세운다. 빈 곳이 없으면 x 그대로.
+   */
+  private freeStandingX(self: RAPIER.Collider, x: number): number {
+    const probe = new RAPIER.Capsule(CAPSULE.halfHeight, CAPSULE.radius + STAND_UP_CLEARANCE)
+    const isBody = (collider: RAPIER.Collider): boolean => {
+      const owner = this.owners.get(collider.handle)
+      return owner?.kind === 'actor' || owner?.kind === 'equipment'
+    }
+    const isFree = (candidate: number): boolean =>
+      this.world.intersectionWithShape(
+        { x: candidate, y: STANDING_Y },
+        0,
+        probe,
+        undefined,
+        undefined,
+        self,
+        undefined,
+        isBody,
+      ) === null
+
+    const start = clampToStudio(x)
+    for (let offset = 0; offset <= STUDIO_WIDTH; offset += STAND_UP_SEARCH_STEP) {
+      const candidates = offset === 0 ? [start] : [start - offset, start + offset]
+      for (const candidate of candidates) {
+        if (candidate !== clampToStudio(candidate)) continue
+        if (isFree(candidate)) return candidate
+      }
+    }
+    return start
   }
 
   /** 넘어진 채 받쳐진 상태로 SETTLED_SPEED 미만이 STAND_UP_SECONDS 이어지면 세운다. */

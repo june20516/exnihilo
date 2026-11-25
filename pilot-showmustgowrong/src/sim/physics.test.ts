@@ -1,8 +1,17 @@
-import { STAND_UP_SECONDS, STEP_SECONDS } from '@/content/balance'
+import { CAPSULE, STAND_UP_SECONDS, STEP_SECONDS } from '@/content/balance'
 import type { EquipmentDef } from '@/content/types'
 import { type Contact, initPhysics, PhysicsWorld } from './physics'
 
 const SETTLE_STEPS = 10
+
+const SET_WALL: EquipmentDef = {
+  id: 'wall',
+  name: '무너지는 세트 벽',
+  kind: 'setWall',
+  position: { x: 13.5, y: 0 },
+  breakAt: 2,
+  onBreak: [],
+}
 
 function stepMany(world: PhysicsWorld, steps: number): Contact[] {
   const contacts: Contact[] = []
@@ -128,6 +137,74 @@ describe('PhysicsWorld', () => {
     expect(state?.angle).toBe(0)
   })
 
+  it('넘어진 세트 벽은 바닥을 뚫지 않고 눕는다', () => {
+    const world = new PhysicsWorld()
+    world.addEquipment(SET_WALL)
+    stepMany(world, 60)
+    expect(world.equipmentState('wall')).toMatchObject({ angle: 0, released: false })
+    world.releaseEquipment('wall')
+    stepMany(world, 300)
+    const state = world.equipmentState('wall')
+    if (state === undefined) throw new Error('장비 없음')
+    // 반시계로 누웠다(x 13.5라 가운데 쪽인 -x로 넘어짐).
+    expect(state.angle).toBeGreaterThan(1.3)
+    expect(state.x).toBeLessThan(SET_WALL.position.x)
+    expect(state.y).toBeGreaterThan(0)
+    expect(state.y).toBeLessThan(0.5)
+  })
+
+  it('다른 actor와 겹친 자리로 세워도 튀지 않고 접촉도 없다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('standing', 8, 'normal')
+    world.addActor('mover', 4, 'normal')
+    stepMany(world, SETTLE_STEPS)
+    world.teleport('mover', 8)
+    const contacts: Contact[] = []
+    for (let i = 0; i < 60; i += 1) {
+      contacts.push(...world.step())
+      for (const id of ['standing', 'mover']) {
+        const state = world.actorState(id)
+        expect(Math.hypot(state?.vx ?? 0, state?.vy ?? 0)).toBeLessThan(0.5)
+      }
+    }
+    expect(contacts).toEqual([])
+    const gap = Math.abs((world.actorState('mover')?.x ?? 0) - (world.actorState('standing')?.x ?? 0))
+    expect(gap).toBeGreaterThanOrEqual(2 * CAPSULE.radius)
+  })
+
+  it('누운 세트 벽 자리로 세우면 벽과 겹치지 않는 곳에 선다', () => {
+    const world = new PhysicsWorld()
+    world.addEquipment(SET_WALL)
+    world.addActor('mover', 4, 'normal')
+    world.releaseEquipment('wall')
+    stepMany(world, 300)
+    world.teleport('mover', 12)
+    for (let i = 0; i < 60; i += 1) {
+      expect(world.step()).toEqual([])
+      const state = world.actorState('mover')
+      expect(Math.hypot(state?.vx ?? 0, state?.vy ?? 0)).toBeLessThan(0.5)
+    }
+    expect(world.actorState('mover')?.y).toBeCloseTo(CAPSULE.halfHeight + CAPSULE.radius, 2)
+  })
+
+  it('같은 id를 다시 추가하면 오류를 던진다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('dup', 4, 'normal')
+    world.addEquipment(SET_WALL)
+    expect(() => world.addActor('dup', 6, 'normal')).toThrow(/dup/)
+    expect(() => world.addEquipment({ ...SET_WALL, id: 'dup' })).toThrow(/dup/)
+    expect(() => world.addActor('wall', 6, 'normal')).toThrow(/wall/)
+  })
+
+  it('dispose 뒤 메서드를 부르면 명시적 오류를 던진다', () => {
+    const world = new PhysicsWorld()
+    world.addActor('a', 4, 'normal')
+    world.dispose()
+    expect(() => world.step()).toThrow(/dispose/)
+    expect(() => world.actorState('a')).toThrow(/dispose/)
+    expect(() => world.addActor('b', 6, 'normal')).toThrow(/dispose/)
+  })
+
   it('releaseEquipment한 조명은 300 스텝 뒤 바닥 근처에 있다', () => {
     const light: EquipmentDef = {
       id: 'light',
@@ -146,5 +223,29 @@ describe('PhysicsWorld', () => {
     const state = world.equipmentState('light')
     expect(state?.released).toBe(true)
     expect(state?.y).toBeLessThan(1)
+  })
+})
+
+describe('initPhysics', () => {
+  afterEach(() => {
+    vi.doUnmock('@dimforge/rapier2d-deterministic-compat')
+    vi.resetModules()
+  })
+
+  it('초기화 전에 월드를 만들면 명시적 오류를 던진다', async () => {
+    vi.resetModules()
+    const fresh = await import('./physics')
+    expect(() => new fresh.PhysicsWorld()).toThrow(/initPhysics/)
+  })
+
+  it('초기화가 실패하면 다음 호출에서 다시 시도한다', async () => {
+    const init = vi.fn<() => Promise<void>>()
+    init.mockRejectedValueOnce(new Error('wasm 실패')).mockResolvedValueOnce(undefined)
+    vi.resetModules()
+    vi.doMock('@dimforge/rapier2d-deterministic-compat', () => ({ default: { init } }))
+    const fresh = await import('./physics')
+    await expect(fresh.initPhysics()).rejects.toThrow('wasm 실패')
+    await expect(fresh.initPhysics()).resolves.toBeUndefined()
+    expect(init).toHaveBeenCalledTimes(2)
   })
 })

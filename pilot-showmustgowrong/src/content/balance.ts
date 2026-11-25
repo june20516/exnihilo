@@ -19,6 +19,10 @@ export const MASS_DENSITY: Record<Weight, number> = { light: 0.6, normal: 1, hea
 export const CAPSULE = { halfHeight: 0.5, radius: 0.35 }
 export const STAND_UP_SECONDS = 1.5
 export const SETTLED_SPEED = 0.5
+/** 일어설 때 다른 actor·장비와 띄우는 최소 간격(m) */
+export const STAND_UP_CLEARANCE = 0.02
+/** 일어설 빈자리를 좌우로 찾는 간격(m) */
+export const STAND_UP_SEARCH_STEP = 0.05
 export const GRAVITY = { x: 0, y: -9.81 }
 /** 스튜디오 크기(m). 바닥 y=0, 위가 +y. */
 export const STUDIO_WIDTH = 16
