@@ -11,11 +11,9 @@ import {
   VIEWERS_START,
   gaugeRiskIncrease,
 } from '@/content/balance'
+import { GAUGE_KINDS } from '@/content/types'
 import type { CameraDef, GaugeKind, ShowDef } from '@/content/types'
 import type { PhenomenonEvent } from './phenomena'
-
-/** 게이지 종류. 정의 순서가 동시 초과 시 우선순위다. */
-const GAUGE_ORDER: readonly GaugeKind[] = ['sexual', 'violence', 'drugs', 'language']
 
 const BOUNDARY_EPSILON = 1e-9
 
@@ -44,10 +42,10 @@ function emptyGauges(): Record<GaugeKind, number> {
 }
 
 export class BroadcastScore {
-  viewers = VIEWERS_START
-  peakViewers = VIEWERS_START
-  gauges: Record<GaugeKind, number> = emptyGauges()
-  haltedBy: GaugeKind | null = null
+  private currentViewers = VIEWERS_START
+  private currentPeakViewers = VIEWERS_START
+  private readonly currentGauges: Record<GaugeKind, number> = emptyGauges()
+  private currentHaltedBy: GaugeKind | null = null
 
   private readonly limits: Record<GaugeKind, number>
   private readonly airedCounts = new Map<string, number>()
@@ -55,6 +53,22 @@ export class BroadcastScore {
 
   constructor(show: ShowDef) {
     this.limits = RATING_LIMITS[show.rating]
+  }
+
+  get viewers(): number {
+    return this.currentViewers
+  }
+
+  get peakViewers(): number {
+    return this.currentPeakViewers
+  }
+
+  get gauges(): Readonly<Record<GaugeKind, number>> {
+    return this.currentGauges
+  }
+
+  get haltedBy(): GaugeKind | null {
+    return this.currentHaltedBy
   }
 
   /** 송출된 이벤트를 점수·시청자·게이지에 반영하고 점수를 돌려준다. */
@@ -79,7 +93,7 @@ export class BroadcastScore {
     this.changeViewers(points * VIEWERS_PER_POINT)
 
     const increase = gaugeRiskIncrease(event.kind, event.intensity)
-    for (const kind of GAUGE_ORDER) {
+    for (const kind of GAUGE_KINDS) {
       const amount = increase[kind]
       if (amount === undefined) continue
       const multiplier = event.kind === 'impact' && kind === 'violence' ? hitViolenceMultiplier : 1
@@ -89,7 +103,7 @@ export class BroadcastScore {
   }
 
   addGauge(kind: GaugeKind, amount: number): void {
-    this.gauges[kind] = Math.max(0, this.gauges[kind] + amount)
+    this.currentGauges[kind] = Math.max(0, this.currentGauges[kind] + amount)
   }
 
   /** 1초마다 호출한다. 정적 이탈을 적용하고 평균 계산용 표본을 기록한다. */
@@ -102,21 +116,22 @@ export class BroadcastScore {
 
   /** 상한 이상인 첫 게이지를 방송 중단 원인으로 정한다. 한 번 정해지면 바뀌지 않는다. */
   checkHalt(): GaugeKind | null {
-    if (this.haltedBy !== null) return this.haltedBy
-    this.haltedBy = GAUGE_ORDER.find((kind) => this.gauges[kind] >= this.limits[kind]) ?? null
-    return this.haltedBy
+    if (this.currentHaltedBy !== null) return this.currentHaltedBy
+    this.currentHaltedBy =
+      GAUGE_KINDS.find((kind) => this.currentGauges[kind] >= this.limits[kind]) ?? null
+    return this.currentHaltedBy
   }
 
   /** 상한의 AUTO_SLOWMO_GAUGE_RATIO 이상인 첫 게이지. 매번 현재 상태로 계산한다. */
   nearLimit(): GaugeKind | null {
     return (
-      GAUGE_ORDER.find((kind) => this.gauges[kind] >= this.limits[kind] * AUTO_SLOWMO_GAUGE_RATIO) ??
+      GAUGE_KINDS.find((kind) => this.gauges[kind] >= this.limits[kind] * AUTO_SLOWMO_GAUGE_RATIO) ??
       null
     )
   }
 
   relieveGauges(amount: number): void {
-    for (const kind of GAUGE_ORDER) this.addGauge(kind, -amount)
+    for (const kind of GAUGE_KINDS) this.addGauge(kind, -amount)
   }
 
   applyAdLoss(): void {
@@ -130,7 +145,7 @@ export class BroadcastScore {
   }
 
   private changeViewers(delta: number): void {
-    this.viewers = Math.max(0, this.viewers + delta)
-    this.peakViewers = Math.max(this.peakViewers, this.viewers)
+    this.currentViewers = Math.max(0, this.currentViewers + delta)
+    this.currentPeakViewers = Math.max(this.currentPeakViewers, this.currentViewers)
   }
 }

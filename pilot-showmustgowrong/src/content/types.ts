@@ -11,7 +11,8 @@ export type PhenomenonKind =
 export type Intensity = 1 | 2 | 3
 
 /** 정의 순서가 동시 초과 때의 우선순위다. */
-export type GaugeKind = 'sexual' | 'violence' | 'drugs' | 'language'
+export const GAUGE_KINDS = ['sexual', 'violence', 'drugs', 'language'] as const
+export type GaugeKind = (typeof GAUGE_KINDS)[number]
 
 export type Pose = 'idle' | 'laugh' | 'angry' | 'panic' | 'flying' | 'fallen'
 

@@ -121,11 +121,12 @@ describe('BroadcastScore.scoreEvent', () => {
 describe('BroadcastScore 게이지와 중단', () => {
   it('TV-14에서 동시에 넘으면 sexual이 먼저고, 이후에도 유지된다', () => {
     const score = new BroadcastScore(show('TV-14'))
-    score.addGauge('violence', 70)
-    score.addGauge('sexual', 70)
+    const limits = RATING_LIMITS['TV-14']
+    score.addGauge('violence', limits.violence)
+    score.addGauge('sexual', limits.sexual)
     expect(score.checkHalt()).toBe('sexual')
     expect(score.haltedBy).toBe('sexual')
-    score.addGauge('language', 90)
+    score.addGauge('language', RATING_LIMITS['TV-14'].language)
     expect(score.checkHalt()).toBe('sexual')
   })
 
