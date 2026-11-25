@@ -86,13 +86,13 @@ controller Ruling(`progress.md`)을 주제별로 묶었다. 번호는 Ruling 번
 
 ## Plan 2 결정 요약 (쿼터뷰, Rapier 3D, 정보 위계 HUD)
 
-controller Ruling(`progress.md`의 R1~R19)을 Plan 1 번호에 이어 37~55로 옮겼다. 줄 끝은 틀렸을 때 비용이다.
+controller Ruling(`progress.md`의 R1~R22)을 Plan 1 번호에 이어 37~58로 옮겼고, 최종 리뷰 수정의 결정을 59로 더했다. 줄 끝은 틀렸을 때 비용이다.
 
 ### 물리와 sim
-- 37 (R1): Contact는 위치 필드에 z를 더한 3D 모양으로 만든다(좌표가 3D). 실제 Contact에는 위치 필드가 없어 해당 없음이 됐다. 비용: Task 2에서 필드 정리 소량.
+- 37 (R1): Contact에 위치 필드가 없어 적용할 것이 없었다.
 - 38 (R2): ActorView.up·EquipmentView.rotation 전환 때 사이드뷰 렌더러를 최소 수정해 빌드와 앱 실행을 유지했다(up의 x·y로 기울기, 장비는 쿼터니언의 z축 각도). 비용: Task 5에서 버려질 임시 코드 소량.
 - 42 (R6): 3D 전환 뒤 sim 지표 변화는 Plan 2에서 밸런스를 조정하지 않고 사용자 플레이 판정 뒤 다룬다(아래 관찰). 비용: 첫 플레이가 사고 과다로 느껴질 수 있음.
-- 46 (R10): engine.ts가 1,068줄로 늘어난 것은 수용한다(DirectedAim 인터페이스 변경은 plan 밖). 비용: 큰 파일 유지.
+- 46 (R10): engine.ts가 1,180줄(최종 리뷰 수정 뒤)로 늘어난 것은 수용한다(DirectedAim 인터페이스 변경은 plan 밖). 비용: 큰 파일 유지.
 
 ### 카메라와 스태프
 - 43 (R7): `track` 입력은 그 카메라의 지시 방향(yaw)을 지우고 대상 추적으로 돌아간다. 나중 입력이 이긴다. 비용: 관객석 지시가 대상 바꾸기로 풀리는 것이 의도와 다를 수 있음(되돌리기 쉬움).
@@ -105,12 +105,12 @@ controller Ruling(`progress.md`의 R1~R19)을 Plan 1 번호에 이어 37~55로 �
 - 55 (R19): 스태프 지시의 예상 결과는 labels.ts가 아니라 콘텐츠(StaffDirectiveDef.expect)에 두고, 스태프 카드에 담당 카메라를 표시한다(spec 8.2). 비용 낮음.
 
 ### 정보 위계와 화면
+- 39 (R3): Task 5는 기존 create의 AbortSignal 인자를 유지하고 BroadcastScreen을 새 draw/hitTest 시그니처에 맞춰 최소 수정했다(배치 재작성은 Task 7). 비용 낮음.
+- 40 (R4): 스튜디오 클릭 상태는 `StudioClickState { phase; interventionOpen; activeActorIds; trackingCameraId }`로 구현자가 정의했다(plan 미정). 비용 낮음.
 - 51 (R15): 시간 반응 긴장도는 발동 주기 기준(absentSteps % period / period)을 유지하고 spec 8.2에 "화면 밖 반응은 주기마다 반복 발동하므로 다음 발동까지의 비율"을 보탰다. 비용 낮음.
 - 52 (R16): 어둠 구역은 sim이 `BroadcastView.darkZones`로 싣고 렌더러는 view만 읽는다. `create(host, show, signal)`. 규칙 단일 출처. 비용 낮음.
 - 53 (R17): hitTest는 종류 우선(출연자 → 스태프 → 장비 → 현상), 같은 종류 안에서는 depthKey가 큰 것 우선. 벽에 가린 출연자도 고를 수 있어야 한다. 비용: 벽을 눌렀는데 출연자가 잡히는 어색함.
 - 54 (R18): Plan 1의 캔버스 사고 말풍선 제거를 수용한다(사고 로그는 왼쪽 열, 현상 상세는 호버). 비용 낮음.
-- 39 (R3): Task 5는 기존 create의 AbortSignal 인자를 유지하고 BroadcastScreen을 새 draw/hitTest 시그니처에 맞춰 최소 수정했다(배치 재작성은 Task 7). 비용 낮음.
-- 40 (R4): 스튜디오 클릭 상태는 `StudioClickState { phase; interventionOpen; activeActorIds; trackingCameraId }`로 구현자가 정의했다(plan 미정). 비용 낮음.
 
 ### 작업 방식
 - 41 (R5): 리뷰 Minor는 연기하지 않고 같은 task 안에서 implementer를 재개해 고친다(메모리 규칙). 비용: task마다 수정 라운드 1회 추가.
@@ -138,3 +138,9 @@ dev 서버에서 시드 7로 한 회를 직접 돌리고(평상시, 미리보기
 - 57 (R21): 평소 진행에서 스태프 놀람이 드문 것은 밸런스 문제로 보고 Plan 2에서 조정하지 않는다. 사용자 플레이 판정 뒤로 넘긴다(범위는 시점·정보 위계). 비용: 첫 플레이에서 스태프 복구를 볼 기회가 적음.
 - 58 (R22): 평상시 광고 패널이 ON AIR 모니터를 가리는 것은 plan("광고 패널은 오른쪽 열 위에 띄운다")대로 수용한다. 광고 중에는 송출이 광고라 모니터 정보가 필요 없다. 비용 낮음.
 
+### 최종 리뷰 수정 (2026-11-26)
+
+- 59: engine.ts의 view 조립부 분리(engineView.ts)는 다음 plan 후보로 미룬다. 범위 밖 구조 변경이고 사람 판정 전에 위험을 줄이기 위해서다. 비용: 큰 파일 유지.
+- Important 1(지시로 고정된 클로즈업이 추적 중으로 보임): 리그가 카메라별 조준 상태(`cameraAimModes`: tracking·directed·startled·fixed)를 view에 싣고, 지시로 고정되면 ON AIR·미리보기 이름표에 "지시로 고정 (출연자 클릭 시 추적)"을 붙이며 머리 위 추적 표시는 속이 빈 흐린 표시로, 피드 강조는 따라가는 중일 때만 그린다.
+- Minor 2(같은 스텝의 이탈 지시와 track이 엔진 throw): 엔진이 검증과 같은 기준(isGoneBeforeInput)의 `dropInvalidQueuedInputs`를 공개하고 루프가 view 대신 그것으로 큐 입력을 거른다(Ruling 35와 같은 처리).
+- Minor 3(피드의 관객석 표시와 엔진 판정 불일치): 엔진이 `cameraSubjects`에 관객석을 관객 소음과 같은 판정(구역 중앙, isInSight)으로 담고, 피드는 모서리 다섯 점 판정을 버리고 그 목록만 따른다.
