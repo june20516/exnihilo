@@ -31,7 +31,7 @@ export interface LoopBroadcast<V extends LoopViewFields> {
 export type Slowmo = 'none' | 'auto' | 'intervention'
 
 export interface LoopSnapshot {
-  /** 'intervention'은 플레이어가 연 패널(개입, 광고 패널) 때문에 느려진 것이다. */
+  /** 'intervention'은 플레이어가 연 개입(또는 개입 중에 연 광고 패널, Ruling 5a) 때문에 느려진 것이다. */
   slowmo: Slowmo
   interventionOpen: boolean
   interventionSecondsLeft: number
@@ -59,6 +59,11 @@ export class BroadcastLoop<V extends LoopViewFields> {
   /** 이미 반응한 자동 슬로모션 계기의 step(Ruling 19). */
   private lastAutoSlowmoStep: number | null = null
   private adPanelOpen = false
+  /**
+   * Ruling 5a: 개입 중에 연 광고 패널이 이어받은 개입의 남은 시간. 그동안만 느려지고 다 되면
+   * 패널을 취소한다. 평상시에 열었으면 null(정상 속도, 시간 제한 없음).
+   */
+  private adPanelSlowSecondsLeft: number | null = null
   /** 확정한 광고 입력이 아직 스텝에 들어가지 않았다. */
   private adPending = false
   private adBreak = false
@@ -86,7 +91,9 @@ export class BroadcastLoop<V extends LoopViewFields> {
 
   /** 이미 열려 있으면 남은 시간을 그대로 둔다(대상만 바꾸는 클릭). */
   openIntervention(): void {
-    if (this.ended || this.adBreak || this.adPanelOpen || this.interventionOpen) return
+    if (this.ended || this.adBreak || this.adPending || this.adPanelOpen || this.interventionOpen) {
+      return
+    }
     this.interventionOpen = true
     this.interventionSecondsLeft = INTERVENTION_REAL_SECONDS
   }
@@ -95,21 +102,26 @@ export class BroadcastLoop<V extends LoopViewFields> {
     this.interventionOpen = false
   }
 
-  /** 광고 효과를 고르는 패널(Ruling 5). 열려 있던 개입은 세지 않고 닫는다. */
+  /**
+   * 광고 효과를 고르는 패널(Ruling 5a). 평상시에 열면 정상 속도에 시간 제한이 없다.
+   * 개입 중에 열면 개입은 세지 않고 닫되, 그 개입의 남은 시간 동안만 느려진 채로 이어받는다.
+   */
   openAdPanel(): void {
-    if (this.ended || this.adBreak || this.adPending) return
+    if (this.ended || this.adBreak || this.adPending || this.adPanelOpen) return
+    this.adPanelSlowSecondsLeft = this.interventionOpen ? this.interventionSecondsLeft : null
     this.interventionOpen = false
     this.adPanelOpen = true
   }
 
   cancelAdPanel(): void {
     this.adPanelOpen = false
+    this.adPanelSlowSecondsLeft = null
   }
 
   /** 고른 효과로 'ad' 입력을 보낸다(Ruling 4). 그 스텝에 효과가 적용되고 광고가 시작된다. */
   confirmAd(effects: AdEffect[]): void {
     if (this.ended || this.adBreak || this.adPending) return
-    this.adPanelOpen = false
+    this.cancelAdPanel()
     this.adPending = true
     this.queuedInputs.push({ type: 'ad', effects: [...effects] })
   }
@@ -169,9 +181,13 @@ export class BroadcastLoop<V extends LoopViewFields> {
   }
 
   private slowmo(): Slowmo {
-    if (this.interventionOpen || this.adPanelOpen) return 'intervention'
+    if (this.interventionOpen || this.adPanelSlowed()) return 'intervention'
     if (this.autoSlowmoSecondsLeft > 0) return 'auto'
     return 'none'
+  }
+
+  private adPanelSlowed(): boolean {
+    return this.adPanelOpen && this.adPanelSlowSecondsLeft !== null
   }
 
   private isSlowed(): boolean {
@@ -180,6 +196,11 @@ export class BroadcastLoop<V extends LoopViewFields> {
 
   private tickTimers(seconds: number): void {
     this.autoSlowmoSecondsLeft = Math.max(0, this.autoSlowmoSecondsLeft - seconds)
+    if (this.adPanelOpen && this.adPanelSlowSecondsLeft !== null) {
+      this.adPanelSlowSecondsLeft = Math.max(0, this.adPanelSlowSecondsLeft - seconds)
+      // Ruling 5a: 이어받은 개입 시간이 다 되면 광고 패널을 취소한다.
+      if (this.adPanelSlowSecondsLeft === 0) this.cancelAdPanel()
+    }
     if (!this.interventionOpen) return
     this.interventionSecondsLeft = Math.max(0, this.interventionSecondsLeft - seconds)
     // 지시 없이 시간이 다 되면 그냥 닫는다(개입으로 세지 않는다).
@@ -215,6 +236,6 @@ export class BroadcastLoop<V extends LoopViewFields> {
 
   private closePanels(): void {
     this.interventionOpen = false
-    this.adPanelOpen = false
+    this.cancelAdPanel()
   }
 }

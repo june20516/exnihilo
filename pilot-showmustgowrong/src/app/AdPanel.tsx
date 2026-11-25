@@ -10,7 +10,10 @@ interface AdPanelProps {
   onCancel(): void
 }
 
-/** 광고 효과 3개 중 AD_EFFECT_PICKS개를 고른다. 시간 제한은 없고 취소할 수 있다(Ruling 5). */
+/**
+ * 광고 효과 3개 중 AD_EFFECT_PICKS개를 고른다. 취소할 수 있다. 평상시에 열면 시간 제한이 없고,
+ * 개입 중에 열면 개입의 남은 시간이 다 될 때 루프가 패널을 닫는다(Ruling 5a).
+ */
 export function AdPanel({ benchLeft, onConfirm, onCancel }: AdPanelProps) {
   const [picked, setPicked] = useState<AdEffect[]>([])
   const full = picked.length >= AD_EFFECT_PICKS
