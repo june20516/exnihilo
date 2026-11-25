@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ErrorScreen } from './ErrorScreen'
-import { ResultScreen } from './ResultScreen'
+import {
+  CHAIN_INDENT_MAX_LEVEL,
+  CHAIN_INDENT_PX,
+  CHAIN_LINES_SHOWN,
+  ResultScreen,
+} from './ResultScreen'
 import type { BroadcastResult } from './useBroadcastLoop'
 
 const HALTED: BroadcastResult = {
@@ -37,6 +42,40 @@ describe('ResultScreen', () => {
     )
     expect(html).toContain('방송 완료')
     expect(html).toContain('이어진 사고가 없었습니다.')
+  })
+})
+
+describe('ResultScreen 긴 연쇄', () => {
+  const CHAIN_LENGTH = CHAIN_LINES_SHOWN + 7
+  const LONG: BroadcastResult = {
+    ...HALTED,
+    summary: { ...HALTED.summary, maxChainDepth: CHAIN_LENGTH },
+    longestChain: Array.from({ length: CHAIN_LENGTH }, (_, index) => ({
+      step: 300 + index,
+      text: `연쇄 문장 ${index + 1}번`,
+      depth: index + 1,
+    })),
+  }
+
+  it('표시 줄 수 상한까지만 보여 주고 나머지는 "… 외 N단계"로 줄인다', () => {
+    const html = renderToStaticMarkup(<ResultScreen result={LONG} onRestart={noop} />)
+    const items = html.match(/<li/g) ?? []
+    expect(items).toHaveLength(CHAIN_LINES_SHOWN + 1)
+    expect(html).toContain(`연쇄 문장 ${CHAIN_LINES_SHOWN}번`)
+    expect(html).not.toContain(`연쇄 문장 ${CHAIN_LINES_SHOWN + 1}번`)
+    expect(html).toContain(`… 외 ${CHAIN_LENGTH - CHAIN_LINES_SHOWN}단계`)
+  })
+
+  it('들여쓰기는 상한 단계에서 멈춘다', () => {
+    const html = renderToStaticMarkup(<ResultScreen result={LONG} onRestart={noop} />)
+    const indents = [...html.matchAll(/padding-left:(\d+)px/g)].map((match) => Number(match[1]))
+    expect(indents.length).toBeGreaterThan(0)
+    expect(Math.max(...indents)).toBe(CHAIN_INDENT_MAX_LEVEL * CHAIN_INDENT_PX)
+  })
+
+  it('상한 이하의 연쇄는 줄이지 않는다', () => {
+    const html = renderToStaticMarkup(<ResultScreen result={HALTED} onRestart={noop} />)
+    expect(html).not.toContain('… 외')
   })
 })
 

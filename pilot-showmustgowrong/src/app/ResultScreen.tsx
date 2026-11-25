@@ -6,10 +6,17 @@ interface ResultScreenProps {
   onRestart(): void
 }
 
-const CHAIN_INDENT_PX = 20
+/** 화면 표시 상수(게임 수치가 아니다). 결과 상자(높이 680px) 안에 연쇄가 다 들어가게 한다. */
+export const CHAIN_INDENT_PX = 20
+/** 이 단계보다 깊으면 더 들여쓰지 않는다. */
+export const CHAIN_INDENT_MAX_LEVEL = 8
+/** 이보다 긴 연쇄는 앞부분만 보이고 나머지를 "… 외 N단계"로 줄인다. */
+export const CHAIN_LINES_SHOWN = 10
 
 export function ResultScreen({ result, onRestart }: ResultScreenProps) {
   const { summary, longestChain, haltedBy, interventionsIssued } = result
+  const shownChain = longestChain.slice(0, CHAIN_LINES_SHOWN)
+  const hiddenCount = longestChain.length - shownChain.length
   return (
     <main
       data-testid="result-screen"
@@ -34,17 +41,26 @@ export function ResultScreen({ result, onRestart }: ResultScreenProps) {
             <p className="text-neutral-500">이어진 사고가 없었습니다.</p>
           ) : (
             <ol data-testid="result-chain" className="space-y-1">
-              {longestChain.map((line, index) => (
+              {shownChain.map((line, index) => (
                 <li key={`${line.step}:${index}`} className="flex">
                   <span className="w-12 shrink-0 text-sm tabular-nums text-neutral-500">
                     {formatStepTime(line.step)}
                   </span>
-                  <span style={{ paddingLeft: `${index * CHAIN_INDENT_PX}px` }}>
+                  <span
+                    style={{
+                      paddingLeft: `${Math.min(index, CHAIN_INDENT_MAX_LEVEL) * CHAIN_INDENT_PX}px`,
+                    }}
+                  >
                     {index > 0 && <span className="text-neutral-500">└ </span>}
                     {line.text}
                   </span>
                 </li>
               ))}
+              {hiddenCount > 0 && (
+                <li data-testid="result-chain-hidden" className="pl-12 text-sm text-neutral-500">
+                  {`… 외 ${hiddenCount}단계`}
+                </li>
+              )}
             </ol>
           )}
         </section>
