@@ -5,6 +5,11 @@ export const STEP_SECONDS = 1 / 60
 export const BROADCAST_STEPS = 10800
 export const CORNER_STEPS = 3600
 export const MAX_STEPS_PER_FRAME = 4
+/**
+ * 화면 루프가 한 프레임에 쓰는 실제 시간 상한(초). 탭을 백그라운드에 뒀다 돌아와도
+ * 개입·광고 타이머가 한꺼번에 끝나지 않게 한다(게임 시간은 MAX_STEPS_PER_FRAME이 막는다).
+ */
+export const MAX_FRAME_REAL_SECONDS = 0.25
 export const REACTION_COOLDOWN_SECONDS = 1
 
 // 엔진

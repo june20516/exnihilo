@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   CANVAS_HEIGHT,
+  CANVAS_WIDTH,
   PIXELS_PER_METER,
   cameraFanPoints,
   capsuleEndpoints,
   capsuleVerticalExtent,
+  clientToCanvas,
   distanceToSegment,
   toScreen,
 } from './geometry'
@@ -93,5 +95,13 @@ describe('distanceToSegment', () => {
 
   it('길이 0인 선분은 점까지 거리다', () => {
     expect(distanceToSegment({ x: 3, y: 4 }, a, a)).toBe(5)
+  })
+})
+
+describe('clientToCanvas', () => {
+  it('CSS로 줄인 캔버스의 클릭 좌표를 논리 좌표(1280×720)로 환산한다', () => {
+    const rect = { left: 10, top: 20, width: 960, height: 540 }
+    expect(clientToCanvas(10 + 480, 20 + 270, rect)).toEqual({ x: 640, y: 360 })
+    expect(clientToCanvas(10 + 960, 20 + 540, rect)).toEqual({ x: CANVAS_WIDTH, y: CANVAS_HEIGHT })
   })
 })

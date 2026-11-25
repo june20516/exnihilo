@@ -15,6 +15,25 @@ export function toScreen(x: number, y: number): Point {
   return { x: x * PIXELS_PER_METER, y: CANVAS_HEIGHT - y * PIXELS_PER_METER }
 }
 
+/** 화면에 보이는 캔버스 영역(getBoundingClientRect의 필요한 부분). */
+export interface DisplayRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/**
+ * 브라우저 클릭 좌표를 캔버스 논리 좌표(1280×720)로 환산한다. CSS로 캔버스를 줄여 보여 줄 때
+ * StudioRenderer.actorAt에 넘기기 전에 쓴다(Ruling 31).
+ */
+export function clientToCanvas(clientX: number, clientY: number, rect: DisplayRect): Point {
+  return {
+    x: ((clientX - rect.left) / rect.width) * CANVAS_WIDTH,
+    y: ((clientY - rect.top) / rect.height) * CANVAS_HEIGHT,
+  }
+}
+
 /**
  * 카메라 부채꼴의 화면 좌표 꼭짓점을 [x0, y0, x1, y1, ...]로 돌려준다. 첫 점은 카메라 위치.
  * 각도는 도 단위, +x가 0도, 반시계(+y 위)다. 화면은 y가 아래로 늘어나므로 y 성분의 부호를 뒤집는다.
