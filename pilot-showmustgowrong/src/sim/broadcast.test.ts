@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RATING_LIMITS, VIEWERS_START } from '@/content/balance'
-import type { CameraDef, ShowDef } from '@/content/types'
+import type { CameraDef, GaugeKind, ShowDef } from '@/content/types'
 import { BroadcastScore, inFrame } from './broadcast'
 import type { PhenomenonEvent } from './phenomena'
 
@@ -126,7 +126,7 @@ describe('BroadcastScore 게이지와 중단', () => {
     score.addGauge('sexual', limits.sexual)
     expect(score.checkHalt()).toBe('sexual')
     expect(score.haltedBy).toBe('sexual')
-    score.addGauge('language', RATING_LIMITS['TV-14'].language)
+    score.addGauge('language', limits.language)
     expect(score.checkHalt()).toBe('sexual')
   })
 
@@ -144,6 +144,13 @@ describe('BroadcastScore 게이지와 중단', () => {
     expect(score.nearLimit()).toBe('violence')
     score.relieveGauges(10)
     expect(score.nearLimit()).toBeNull()
+  })
+
+  it('gauges로 받은 객체를 바꿔도 내부 게이지는 그대로다', () => {
+    const score = new BroadcastScore(show())
+    const received = score.gauges as Record<GaugeKind, number>
+    received.violence = 50
+    expect(score.gauges.violence).toBe(0)
   })
 
   it('relieveGauges는 0 미만으로 내리지 않는다', () => {

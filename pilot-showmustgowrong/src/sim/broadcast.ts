@@ -64,7 +64,7 @@ export class BroadcastScore {
   }
 
   get gauges(): Readonly<Record<GaugeKind, number>> {
-    return this.currentGauges
+    return { ...this.currentGauges }
   }
 
   get haltedBy(): GaugeKind | null {
