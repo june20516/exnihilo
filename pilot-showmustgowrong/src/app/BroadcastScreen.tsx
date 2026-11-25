@@ -227,7 +227,12 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
             />
           )}
           {adPanelOpen && (
-            <AdPanel benchLeft={view.benchLeft} onConfirm={loop.endAd} onCancel={cancelAd} />
+            <AdPanel
+              benchLeft={view.benchLeft}
+              secondsLeft={loop.adPanelSecondsLeft}
+              onConfirm={loop.endAd}
+              onCancel={cancelAd}
+            />
           )}
           {!interventionOpen && !adPanelOpen && (
             <p className="text-xs leading-5 text-neutral-400">

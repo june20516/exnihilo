@@ -47,6 +47,8 @@ export function ResultScreen({ result, onRestart }: ResultScreenProps) {
                     {formatStepTime(line.step)}
                   </span>
                   <span
+                    className="min-w-0 truncate"
+                    title={line.text}
                     style={{
                       paddingLeft: `${Math.min(index, CHAIN_INDENT_MAX_LEVEL) * CHAIN_INDENT_PX}px`,
                     }}

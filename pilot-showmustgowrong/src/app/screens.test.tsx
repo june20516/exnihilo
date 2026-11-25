@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { AdPanel } from './AdPanel'
 import { ErrorScreen } from './ErrorScreen'
 import {
   CHAIN_INDENT_MAX_LEVEL,
@@ -76,6 +77,36 @@ describe('ResultScreen 긴 연쇄', () => {
   it('상한 이하의 연쇄는 줄이지 않는다', () => {
     const html = renderToStaticMarkup(<ResultScreen result={HALTED} onRestart={noop} />)
     expect(html).not.toContain('… 외')
+  })
+})
+
+describe('ResultScreen 긴 문장', () => {
+  const LONG_TEXT = '렉스가 방송 내내 참았던 분노를 터뜨리며 스튜디오 한가운데에서 소리를 지르기 시작한다'
+
+  it('연쇄 줄은 한 줄로 고정(truncate)하고 전체 문장은 title로 보여 준다', () => {
+    const html = renderToStaticMarkup(
+      <ResultScreen
+        result={{ ...HALTED, longestChain: [{ step: 300, text: LONG_TEXT, depth: 1 }] }}
+        onRestart={noop}
+      />,
+    )
+    expect(html).toMatch(/<span class="[^"]*\btruncate\b[^"]*"[^>]*>/)
+    expect(html).toMatch(/\btruncate\b[^>]*title="/)
+    expect(html).toContain(`title="${LONG_TEXT}"`)
+  })
+})
+
+describe('AdPanel 남은 시간', () => {
+  it('개입 중에 연 패널(secondsLeft 있음)만 남은 초를 보여 준다', () => {
+    const open = renderToStaticMarkup(
+      <AdPanel benchLeft={1} secondsLeft={2.34} onConfirm={noop} onCancel={noop} />,
+    )
+    expect(open).toContain('data-testid="ad-seconds"')
+    expect(open).toContain('2.3초')
+    const normal = renderToStaticMarkup(
+      <AdPanel benchLeft={1} secondsLeft={null} onConfirm={noop} onCancel={noop} />,
+    )
+    expect(normal).not.toContain('ad-seconds')
   })
 })
 

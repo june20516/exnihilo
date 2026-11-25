@@ -282,6 +282,22 @@ describe('BroadcastLoop 광고', () => {
     expect(broadcast.steps.flat()).toEqual([])
   })
 
+  it('광고 패널의 남은 시간은 개입 중에 연 경우에만 있고, 줄어든다', () => {
+    const { loop } = setup()
+    loop.openAdPanel()
+    expect(loop.snapshot().adPanelSecondsLeft).toBeNull()
+    loop.cancelAdPanel()
+
+    loop.openIntervention()
+    runSeconds(loop, 1)
+    loop.openAdPanel()
+    expect(loop.snapshot().adPanelSecondsLeft).toBeCloseTo(INTERVENTION_REAL_SECONDS - 1, 5)
+    runSeconds(loop, 1)
+    expect(loop.snapshot().adPanelSecondsLeft).toBeCloseTo(INTERVENTION_REAL_SECONDS - 2, 5)
+    loop.cancelAdPanel()
+    expect(loop.snapshot().adPanelSecondsLeft).toBeNull()
+  })
+
   it('개입 중에 연 광고 패널을 취소하면 슬로모션도 끝난다', () => {
     const { loop } = setup()
     loop.openIntervention()

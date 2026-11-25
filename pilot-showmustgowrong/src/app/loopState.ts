@@ -38,6 +38,8 @@ export interface LoopSnapshot {
   /** 실제로 방송에 넘긴 지시 수. 시간이 다 되거나 취소한 개입, 버린 지시는 세지 않는다. */
   interventionsIssued: number
   adPanelOpen: boolean
+  /** 개입 중에 연 광고 패널이 이어받은 개입의 남은 시간. 평상시에 열었거나 닫혀 있으면 null. */
+  adPanelSecondsLeft: number | null
   adBreak: boolean
   adBreakSecondsLeft: number
   ended: boolean
@@ -159,6 +161,7 @@ export class BroadcastLoop<V extends LoopViewFields> {
       interventionSecondsLeft: this.interventionOpen ? this.interventionSecondsLeft : 0,
       interventionsIssued: this.interventionsIssued,
       adPanelOpen: this.adPanelOpen,
+      adPanelSecondsLeft: this.adPanelOpen ? this.adPanelSlowSecondsLeft : null,
       adBreak: this.adBreak,
       adBreakSecondsLeft: this.adBreakSecondsLeft,
       ended: this.ended,
