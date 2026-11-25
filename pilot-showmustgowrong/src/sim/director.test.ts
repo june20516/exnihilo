@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { FATIGUE_MISFIRE_PER_POINT, STAFF_FATIGUE_MISFIRE_PER_POINT } from '@/content/balance'
 import type { ActionDef, PerformerDef, StaffDef } from '@/content/types'
 import { createRng, type RngState } from '@/kit/rng'
-import { FATIGUE_MISFIRE_PER_POINT, STAFF_FATIGUE_MISFIRE_PER_POINT } from '@/content/balance'
 import { Director, type DirectiveOutcome } from './director'
 
 const SHOUT: ActionDef = {

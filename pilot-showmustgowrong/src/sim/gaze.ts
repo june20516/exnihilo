@@ -1,9 +1,14 @@
 import { STEP_SECONDS } from '@/content/balance'
-import type { ReactionDef } from '@/content/types'
+import type { ReactionDef, Trigger } from '@/content/types'
 import type { Cast, CastMember } from './cast'
 import type { Vec3 } from './vec'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
+
+/** absentFor 반응이 반복 발동하는 주기(스텝). 긴장도 진행도도 이 주기를 쓴다. */
+export function absentPeriodSteps(trigger: Extract<Trigger, { when: 'absentFor' }>): number {
+  return Math.max(1, Math.round(trigger.seconds * STEPS_PER_SECOND))
+}
 
 export interface GazeCandidate {
   member: CastMember
@@ -28,7 +33,7 @@ export function updateGaze(cast: Cast, isOnAir: (point: Vec3) => boolean): GazeC
     const reactions = member.def.reactions.filter(({ trigger }) => {
       if (trigger.kind !== 'gaze') return false
       if (trigger.when === 'enter') return entered
-      const period = Math.max(1, Math.round(trigger.seconds * STEPS_PER_SECOND))
+      const period = absentPeriodSteps(trigger)
       return member.absentSteps > 0 && member.absentSteps % period === 0
     })
     if (reactions.length > 0) candidates.push({ member, reactions })

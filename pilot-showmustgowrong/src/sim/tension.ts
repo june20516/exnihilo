@@ -1,6 +1,7 @@
 import { STEP_SECONDS, TENSION_WINDOW_SECONDS, VIEWERS_TREND_EPSILON } from '@/content/balance'
-import type { ReactionDef } from '@/content/types'
+import type { ReactionDef, Trigger } from '@/content/types'
 import type { CastMember } from './cast'
+import { absentPeriodSteps } from './gaze'
 import { targetsSelf, type PhenomenonEvent } from './phenomena'
 import { cooldownKey, type CooldownTable } from './reactions'
 
@@ -8,9 +9,15 @@ const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 /** 긴장도가 되돌아보는 스텝 수. 엔진이 최근 이벤트를 고를 때도 쓴다. */
 export const TENSION_WINDOW_STEPS = Math.round(TENSION_WINDOW_SECONDS * STEPS_PER_SECOND)
 
-/** 화면 밖에 있던 시간이 다음 발동까지 얼마나 찼는지. gaze.ts의 발동 주기와 같은 계산이다. */
-function absentProgress(member: CastMember, seconds: number): number {
-  const period = Math.max(1, Math.round(seconds * STEPS_PER_SECOND))
+/** 화면 밖에 있던 시간이 다음 발동까지 얼마나 찼는지. 발동 주기는 gaze.ts와 같다. 쿨다운 중이면 0 */
+function absentProgress(
+  member: CastMember,
+  trigger: Extract<Trigger, { when: 'absentFor' }>,
+  cooldowns: CooldownTable,
+  step: number,
+): number {
+  if (!cooldowns.ready(member.def.id, cooldownKey(trigger), step)) return 0
+  const period = absentPeriodSteps(trigger)
   return (member.absentSteps % period) / period
 }
 
@@ -55,7 +62,7 @@ export function tensionOf(
     const { trigger } = reaction
     const progress =
       trigger.kind === 'gaze' && trigger.when === 'absentFor'
-        ? absentProgress(member, trigger.seconds)
+        ? absentProgress(member, trigger, cooldowns, step)
         : eventProgress(reaction, member, recent, cooldowns, step, perceivesEvent)
     tension = Math.max(tension, progress)
   }

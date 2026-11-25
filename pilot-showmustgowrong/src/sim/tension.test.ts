@@ -71,6 +71,18 @@ describe('tensionOf 시간 반응', () => {
     expect(tensionOf(member([ABSENT_5S], 270), [], cooldowns, 270, perceivesAll)).toBeCloseTo(0.9)
   })
 
+  it('쿨다운 중이면 화면 밖이어도 0이다', () => {
+    const cooldowns = new CooldownTable()
+    cooldowns.mark('rex', cooldownKey(ABSENT_5S.trigger), 140)
+    expect(tensionOf(member([ABSENT_5S], 150), [], cooldowns, 150, perceivesAll)).toBe(0)
+    expect(tensionOf(member([ABSENT_5S], 150), [], cooldowns, 200, perceivesAll)).toBeCloseTo(0.5)
+  })
+
+  it('발동 주기를 넘으면 진행도가 0부터 다시 찬다', () => {
+    const tension = tensionOf(member([ABSENT_5S], 330), [], new CooldownTable(), 330, perceivesAll)
+    expect(tension).toBeCloseTo(0.1)
+  })
+
   it('화면 안에 있으면 0이다', () => {
     expect(tensionOf(member([ABSENT_5S], 0), [], new CooldownTable(), 0, perceivesAll)).toBe(0)
   })
@@ -80,7 +92,8 @@ describe('tensionOf 현상 반응', () => {
   const now = 100
 
   it('최소 강도 2 반응에 최근 강도 1 분노를 인지하면 0.5다', () => {
-    const tension = tensionOf(member([ANGER_MIN_2]), [anger(1, now - 10)], new CooldownTable(), now, perceivesAll)
+    const recent = [anger(1, now - 10)]
+    const tension = tensionOf(member([ANGER_MIN_2]), recent, new CooldownTable(), now, perceivesAll)
     expect(tension).toBeCloseTo(0.5)
   })
 
@@ -88,13 +101,15 @@ describe('tensionOf 현상 반응', () => {
     const cooldowns = new CooldownTable()
     const old = anger(1, now - STEPS_PER_SECOND - 1)
     expect(tensionOf(member([ANGER_MIN_2]), [old], cooldowns, now, perceivesAll)).toBe(0)
-    expect(tensionOf(member([ANGER_MIN_2]), [anger(1, now - 10)], cooldowns, now, () => false)).toBe(0)
+    const fresh = [anger(1, now - 10)]
+    expect(tensionOf(member([ANGER_MIN_2]), fresh, cooldowns, now, () => false)).toBe(0)
   })
 
   it('쿨다운 중인 반응의 진행도는 0이다', () => {
     const cooldowns = new CooldownTable()
     cooldowns.mark('rex', cooldownKey(ANGER_MIN_2.trigger), now - 5)
-    expect(tensionOf(member([ANGER_MIN_2]), [anger(1, now - 10)], cooldowns, now, perceivesAll)).toBe(0)
+    const recent = [anger(1, now - 10)]
+    expect(tensionOf(member([ANGER_MIN_2]), recent, cooldowns, now, perceivesAll)).toBe(0)
   })
 
   it('targetsSelf 반응은 자신을 향한 이벤트만 센다', () => {
@@ -106,7 +121,8 @@ describe('tensionOf 현상 반응', () => {
     const aimedAtSelf = { ...anger(1, now - 5), targetId: 'rex' }
     const cooldowns = new CooldownTable()
     expect(tensionOf(member([reaction]), [aimedAtOther], cooldowns, now, perceivesAll)).toBe(0)
-    expect(tensionOf(member([reaction]), [aimedAtSelf], cooldowns, now, perceivesAll)).toBeCloseTo(0.5)
+    const tension = tensionOf(member([reaction]), [aimedAtSelf], cooldowns, now, perceivesAll)
+    expect(tension).toBeCloseTo(0.5)
   })
 })
 

@@ -1434,7 +1434,8 @@ describe('판단 정보 view', () => {
     if (noise === undefined) throw new Error('소음이 생기지 않았습니다.')
     const findShown = () => broadcast.view().recentPhenomena.find((item) => item.id === noise.id)
 
-    expect(findShown()).toMatchObject({ kind: 'noise', intensity: 1, x: noise.x, y: noise.y, z: noise.z })
+    const { x, y, z } = noise
+    expect(findShown()).toMatchObject({ kind: 'noise', intensity: 1, x, y, z })
     const logLine = broadcast.view().log.find((line) => line.eventId === noise.id)
     expect(findShown()?.text).toBe(logLine?.text)
 
@@ -1462,5 +1463,14 @@ describe('판단 정보 view', () => {
     broadcast.step([directRex('flash3')])
     expect(broadcast.view().viewers).toBeGreaterThan(500)
     expect(broadcast.view().viewersTrend).toBe(1)
+  })
+
+  it('시청자가 줄면 추세가 -1이다', async () => {
+    const broadcast = await open(infoSetup())
+    broadcast.step([directRex('flash3')])
+    // 광고 복귀 때 시청자 10%가 빠진다. 광고 스텝 뒤 1초가 지나지 않았으므로 직전 값과 비교된다.
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    broadcast.resumeFromAd()
+    expect(broadcast.view().viewersTrend).toBe(-1)
   })
 })
