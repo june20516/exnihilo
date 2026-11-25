@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { AUDIENCE_NOISE_SECONDS, STEP_SECONDS } from '@/content/balance'
+import { LINEUP } from '@/content/lineup'
+import { TALK_SHOW } from '@/content/talkShow'
 import type { CameraDef } from '@/content/types'
-import type { ActorView, EquipmentView } from '@/sim/engineTypes'
+import { Broadcast } from '@/sim/engine'
+import type { ActorView, BroadcastInput, EquipmentView } from '@/sim/engineTypes'
 import { MIN_DISTANCE, REFERENCE_DISTANCE, cameraFeed, type FeedView } from './cameraFeed'
 
 const CAMERA: CameraDef = {
@@ -45,6 +49,7 @@ function view(
     equipment,
     cameraAngles: { cam: 0 },
     cameraTargets: { cam: null },
+    cameraAimModes: { cam: 'fixed' },
     cameraSubjects: {
       cam: [...actors.map((a) => a.id), ...equipment.map((e) => e.id)],
     },
@@ -123,14 +128,18 @@ describe('목록', () => {
     expect(feedOf(v)).toEqual([])
   })
 
-  it('추적 대상은 highlighted다', () => {
+  it('따라가는 중인 추적 대상만 highlighted다', () => {
     const point = polar(0, 5)
     const other = polar(5, 5)
-    const v = view([actor('a', point.x, point.z), actor('b', other.x, other.z)], {
-      cameraTargets: { cam: 'a' },
-    })
+    const actors = [actor('a', point.x, point.z), actor('b', other.x, other.z)]
+    const v = view(actors, { cameraTargets: { cam: 'a' }, cameraAimModes: { cam: 'tracking' } })
     expect(actorItem(v, 'a')?.highlighted).toBe(true)
     expect(actorItem(v, 'b')?.highlighted).toBe(false)
+    // 지시로 고정됐거나 스태프가 놀라 있으면 대상이어도 따라가지 않는다
+    for (const mode of ['directed', 'startled'] as const) {
+      const held = view(actors, { cameraTargets: { cam: 'a' }, cameraAimModes: { cam: mode } })
+      expect(actorItem(held, 'a')?.highlighted).toBe(false)
+    }
   })
 
   it('높이 떠 있으면 heightOffset이 커지고 장비도 투영한다', () => {
@@ -151,19 +160,14 @@ describe('목록', () => {
     expect(light?.heightOffset).toBeGreaterThan(item?.heightOffset ?? 0)
   })
 
-  it('관객석이 화각 안이면 audience 항목이 있다', () => {
-    const v = view([], { cameraAngles: { cam: 0 } })
-    expect(
-      cameraFeed(v, CAMERA, AUDIENCE_ZONE).filter((item) => item.kind === 'audience'),
-    ).toHaveLength(1)
-    expect(cameraFeed(v, CAMERA, FAR_ZONE).filter((item) => item.kind === 'audience')).toEqual([])
-  })
-
-  it('관객석은 모서리만 화각에 걸려도 보인다', () => {
-    // 중심(0, 20)은 화각 밖이고 모서리(10, 2)만 안이다
-    const edgeZone = { minX: -10, maxX: 10, minZ: 2, maxZ: 38 }
-    const items = cameraFeed(view([]), CAMERA, edgeZone).filter((item) => item.kind === 'audience')
+  it('관객석은 엔진이 cameraSubjects에 audience를 담았을 때만 구역 중앙에 그린다', () => {
+    const caught = view([], { cameraSubjects: { cam: ['audience'] } })
+    const items = cameraFeed(caught, CAMERA, AUDIENCE_ZONE).filter((i) => i.kind === 'audience')
     expect(items).toHaveLength(1)
+    expect(items[0].screenX).toBeCloseTo(0)
+    // 화각 안이어도 엔진이 담지 않았으면(가림 등) 그리지 않는다
+    const missed = cameraFeed(view([]), CAMERA, AUDIENCE_ZONE)
+    expect(missed.filter((item) => item.kind === 'audience')).toEqual([])
   })
 
   it('화각 밖으로 걸친 대상의 screenX는 -1~1로 자른다', () => {
@@ -198,5 +202,54 @@ describe('목록', () => {
     }
     const item = feedOf(view([], {}, [wall])).find((entry) => entry.kind === 'equipment')
     expect(item?.equipmentKind).toBe('setWall')
+  })
+})
+
+describe('엔진 판정과 일치', () => {
+  const NOISE_STEPS = Math.round(AUDIENCE_NOISE_SECONDS / STEP_SECONDS)
+  // 와이드(8.5, 9.5)를 175도로 돌리면 관객석 모서리(0~3, 7)는 화각(±40도) 안이고
+  // 중앙(1.5, 4)은 밖이다. 예전 피드의 모서리 판정과 엔진 판정이 갈리던 자리다.
+  const SHOW = {
+    ...TALK_SHOW,
+    cameras: TALK_SHOW.cameras.map((entry) =>
+      entry.id === 'wide' ? { ...entry, defaultAngle: 175 } : entry,
+    ),
+  }
+
+  /** 송출 카메라 피드에 관객석이 있는지 */
+  function onAirFeedHasAudience(broadcast: Broadcast): boolean {
+    const view = broadcast.view()
+    const camera = SHOW.cameras.find((entry) => entry.id === view.onAirCameraId)
+    if (camera === undefined) throw new Error(`알 수 없는 카메라: ${view.onAirCameraId}`)
+    return cameraFeed(view, camera, SHOW.audienceZone).some((item) => item.kind === 'audience')
+  }
+
+  it('송출 피드의 관객석 표시는 엔진의 관객석 송출 판정(관객 소음)과 같다', async () => {
+    const broadcast = await Broadcast.create({ show: SHOW, ...LINEUP, seed: 3 })
+    const audienceNoises = () =>
+      broadcast.events().filter((event) => event.sourceId === 'audience' && event.kind === 'noise')
+    const aimAudience: BroadcastInput = {
+      type: 'directStaff',
+      staffId: 'cameraOperator',
+      directiveId: 'aimAudience',
+    }
+    const windows: { inputs: BroadcastInput[]; shown: boolean }[] = [
+      { inputs: [{ type: 'switch', cameraId: 'audienceCam' }], shown: true },
+      { inputs: [{ type: 'switch', cameraId: 'wide' }], shown: false },
+      { inputs: [{ type: 'switch', cameraId: 'close' }, aimAudience], shown: true },
+    ]
+    try {
+      for (const { inputs, shown } of windows) {
+        const noisesBefore = audienceNoises().length
+        for (let index = 0; index < NOISE_STEPS; index++) {
+          broadcast.step(index === 0 ? inputs : [])
+          expect(onAirFeedHasAudience(broadcast)).toBe(shown)
+        }
+        // 관객석이 NOISE_STEPS 동안 송출되면 엔진은 관객 소음을 낸다
+        expect(audienceNoises().length > noisesBefore).toBe(shown)
+      }
+    } finally {
+      broadcast.dispose()
+    }
   })
 })

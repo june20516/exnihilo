@@ -93,6 +93,9 @@ const BURST_GAP = 3
 const TRACKING_ICON_WIDTH = 12
 const TRACKING_ICON_HEIGHT = 8
 const TRACKING_ICON_GAP = 4
+/** 지시로 고정돼 대상을 따라가지 않는 카메라의 표시: 속을 비우고 흐리게 */
+const HELD_ICON_ALPHA = 0.5
+const HELD_ICON_STROKE = 1.5
 
 // 스태프
 const STAFF_HEIGHT_METERS = 1.6
@@ -141,6 +144,22 @@ const AUTO_VIGNETTE_ALPHA = 0.5
 /** 조명이 오른쪽 위 앞에서 비친다고 보고 면마다 밝기를 정한다. */
 const LIGHT_DIRECTION: Vec3 = { x: 0.35, y: 1, z: 0.6 }
 const FACE_MIN_BRIGHTNESS = 0.55
+
+/** 머리 위 클로즈업 표시. following: 대상을 따라가는 중, held: 대상이지만 지시·놀람으로 다른 곳을 봄 */
+type TrackMark = 'following' | 'held'
+
+/** 출연자별 클로즈업 표시. 대상으로 삼은 카메라 중 하나라도 따라가는 중이면 following이다. */
+function trackMarks(
+  view: Pick<BroadcastView, 'cameraTargets' | 'cameraAimModes'>,
+): Map<string, TrackMark> {
+  const marks = new Map<string, TrackMark>()
+  for (const [cameraId, actorId] of Object.entries(view.cameraTargets)) {
+    if (actorId === null) continue
+    const following = view.cameraAimModes[cameraId] === 'tracking'
+    if (following || !marks.has(actorId)) marks.set(actorId, following ? 'following' : 'held')
+  }
+  return marks
+}
 
 interface ActorSprite {
   root: Container
@@ -568,12 +587,10 @@ export class StudioRenderer {
 
   private drawActors(view: BroadcastView): void {
     this.hits.actors = []
-    const tracked = new Set(
-      Object.values(view.cameraTargets).filter((id): id is string => id !== null),
-    )
+    const marks = trackMarks(view)
     for (const actor of view.actors) {
       const sprite = this.actorSprites.get(actor.id) ?? this.createActorSprite(actor)
-      this.drawActor(sprite, actor, tracked.has(actor.id))
+      this.drawActor(sprite, actor, marks.get(actor.id) ?? null)
     }
   }
 
@@ -625,7 +642,7 @@ export class StudioRenderer {
   }
 
   /** Plan 3에서 툰 스프라이트로 바뀌는 지점. 출연자 한 명을 그리는 일은 이 함수가 전부 맡는다. */
-  private drawActor(sprite: ActorSprite, actor: ActorView, tracked: boolean): void {
+  private drawActor(sprite: ActorSprite, actor: ActorView, trackMark: TrackMark | null): void {
     const visible = !actor.departed
     sprite.root.visible = visible
     sprite.overhead.visible = visible && !actor.walkedOut
@@ -666,7 +683,7 @@ export class StudioRenderer {
     sprite.label.position.set(0, extent + NAME_GAP)
 
     sprite.overhead.position.set(center.x, center.y - extent - OVERHEAD_GAP)
-    this.drawOverhead(sprite, actor, tracked)
+    this.drawOverhead(sprite, actor, trackMark)
 
     if (!actor.walkedOut) {
       this.hits.actors.push({
@@ -680,8 +697,11 @@ export class StudioRenderer {
     }
   }
 
-  /** 머리 위(아래에서 위로): 남은 내성 점, 긴장도 막대, "곧 터짐!" 태그. 추적 대상이면 카메라 표시. */
-  private drawOverhead(sprite: ActorSprite, actor: ActorView, tracked: boolean): void {
+  /**
+   * 머리 위(아래에서 위로): 남은 내성 점, 긴장도 막대, "곧 터짐!" 태그. 클로즈업 대상이면 카메라 표시
+   * (따라가는 중이면 채운 표시, 지시나 놀람으로 다른 곳을 보고 있으면 속이 빈 흐린 표시).
+   */
+  private drawOverhead(sprite: ActorSprite, actor: ActorView, trackMark: TrackMark | null): void {
     const marks = sprite.overheadMarks.clear()
     // 남은 내성 점(바닥 줄)
     const dotCount = Math.max(0, actor.directivesLeft)
@@ -709,20 +729,27 @@ export class StudioRenderer {
         .fill(actor.aboutToBurst ? COLORS.tensionDanger : COLORS.tensionFill)
     }
 
-    // 클로즈업 추적 대상: 막대 오른쪽의 작은 카메라
-    if (tracked) {
+    // 클로즈업 대상: 막대 오른쪽의 작은 카메라
+    if (trackMark !== null) {
       const left = TENSION_BAR_WIDTH / 2 + TRACKING_ICON_GAP
       const top = barTop + TENSION_BAR_HEIGHT / 2 - TRACKING_ICON_HEIGHT / 2
       const lensX = left + TRACKING_ICON_WIDTH + TRACKING_ICON_HEIGHT / 2
       marks
         .roundRect(left, top, TRACKING_ICON_WIDTH, TRACKING_ICON_HEIGHT, 2)
-        .fill(COLORS.trackingIcon)
         .poly([
           { x: left + TRACKING_ICON_WIDTH, y: top + TRACKING_ICON_HEIGHT / 2 },
           { x: lensX, y: top },
           { x: lensX, y: top + TRACKING_ICON_HEIGHT },
         ])
-        .fill(COLORS.trackingIcon)
+      if (trackMark === 'following') {
+        marks.fill(COLORS.trackingIcon)
+      } else {
+        marks.stroke({
+          color: COLORS.trackingIcon,
+          width: HELD_ICON_STROKE,
+          alpha: HELD_ICON_ALPHA,
+        })
+      }
     }
 
     sprite.burstTag.visible = actor.aboutToBurst

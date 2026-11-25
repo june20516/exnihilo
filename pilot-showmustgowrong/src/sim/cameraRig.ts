@@ -1,6 +1,6 @@
 import { STAFF_RECOVERY, STEP_SECONDS } from '@/content/balance'
 import type { CameraDef, PerformerDef, StaffDef } from '@/content/types'
-import type { StaffMode, StaffView } from './engineTypes'
+import type { CameraAimMode, StaffMode, StaffView } from './engineTypes'
 import { type FloorPoint, normalizeDegrees, rotateYaw, yawBetween } from './vec'
 
 /** 스태프 지시가 정하는 카메라 방향. default는 지시 방향을 지우고 기준으로 돌아간다. */
@@ -129,6 +129,13 @@ export class CameraRig {
     return Object.fromEntries([...this.cameras.keys()].map((id) => [id, this.target(id)]))
   }
 
+  /** 카메라별 조준 상태. 놀람 > 지시 방향 > 추적 > 기본 방향 순으로 앞선다. */
+  aimModes(): Record<string, CameraAimMode> {
+    return Object.fromEntries(
+      [...this.cameras.values()].map((camera) => [camera.def.id, this.aimModeOf(camera)]),
+    )
+  }
+
   /** 방송 시작 때 추적 카메라마다 시작 대상을 정한다(chooseStartTarget). */
   startTracking(candidates: readonly TrackCandidate[], startTag: string): void {
     for (const camera of this.trackingCameras()) {
@@ -207,6 +214,14 @@ export class CameraRig {
   private modeOf(member: StaffState): StaffMode {
     if (member.panicYaw === null) return 'normal'
     return member.elapsedSteps < member.holdSteps ? 'startled' : 'recovering'
+  }
+
+  private aimModeOf(camera: CameraState): CameraAimMode {
+    const operator = this.operators.get(camera.def.id)
+    if (operator !== undefined && operator.panicYaw !== null) return 'startled'
+    if (camera.directedYaw !== null) return 'directed'
+    if (camera.def.tracking === true && camera.target !== null) return 'tracking'
+    return 'fixed'
   }
 
   private trackingCameras(): CameraState[] {

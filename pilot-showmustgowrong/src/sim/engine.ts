@@ -324,6 +324,7 @@ export class Broadcast {
       onAirCameraId: this.onAirCameraId,
       cameraAngles: this.rig.angles(),
       cameraTargets: this.rig.targets(),
+      cameraAimModes: this.rig.aimModes(),
       cameraSubjects: structuredClone(this.cameraSubjects()),
       staff: this.rig.staffViews().map((view) => this.staffView(view)),
       actors: this.cast.all().map((member) => this.actorView(member, recentEvents)),
@@ -1020,8 +1021,8 @@ export class Broadcast {
   }
 
   /**
-   * 카메라마다 지금 시야에 잡힌 출연자와 장비 id(이탈한 출연자는 없다). 송출 판정과 같은
-   * 기준이며 장비는 다른 장비에 가려도 빠진다. 위치는 step 안에서만 바뀌므로 step마다 한 번 계산한다.
+   * 카메라마다 지금 시야에 잡힌 출연자, 장비 id와 관객석('audience')(이탈한 출연자는 없다).
+   * 송출 판정과 같은 기준이며 장비는 다른 장비에 가려도 빠진다. 위치는 step 안에서만 바뀌므로 step마다 한 번 계산한다.
    */
   private cameraSubjects(): Record<string, string[]> {
     if (this.subjectsCache !== null) return this.subjectsCache
@@ -1038,7 +1039,9 @@ export class Broadcast {
         const state = this.physics.equipmentState(id)
         return state !== undefined && this.isInSight(camera, state.position, id)
       })
-      subjects[camera.id] = [...actors, ...equipment]
+      // 관객석은 관객 소음(updateAudienceNoise)의 송출 판정과 같은 점(구역 중앙)으로 본다.
+      const audience = this.isInSight(camera, this.locator.audiencePosition()) ? [AUDIENCE_ID] : []
+      subjects[camera.id] = [...actors, ...equipment, ...audience]
     }
     this.subjectsCache = subjects
     return subjects

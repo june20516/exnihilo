@@ -1352,6 +1352,47 @@ describe('클로즈업 추적과 스태프 복구', () => {
     expect(view.cameraAngles.close).toBeCloseTo(yawBetween(CLOSE_POSITION, mo), 3)
   })
 
+  it("'관객석' 지시 뒤 대상은 그대로지만 조준 상태가 directed이고, track 뒤 tracking으로 돌아온다", async () => {
+    const broadcast = await open(
+      quietSetup({ show: TRACKING_SHOW, staff: [operatorWith(['audience', 'default'])] }),
+    )
+    expect(broadcast.view().cameraAimModes).toEqual({
+      wide: 'fixed',
+      close: 'tracking',
+      audienceCam: 'fixed',
+    })
+
+    broadcast.step([{ type: 'directStaff', staffId: 'cammy', directiveId: 'audience' }])
+    const directed = broadcast.view()
+    expect(directed.cameraTargets.close).toBe('rex')
+    expect(directed.cameraAimModes.close).toBe('directed')
+
+    broadcast.step([track('rex')])
+    expect(broadcast.view().cameraAimModes.close).toBe('tracking')
+  })
+
+  it('스태프가 놀라 있는 동안 조준 상태는 startled이고 복구가 끝나면 원래대로 돌아온다', async () => {
+    const shouter = performer({
+      id: 'rex',
+      tags: ['host'],
+      reactions: [
+        reaction(
+          { kind: 'corner', tag: 'host' },
+          { pose: 'angry', emits: [{ kind: 'noise', intensity: 2, target: 'none' }] },
+        ),
+      ],
+    })
+    const broadcast = await open(
+      setup({ show: TRACKING_SHOW, performers: [shouter, MO], equipment: [] }),
+    )
+    run(broadcast, 2)
+    expect(broadcast.view().staff[0].mode).toBe('startled')
+    expect(broadcast.view().cameraAimModes.close).toBe('startled')
+    run(broadcast, 10 * STEPS_PER_SECOND)
+    expect(broadcast.view().staff[0].mode).toBe('normal')
+    expect(broadcast.view().cameraAimModes.close).toBe('tracking')
+  })
+
   it('광고 reset은 스태프 놀람을 평상시로 되돌린다(R12)', async () => {
     const shouter = performer({
       id: 'rex',
@@ -1539,7 +1580,9 @@ describe('카메라별 잡힌 대상', () => {
     const { cameraSubjects } = broadcast.view()
     expect(Object.keys(cameraSubjects).sort()).toEqual(['audienceCam', 'close', 'wide'])
     expect(cameraSubjects.wide).toContain('wall')
-    expect(cameraSubjects.audienceCam).toEqual([])
+    // 관객석 카메라는 무대의 누구도 잡지 않고 관객석만 잡는다
+    expect(cameraSubjects.audienceCam).toEqual(['audience'])
+    expect(cameraSubjects.wide).not.toContain('audience')
   })
 
   it('세트 벽 뒤의 장비는 가려져 피드에서 빠진다', async () => {

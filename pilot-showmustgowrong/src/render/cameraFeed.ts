@@ -1,5 +1,4 @@
 import type { CameraDef, EquipmentDef, Pose, ShowDef } from '@/content/types'
-import { inFrame } from '@/sim/broadcast'
 import type { BroadcastView } from '@/sim/engineTypes'
 import { floorDistance, normalizeDegrees, yawBetween } from '@/sim/vec'
 
@@ -24,14 +23,14 @@ export interface FeedItem {
   /** 장비 종류. 출연자와 관객석은 null */
   equipmentKind: EquipmentKind | null
   pose: Pose | null
-  /** 클로즈업이 따라가는 대상 */
+  /** 클로즈업이 지금 따라가는 대상. 지시나 놀람으로 다른 곳을 보고 있으면 false */
   highlighted: boolean
 }
 
 /** 피드 계산에 필요한 view 부분 */
 export type FeedView = Pick<
   BroadcastView,
-  'actors' | 'equipment' | 'cameraAngles' | 'cameraTargets' | 'cameraSubjects'
+  'actors' | 'equipment' | 'cameraAngles' | 'cameraTargets' | 'cameraAimModes' | 'cameraSubjects'
 >
 
 export type AudienceZone = ShowDef['audienceZone']
@@ -41,6 +40,8 @@ const EQUIPMENT_LABELS: Record<EquipmentKind, string> = {
   setWall: '세트 벽',
 }
 const AUDIENCE_LABEL = '관객석'
+/** 엔진이 cameraSubjects에 관객석을 담을 때 쓰는 id */
+const AUDIENCE_SUBJECT_ID = 'audience'
 
 interface Placed {
   x: number
@@ -57,21 +58,14 @@ interface Projection {
   equipmentKind: EquipmentKind | null
 }
 
-/** 관객석 구역의 중심과 네 모서리. 하나라도 시야 안이면 관객석이 보인다. */
-function audiencePoints(zone: AudienceZone): Placed[] {
-  const { minX, maxX, minZ, maxZ } = zone
-  return [
-    { x: (minX + maxX) / 2, y: 0, z: (minZ + maxZ) / 2 },
-    { x: minX, y: 0, z: minZ },
-    { x: maxX, y: 0, z: minZ },
-    { x: minX, y: 0, z: maxZ },
-    { x: maxX, y: 0, z: maxZ },
-  ]
+/** 관객석 구역 중앙의 바닥 점. 엔진의 관객석 송출 판정도 이 중앙을 본다. */
+function audienceCenter(zone: AudienceZone): Placed {
+  return { x: (zone.minX + zone.maxX) / 2, y: 0, z: (zone.minZ + zone.maxZ) / 2 }
 }
 
 /**
  * 카메라가 지금 잡은 출연자·장비·관객석을 카메라 방향 기준 화면 좌표로 투영한다.
- * 가림 판정은 엔진이 view.cameraSubjects에 담아 주므로 그 목록 안에서만 그린다.
+ * 시야·가림 판정은 엔진이 view.cameraSubjects에 담아 주므로 그 목록 안에서만 그린다(관객석 포함).
  * 먼 것부터 가까운 것 순서라 앞에서부터 그리면 된다.
  */
 export function cameraFeed(
@@ -81,7 +75,8 @@ export function cameraFeed(
 ): FeedItem[] {
   const yaw = view.cameraAngles[camera.id] ?? camera.defaultAngle
   const caught = new Set(view.cameraSubjects[camera.id] ?? [])
-  const target = view.cameraTargets[camera.id] ?? null
+  const following = view.cameraAimModes[camera.id] === 'tracking'
+  const target = following ? (view.cameraTargets[camera.id] ?? null) : null
 
   const project = ({ kind, id, label, at, pose, equipmentKind }: Projection) => {
     const distance = Math.max(MIN_DISTANCE, floorDistance(camera.position, at))
@@ -123,15 +118,12 @@ export function cameraFeed(
         equipmentKind: equipment.kind,
       })),
   ]
-  const visibleAudiencePoint = audiencePoints(audienceZone).find((point) =>
-    inFrame(camera, yaw, point),
-  )
-  if (visibleAudiencePoint !== undefined) {
+  if (caught.has(AUDIENCE_SUBJECT_ID)) {
     projections.push({
       kind: 'audience',
-      id: 'audience',
+      id: AUDIENCE_SUBJECT_ID,
       label: AUDIENCE_LABEL,
-      at: visibleAudiencePoint,
+      at: audienceCenter(audienceZone),
       pose: null,
       equipmentKind: null,
     })

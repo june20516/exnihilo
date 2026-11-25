@@ -27,6 +27,10 @@ const HALTED: BroadcastResult = {
 
 function noop(): void {}
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 describe('ResultScreen', () => {
   it('중단 원인 게이지, 시청자, 최대 연쇄와 그 문장들, 다시 하기를 보여 준다', () => {
     const html = renderToStaticMarkup(<ResultScreen result={HALTED} onRestart={noop} />)
@@ -194,6 +198,35 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toContain('data-testid="intervene-button"')
     expect(html).toContain('data-testid="ad-button"')
     expect(html).toContain('data-testid="event-log"')
+  })
+
+  it('지시로 고정된 클로즈업은 ON AIR와 미리보기 이름표에 고정과 되돌리는 법을 쓴다', () => {
+    const directed: BroadcastView = {
+      ...baseView,
+      cameraTargets: { ...baseView.cameraTargets, close: 'rex' },
+      cameraAimModes: { ...baseView.cameraAimModes, close: 'directed' },
+    }
+    const label = '대상 렉스 · 지시로 고정 (출연자 클릭 시 추적)'
+    const onAir = render({ view: { ...directed, onAirCameraId: 'close' } })
+    expect(onAir).toMatch(
+      new RegExp(`data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · ${escapeRegExp(label)}`),
+    )
+    expect(onAir).toMatch(/data-testid="on-air-label" data-aim-mode="directed"/)
+
+    const preview = render({ view: { ...directed, onAirCameraId: 'wide' } })
+    expect(preview).toMatch(
+      new RegExp(`data-testid="preview-target"[^>]*>${escapeRegExp(label)}<`),
+    )
+
+    const tracking = render({
+      view: {
+        ...directed,
+        onAirCameraId: 'close',
+        cameraAimModes: { ...directed.cameraAimModes, close: 'tracking' },
+      },
+    })
+    expect(tracking).toMatch(/data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · 대상 렉스</)
+    expect(tracking).not.toContain('지시로 고정')
   })
 
   it('상한의 80%를 넘은 게이지에만 강조 표시가 있다', () => {

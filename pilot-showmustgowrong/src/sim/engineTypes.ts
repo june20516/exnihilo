@@ -65,6 +65,13 @@ export interface EquipmentView {
 /** startled: 놀란 방향 유지, recovering: 기준 방향으로 돌아오는 중(spec 5.6) */
 export type StaffMode = 'normal' | 'startled' | 'recovering'
 
+/**
+ * 카메라가 지금 무엇을 따라 방향을 정하는지. tracking: 추적 대상을 따라감,
+ * directed: 스태프 지시 방향으로 고정(PD가 대상을 다시 고르면 tracking), startled: 맡은 스태프가
+ * 놀라 휘둘렀거나 복귀 중(StaffMode가 normal이 아님), fixed: 기본 방향(추적 카메라가 아니거나 대상 없음).
+ */
+export type CameraAimMode = 'tracking' | 'directed' | 'startled' | 'fixed'
+
 /** 카메라를 맡은 스태프. 위치는 담당 카메라 자리다. */
 export interface StaffView {
   id: string
@@ -133,7 +140,12 @@ export interface BroadcastView {
   cameraAngles: Record<string, number>
   /** 추적 카메라의 대상 출연자 id. 추적 카메라가 아니거나 대상이 없으면 null */
   cameraTargets: Record<string, string | null>
-  /** 카메라별로 지금 시야에 잡힌 출연자와 장비 id(출연자는 장비 가림까지 반영). 이탈한 출연자는 없다. */
+  /** 카메라별 조준 상태. 대상이 있어도 지시로 고정됐으면 directed다. */
+  cameraAimModes: Record<string, CameraAimMode>
+  /**
+   * 카메라별로 지금 시야에 잡힌 출연자와 장비 id(장비 가림까지 반영). 이탈한 출연자는 없다.
+   * 관객석 구역 중앙이 잡히면 'audience'도 든다(관객 소음의 송출 판정과 같은 기준).
+   */
   cameraSubjects: Record<string, string[]>
   staff: StaffView[]
   actors: ActorView[]

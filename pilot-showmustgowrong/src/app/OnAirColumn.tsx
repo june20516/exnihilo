@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engine'
+import type { CameraAimMode } from '@/sim/engineTypes'
 import { CameraFeedCanvas } from './CameraFeedCanvas'
 import { SWITCHER_KEYS, cameraName } from './labels'
 
@@ -20,15 +21,28 @@ interface OnAirColumnProps {
   overlay: ReactNode
 }
 
-/** 추적 카메라면 "대상 렉스", 아니면 null */
+/** 조준 상태가 대상 이름 뒤에 붙이는 설명. 대상을 따라가는 중이면 붙이지 않는다. */
+const AIM_NOTES: Record<CameraAimMode, string | null> = {
+  tracking: null,
+  directed: '지시로 고정 (출연자 클릭 시 추적)',
+  startled: '스태프가 놀라 휘두름',
+  fixed: null,
+}
+
+/**
+ * 추적 카메라면 "대상 렉스", 지시로 고정됐으면 "대상 렉스 · 지시로 고정 (출연자 클릭 시 추적)".
+ * 대상이 없으면 null.
+ */
 function trackingTarget(
-  view: BroadcastView,
+  view: Pick<BroadcastView, 'cameraTargets' | 'cameraAimModes'>,
   camera: CameraDef,
   performers: ReadonlyMap<string, PerformerDef>,
 ): string | null {
   const targetId = view.cameraTargets[camera.id] ?? null
   if (targetId === null) return null
-  return `대상 ${performers.get(targetId)?.shortName ?? targetId}`
+  const target = `대상 ${performers.get(targetId)?.shortName ?? targetId}`
+  const note = AIM_NOTES[view.cameraAimModes[camera.id] ?? 'fixed']
+  return note === null ? target : `${target} · ${note}`
 }
 
 /**
@@ -60,7 +74,11 @@ export function OnAirColumn({
         className="flex flex-col gap-1.5 rounded-xl border-2 border-red-500 bg-slate-900 p-2 text-left shadow-[0_0_14px_rgba(239,68,68,0.35)]"
       >
         <span className="flex items-center justify-between gap-2">
-          <span data-testid="on-air-label" className="truncate text-sm font-bold text-slate-100">
+          <span
+            data-testid="on-air-label"
+            data-aim-mode={view.cameraAimModes[onAir.id] ?? 'fixed'}
+            className="min-w-0 text-sm leading-tight font-bold text-slate-100"
+          >
             {cameraName(show.cameras, onAir)}
             {onAirTarget !== null && ` · ${onAirTarget}`}
           </span>
@@ -108,7 +126,15 @@ export function OnAirColumn({
                 </kbd>
                 <span className="truncate">{cameraName(show.cameras, camera)}</span>
               </span>
-              {target !== null && <span className="text-[11px] text-amber-300">{target}</span>}
+              {target !== null && (
+                <span
+                  data-testid="preview-target"
+                  data-aim-mode={view.cameraAimModes[camera.id] ?? 'fixed'}
+                  className="text-[11px] leading-tight text-amber-300"
+                >
+                  {target}
+                </span>
+              )}
             </button>
           )
         })}
