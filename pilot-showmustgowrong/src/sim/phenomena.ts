@@ -76,6 +76,8 @@ export class EventLog {
   }
 
   get(id: number): PhenomenonEvent | undefined {
+    // 불변식: 이벤트의 id는 배열 index + 1이다.
+    if (!Number.isInteger(id) || id < 1 || id > this.events.length) return undefined
     return this.events[id - 1]
   }
 

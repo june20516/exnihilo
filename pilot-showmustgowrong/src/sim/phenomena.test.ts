@@ -89,6 +89,10 @@ describe('perceives', () => {
     expect(perceives(makeEvent({ kind: 'noise', intensity: 3 }), own)).toBe(false)
     expect(perceives(makeEvent({ kind: 'laughter' }), own)).toBe(false)
     expect(perceives(makeEvent({ kind: 'silence' }), own)).toBe(false)
+    expect(perceives(makeEvent({ kind: 'anger', targetId: 'src' }), own)).toBe(false)
+    expect(perceives(makeEvent({ kind: 'anger', targetId: null }), own)).toBe(false)
+    expect(perceives(makeEvent({ kind: 'exposure' }), own)).toBe(false)
+    expect(perceives(makeEvent({ kind: 'darkness' }), makePerceiver({ id: 'src', inDarkness: true }))).toBe(false)
     expect(perceives(makeEvent({ kind: 'impact' }), own)).toBe(true)
   })
 })
@@ -103,7 +107,16 @@ describe('targetsSelf', () => {
 })
 
 describe('EventLog', () => {
-  const base = { kind: 'noise', intensity: 1, sourceId: 's', targetId: null, x: 0, y: 0, step: 0, causeId: null } as const
+  const base: Omit<PhenomenonEvent, 'id' | 'depth'> = {
+    kind: 'noise',
+    intensity: 1,
+    sourceId: 's',
+    targetId: null,
+    x: 0,
+    y: 0,
+    step: 0,
+    causeId: null,
+  }
 
   it('id를 1부터 늘리고 원인이 없으면 depth 1이다', () => {
     const log = new EventLog()
@@ -113,6 +126,9 @@ describe('EventLog', () => {
     expect(first.depth).toBe(1)
     expect(log.get(2)).toBe(second)
     expect(log.get(99)).toBeUndefined()
+    expect(log.get(0)).toBeUndefined()
+    expect(log.get(-1)).toBeUndefined()
+    expect(log.get(1.5)).toBeUndefined()
   })
 
   it('원인이 있으면 depth가 원인보다 1 크다', () => {
