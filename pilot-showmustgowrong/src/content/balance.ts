@@ -1,4 +1,6 @@
 import type {
+  EmotionThresholds,
+  EventIntensity,
   GaugeKind,
   Intensity,
   PhenomenonKind,
@@ -184,3 +186,40 @@ export const AD_BREAK_REAL_SECONDS = 3
 export const AD_VIEWER_LOSS = 0.1
 export const AD_GAUGE_RELIEF = 25
 export const AD_EFFECT_PICKS = 2
+
+// 감정(living spec 1.1 체감 목표: 평온 -> 1단계 실제 40~60초, 1 -> 2단계 20~40초)
+/** 단계 문턱 기본값. 올라가는 문턱과 내려가는 문턱이 10 벌어져 값이 문턱 근처에서 흔들려도 단계가 깜빡이지 않는다. */
+export const DEFAULT_THRESHOLDS: EmotionThresholds = {
+  rise: [50, 80],
+  fall: [40, 70],
+  intense: 95,
+}
+/**
+ * 기준 상황이 참일 때 극 중 1분에 쌓이는 감정(포인트). 토크쇼(배율 10)에서
+ * 0 -> 50은 극 중 8.3분 = 실제 50초(목표 40~60초), 50 -> 80은 극 중 5분 = 실제 30초(목표 20~40초).
+ */
+export const SITUATION_REFERENCE_PER_SHOW_MINUTE = 6
+/** 상황 조건이 끝나면 극 중 1분에 빠지는 감정. 쌓인 속도의 2배라 50이 실제 25초에 0이 된다. */
+export const SITUATION_FADE_PER_SHOW_MINUTE = 12
+/** 상황 하나가 쌓을 수 있는 감정의 상한 */
+export const SITUATION_CAP = 100
+/**
+ * 사건(지시) 이유가 0으로 줄어드는 데 걸리는 극 중 초. 180초 = 토크쇼 실제 18초라
+ * 버릇 간격(실제 10~20초)과 겹쳐 쌓일 수 있다.
+ */
+export const EVENT_REASON_SHOW_SECONDS = 180
+/** 사건 강도별 감정 배율. 기척(강도 0)은 강도 1의 0.4배다. */
+export const INTENSITY_EMOTION_FACTOR: Record<EventIntensity, number> = {
+  0: 0.4,
+  1: 1,
+  2: 2,
+  3: 3,
+}
+/** 같은 이유가 살아 있는 개수별 배율(림월드식 중첩). 개수가 넘으면 마지막 값을 쓴다. */
+export const REPEAT_MULTIPLIERS: readonly number[] = [1, 0.6, 0.35, 0.2]
+/** 작은 터짐이 그 감정의 양수 이유를 남기는 비율(55 -> 33, 1단계 아래로) */
+export const SMALL_BURST_KEEP = 0.6
+/** 큰 터짐 뒤 후련함(감정 포인트) */
+export const RELIEF_AMOUNT = -40
+/** 후련함이 0으로 줄어드는 데 걸리는 극 중 초. 600초 = 토크쇼 실제 60초 */
+export const RELIEF_SHOW_SECONDS = 600
