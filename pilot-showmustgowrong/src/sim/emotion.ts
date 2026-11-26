@@ -49,7 +49,7 @@ export interface ActiveSituations {
   showTraits: readonly string[]
 }
 
-type Stage = 0 | 1 | 2
+export type Stage = 0 | 1 | 2
 
 /** 시간이 지나며 줄어드는 이유(사건, 지시, 후련함)의 수명 정보 */
 interface Decay {
@@ -64,6 +64,8 @@ interface StoredReason extends Reason {
 }
 
 const SECONDS_PER_MINUTE = 60
+/** 부동소수 오차로 남는 아주 작은 상황 누적량은 0으로 본다 */
+const SITUATION_EPSILON = 1e-9
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -129,6 +131,8 @@ export class Mind {
           reason.source.type === 'event' &&
           reason.source.event.sourceId === event.sourceId &&
           reason.source.event.kind === event.kind &&
+          // 같은 사건이 여러 민감도에 맞아도 서로를 반복으로 세지 않는다
+          reason.source.event.id !== event.id &&
           this.isAlive(reason, step),
       )
       const amount =
@@ -166,8 +170,10 @@ export class Mind {
 
   /** 마지막 advance부터 step까지 이유를 갱신하고 단계를 다시 정한다. 바뀐 단계만 돌려준다 */
   advance(situations: ActiveSituations, step: number): StageChange[] {
-    const showMinutes =
-      stepsToShowSeconds(step - this.lastStep, this.show) / SECONDS_PER_MINUTE
+    const showMinutes = Math.max(
+      0,
+      stepsToShowSeconds(step - this.lastStep, this.show) / SECONDS_PER_MINUTE,
+    )
     this.lastStep = step
     this.updateDecaying(step)
     this.updateSituations(situations, showMinutes)
@@ -264,13 +270,15 @@ export class Mind {
   }
 
   private updateDecaying(step: number): void {
-    this.reasons = this.reasons.filter((reason) => {
-      if (!reason.decay) return true
-      if (!this.isAlive(reason, step)) return false
+    this.reasons = this.reasons.filter(
+      (reason) => !reason.decay || this.isAlive(reason, step),
+    )
+    for (const reason of this.reasons) {
+      if (!reason.decay) continue
       const elapsed = this.elapsedShowSeconds(reason.decay, step)
-      reason.amount = reason.decay.initial * (1 - elapsed / reason.decay.showSeconds)
-      return true
-    })
+      reason.amount =
+        reason.decay.initial * (1 - elapsed / reason.decay.showSeconds)
+    }
   }
 
   private updateSituations(
@@ -318,7 +326,7 @@ export class Mind {
     if (!existing) return
     const fade = sensitivity.fadePerShowMinute ?? SITUATION_FADE_PER_SHOW_MINUTE
     existing.amount -= fade * showMinutes
-    if (existing.amount <= 0) {
+    if (existing.amount <= SITUATION_EPSILON) {
       this.reasons = this.reasons.filter((reason) => reason !== existing)
     }
   }

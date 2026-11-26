@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import {
+  EVENT_REASON_SHOW_SECONDS,
+  SITUATION_CAP,
+  SITUATION_FADE_PER_SHOW_MINUTE,
+  SITUATION_REFERENCE_PER_SHOW_MINUTE,
+} from '@/content/balance'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { TALK_SHOW } from '@/content/talkShow'
 import type { EventIntensity, MindDef, SensitivityDef } from '@/content/types'
+import { showSecondsToSteps } from './showClock'
 import { Mind, type ActiveSituations } from './emotion'
 import type { PhenomenonEvent } from './phenomena'
 
@@ -11,7 +18,7 @@ const OFF_SCREEN: SensitivityDef = {
   emotion: 'irritation',
   on: 'situation',
   situation: { kind: 'offScreen' },
-  perShowMinute: 6,
+  perShowMinute: SITUATION_REFERENCE_PER_SHOW_MINUTE,
   label: LABEL,
 }
 const NOISE_SENSITIVITY: SensitivityDef = {
@@ -114,7 +121,9 @@ describe('사건 이유', () => {
 
   it('같은 사람의 같은 종류 사건이 겹치면 1, 0.6, 0.35, 0.2배로 쌓인다', () => {
     const mind = makeMind({ sensitivities: [NOISE_SENSITIVITY] })
-    for (let i = 0; i < 5; i += 1) mind.perceive(makeEvent(), false, 0)
+    for (let id = 1; id <= 5; id += 1) {
+      mind.perceive(makeEvent({ id }), false, 0)
+    }
     const amounts = mind.topReasons('irritation', 10).map((r) => r.amount)
     expect(amounts[0]).toBeCloseTo(10)
     expect(amounts[1]).toBeCloseTo(6)
@@ -122,11 +131,39 @@ describe('사건 이유', () => {
     expect(amounts[3]).toBeCloseTo(2)
     expect(amounts[4]).toBeCloseTo(2)
 
-    mind.perceive(makeEvent({ sourceId: 'jun' }), false, 0)
+    mind.perceive(makeEvent({ id: 6, sourceId: 'jun' }), false, 0)
     const other = mind
       .topReasons('irritation', 10)
       .filter((r) => r.source.type === 'event' && r.source.event.sourceId === 'jun')
     expect(other[0].amount).toBeCloseTo(10)
+  })
+
+  it('같은 사건이 같은 감정의 민감도 둘에 맞아도 서로 반복으로 세지 않는다', () => {
+    const mind = makeMind({
+      sensitivities: [
+        NOISE_SENSITIVITY,
+        { ...NOISE_SENSITIVITY, amount: 20 },
+      ],
+    })
+    mind.perceive(makeEvent(), false, 0)
+    expect(mind.topReasons('irritation', 5).map((r) => r.amount)).toEqual([
+      20, 10,
+    ])
+  })
+
+  it('지시 이유는 같은 label이 겹치면 반복 배율을 받고 사건 이유와 같은 수명으로 줄어든다', () => {
+    const mind = makeMind()
+    const shift = [{ emotion: 'irritation', amount: 10 }]
+    mind.addDirective(shift, '재촉', 0)
+    mind.addDirective(shift, '재촉', 0)
+    mind.addDirective(shift, '달램', 0)
+    expect(mind.topReasons('irritation', 5).map((r) => r.amount)).toEqual([
+      10, 10, 6,
+    ])
+    mind.advance(IDLE, showSecondsToSteps(EVENT_REASON_SHOW_SECONDS / 2, TALK_SHOW))
+    expect(mind.value('irritation')).toBeCloseTo(13)
+    mind.advance(IDLE, showSecondsToSteps(EVENT_REASON_SHOW_SECONDS, TALK_SHOW))
+    expect(mind.topReasons('irritation', 5)).toEqual([])
   })
 
   it('기척 사건은 강도 1의 0.4배다', () => {
@@ -147,7 +184,10 @@ describe('사건 이유', () => {
 })
 
 describe('상황 이유', () => {
-  /** 10초(실제) 동안 offScreen이면 극 중 100초 = 1.67분 x 6 = 10이 쌓인다 */
+  const SHOW_MINUTES_PER_REAL_SECOND = 10 / 60 // 토크쇼 배율 10
+  /** 10초(실제) 동안 offScreen이면 극 중 100초가 지난 만큼 쌓인다 */
+  const ACCUMULATED =
+    SITUATION_REFERENCE_PER_SHOW_MINUTE * 10 * SHOW_MINUTES_PER_REAL_SECOND
   function accumulate(mind: Mind): void {
     for (let step = 30; step <= 10 * STEPS_PER_SECOND; step += 30) {
       mind.advance(OFF_AIR, step)
@@ -157,9 +197,12 @@ describe('상황 이유', () => {
   it('상황이 끝나면 쌓인 속도의 2배로 빠지고 0이 되면 이유가 사라진다', () => {
     const mind = makeMind({ sensitivities: [OFF_SCREEN] })
     accumulate(mind)
-    expect(mind.value('irritation')).toBeCloseTo(10)
+    expect(mind.value('irritation')).toBeCloseTo(ACCUMULATED)
     mind.advance(IDLE, 600 + 150)
-    expect(mind.value('irritation')).toBeCloseTo(5)
+    // 실제 2.5초 동안 FADE 속도로 빠진다
+    expect(mind.value('irritation')).toBeCloseTo(
+      ACCUMULATED - SITUATION_FADE_PER_SHOW_MINUTE * 2.5 * SHOW_MINUTES_PER_REAL_SECOND,
+    )
     mind.advance(IDLE, 600 + 300)
     expect(mind.value('irritation')).toBe(0)
     expect(mind.topReasons('irritation', 5)).toEqual([])
@@ -172,7 +215,9 @@ describe('상황 이유', () => {
     accumulate(mind)
     mind.advance(IDLE, 600 + 150)
     // 실제 2.5초 = 극 중 25초 = 0.4167분 x 3 = 1.25
-    expect(mind.value('irritation')).toBeCloseTo(8.75)
+    expect(mind.value('irritation')).toBeCloseTo(
+      ACCUMULATED - 3 * 2.5 * SHOW_MINUTES_PER_REAL_SECOND,
+    )
   })
 
   it('nearTag present:false는 그 태그가 근처에 없을 때만 쌓인다', () => {
@@ -187,7 +232,82 @@ describe('상황 이유', () => {
       alone.advance(IDLE, step)
     }
     expect(near.value('irritation')).toBe(0)
-    expect(alone.value('irritation')).toBeCloseTo(10)
+    expect(alone.value('irritation')).toBeCloseTo(ACCUMULATED)
+  })
+
+  it.each([
+    ['onScreen', { kind: 'onScreen' }, IDLE, OFF_AIR],
+    ['silence', { kind: 'silence' }, { ...IDLE, silence: true }, IDLE],
+    [
+      'showTrait',
+      { kind: 'showTrait', trait: 'live' },
+      { ...IDLE, showTraits: ['live'] },
+      IDLE,
+    ],
+  ] as const)('%s 상황은 조건이 참일 때만 쌓인다', (_name, situation, on, off) => {
+    const sensitivity: SensitivityDef = { ...OFF_SCREEN, situation }
+    const active = makeMind({ sensitivities: [sensitivity] })
+    const inactive = makeMind({ sensitivities: [sensitivity] })
+    for (let step = 30; step <= 600; step += 30) {
+      active.advance(on, step)
+      inactive.advance(off, step)
+    }
+    expect(active.value('irritation')).toBeCloseTo(ACCUMULATED)
+    expect(inactive.value('irritation')).toBe(0)
+  })
+
+  it('nearTag present:true는 그 태그가 근처에 있을 때만 쌓인다', () => {
+    const sensitivity: SensitivityDef = {
+      ...OFF_SCREEN,
+      situation: { kind: 'nearTag', tag: 'host', present: true },
+    }
+    const near = makeMind({ sensitivities: [sensitivity] })
+    const alone = makeMind({ sensitivities: [sensitivity] })
+    for (let step = 30; step <= 600; step += 30) {
+      near.advance({ ...IDLE, nearTags: ['host'] }, step)
+      alone.advance(IDLE, step)
+    }
+    expect(near.value('irritation')).toBeCloseTo(ACCUMULATED)
+    expect(alone.value('irritation')).toBe(0)
+  })
+
+  it('상황 누적은 SITUATION_CAP에서 멈춘다', () => {
+    const mind = makeMind({
+      sensitivities: [{ ...OFF_SCREEN, perShowMinute: 1000 }],
+    })
+    mind.advance(OFF_AIR, 600)
+    mind.advance(OFF_AIR, 1200)
+    expect(mind.topReasons('irritation', 1)[0].amount).toBe(SITUATION_CAP)
+  })
+
+  it('같은 (감정, 키) 민감도가 둘이면 첫 번째만 쓴다', () => {
+    const mind = makeMind({
+      sensitivities: [
+        OFF_SCREEN,
+        { ...OFF_SCREEN, perShowMinute: 1000, label: { noun: 'x', clause: 'y' } },
+      ],
+    })
+    for (let step = 30; step <= 600; step += 30) mind.advance(OFF_AIR, step)
+    expect(mind.topReasons('irritation', 5)).toHaveLength(1)
+    expect(mind.value('irritation')).toBeCloseTo(ACCUMULATED)
+  })
+
+  it('끝난 상황의 아주 작은 잔량은 지운다', () => {
+    const mind = makeMind({ sensitivities: [OFF_SCREEN] })
+    mind.advance(OFF_AIR, 1)
+    // 남은 양보다 조금 덜 빠지는 시간: 잔량이 epsilon 이하이면 이유가 사라진다
+    const remaining = mind.value('irritation')
+    const fadeSteps = (remaining / SITUATION_FADE_PER_SHOW_MINUTE) * 6 * 60
+    mind.advance(IDLE, 1 + fadeSteps * (1 - 1e-12))
+    expect(mind.topReasons('irritation', 1)).toEqual([])
+  })
+
+  it('경과 스텝이 거꾸로 들어와도 상황이 줄거나 늘지 않는다', () => {
+    const mind = makeMind({ sensitivities: [OFF_SCREEN] })
+    mind.advance(OFF_AIR, 600)
+    const before = mind.value('irritation')
+    mind.advance(OFF_AIR, 300)
+    expect(mind.value('irritation')).toBe(before)
   })
 })
 
