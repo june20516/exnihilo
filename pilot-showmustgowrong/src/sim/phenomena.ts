@@ -1,11 +1,11 @@
-import { NOISE_RADIUS, SIGHT_RADIUS } from '@/content/balance'
-import type { Intensity, PhenomenonKind } from '@/content/types'
+import { NOISE_RADIUS, SIGHT_RADIUS, STIR_NOISE_RADIUS, STIR_SIGHT_RADIUS } from '@/content/balance'
+import type { EventIntensity, PhenomenonKind, StirKind } from '@/content/types'
 import { distance3 } from './vec'
 
 export interface PhenomenonEvent {
   id: number
   kind: PhenomenonKind
-  intensity: Intensity
+  intensity: EventIntensity
   /** actor, 장비 id, 또는 'broadcast'(정적), 'audience' */
   sourceId: string
   targetId: string | null
@@ -15,7 +15,20 @@ export interface PhenomenonEvent {
   step: number
   causeId: number | null
   depth: number
+  /** 버릇이 낸 기척의 이름 명사(예: '킥킥거림'). 문구를 만들 때 쓴다. */
+  label?: string
 }
+
+const STIR_KINDS: readonly StirKind[] = ['noise', 'laughter', 'anger', 'exposure']
+
+export function isStir(event: PhenomenonEvent): boolean {
+  return event.intensity === 0
+}
+
+function canBeStir(kind: PhenomenonKind): kind is StirKind {
+  return (STIR_KINDS as readonly PhenomenonKind[]).includes(kind)
+}
+
 
 export interface Perceiver {
   id: string
@@ -36,15 +49,18 @@ export function perceives(event: PhenomenonEvent, perceiver: Perceiver): boolean
   if (event.sourceId === perceiver.id) return false
 
   const distance = distance3(event, perceiver)
+  const sightRadius = isStir(event) ? STIR_SIGHT_RADIUS : SIGHT_RADIUS
   switch (event.kind) {
     case 'noise':
-      return distance <= NOISE_RADIUS[event.intensity]
+      return (
+        distance <= (event.intensity === 0 ? STIR_NOISE_RADIUS : NOISE_RADIUS[event.intensity])
+      )
     case 'laughter':
     case 'exposure':
-      return distance <= SIGHT_RADIUS && !perceiver.inDarkness
+      return distance <= sightRadius && !perceiver.inDarkness
     case 'anger':
       if (event.targetId !== null) return targetsSelf(event, perceiver.id)
-      return distance <= SIGHT_RADIUS
+      return distance <= sightRadius
     case 'darkness':
       return perceiver.inDarkness
     case 'silence':
@@ -57,12 +73,20 @@ export function perceives(event: PhenomenonEvent, perceiver: Perceiver): boolean
 export class EventLog {
   private readonly events: PhenomenonEvent[] = []
   private nextId = 1
-  /** 이 id 이하의 이벤트는 depth 계산에서 원인으로 치지 않는다. */
-  private chainBreakId = 0
+  /** 광고가 끊은 지점들(그 시점의 마지막 이벤트 id). 원인 id <= 지점 < 이벤트 id 인 연결은 끊긴 것이다. */
+  private readonly breakIds: number[] = []
 
+  /**
+   * 강도 1 이상은 원인 깊이 + 1, 기척(강도 0)은 원인 깊이 그대로다.
+   * 원인이 없거나 광고 전이면 각각 1, 0이다.
+   */
   emit(partial: Omit<PhenomenonEvent, 'id' | 'depth'>): PhenomenonEvent {
-    const cause = partial.causeId === null ? undefined : this.get(partial.causeId)
-    const depth = cause && cause.id > this.chainBreakId ? cause.depth + 1 : 1
+    if (partial.intensity === 0 && !canBeStir(partial.kind)) {
+      throw new Error(`${partial.kind}은(는) 기척(강도 0)이 될 수 없습니다`)
+    }
+    const cause = this.linkedCause(partial.causeId, this.nextId)
+    const causeDepth = cause?.depth ?? 0
+    const depth = partial.intensity === 0 ? causeDepth : causeDepth + 1
     const event: PhenomenonEvent = { ...partial, id: this.nextId, depth }
     this.nextId += 1
     this.events.push(event)
@@ -71,7 +95,27 @@ export class EventLog {
 
   /** 이전 이벤트를 원인으로 한 emit은 depth를 1부터 다시 센다(광고용). causeId는 그대로 기록한다. */
   breakChains(): void {
-    this.chainBreakId = this.nextId - 1
+    this.breakIds.push(this.nextId - 1)
+  }
+
+  /** eventId 시점에서 광고에 끊기지 않고 이어지는 원인 이벤트. */
+  private linkedCause(causeId: number | null, eventId: number): PhenomenonEvent | undefined {
+    if (causeId === null) return undefined
+    const cause = this.get(causeId)
+    if (cause === undefined) return undefined
+    const broken = this.breakIds.some((breakId) => causeId <= breakId && breakId < eventId)
+    return broken ? undefined : cause
+  }
+
+  /** 원인을 따라 원인 없는 사건까지 거슬러 간 뿌리. 광고로 끊긴 연결은 넘지 않는다. 기척도 거친다. */
+  rootOf(id: number): PhenomenonEvent | undefined {
+    let current = this.get(id)
+    while (current) {
+      const cause = this.linkedCause(current.causeId, current.id)
+      if (cause === undefined) return current
+      current = cause
+    }
+    return undefined
   }
 
   get(id: number): PhenomenonEvent | undefined {

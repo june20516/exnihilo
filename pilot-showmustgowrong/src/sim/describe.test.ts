@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeEvent, withSubject } from './describe'
+import { describeEvent, describeRootEvent, withSubject } from './describe'
 import type { PhenomenonEvent } from './phenomena'
 
 const NAMES: Record<string, string> = {
@@ -90,5 +90,17 @@ describe('withSubject', () => {
     expect(withSubject('렉스')).toBe('렉스가')
     expect(withSubject('준')).toBe('준이')
     expect(withSubject('R2')).toBe('R2이(가)')
+  })
+})
+
+describe('기척(강도 0)의 문구', () => {
+  it('describeEvent는 기척에 문장이 없어 throw한다', () => {
+    expect(() => describeEvent(event({ kind: 'laughter', intensity: 0 }), NAMES)).toThrow()
+  })
+
+  it('describeRootEvent는 기척이면 label을, 없으면 종류 명사를, 강도 1 이상이면 describeEvent 문장을 쓴다', () => {
+    expect(describeRootEvent(event({ kind: 'laughter', intensity: 0, label: '킥킥거림' }), NAMES)).toBe('킥킥거림')
+    expect(describeRootEvent(event({ kind: 'noise', intensity: 0 }), NAMES)).toBe('기척 소리')
+    expect(describeRootEvent(event({ kind: 'laughter', intensity: 2 }), NAMES)).toBe('렉스가 웃음을 터뜨린다')
   })
 })

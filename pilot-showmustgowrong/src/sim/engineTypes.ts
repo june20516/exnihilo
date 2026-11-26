@@ -179,6 +179,8 @@ export interface BroadcastSummary {
   averageViewers: number
   eventCount: number
   maxChainDepth: number
+  /** 가장 깊은 연쇄(강도 1 이상)의 뿌리 사건이 남긴 로그 줄. 연쇄가 없으면 null */
+  rootLine: { step: number; text: string } | null
 }
 
 export interface InputRecord {

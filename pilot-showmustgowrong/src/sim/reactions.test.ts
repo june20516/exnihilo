@@ -228,3 +228,18 @@ describe('cooldownKey', () => {
     )
   })
 })
+
+describe('기척(강도 0)', () => {
+  it('기척은 min 1 반응을 일으키지 않는다(관객·스태프 포함)', () => {
+    const stir = event({ id: 1, kind: 'laughter', intensity: 0, targetId: null })
+    const reactors = [
+      reactor('A', [reaction('laughter', 1, 'perceived', 'laugh')]),
+      reactor('audience', [reaction('laughter', 1, 'perceived', 'laugh', 0.5)]),
+      reactor('cam-op', [reaction('laughter', 1, 'perceived', 'panic')]),
+    ]
+    const rng = createRng(1)
+    const [planned, nextRng] = resolveReactions([stir], reactors, new CooldownTable(), 0, rng, describeEvent)
+    expect(planned).toEqual([])
+    expect(nextRng).toEqual(rng)
+  })
+})

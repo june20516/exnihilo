@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   EventLog,
+  isStir,
   perceives,
   targetsSelf,
   type PhenomenonEvent,
@@ -181,5 +182,91 @@ describe('EventLog', () => {
     const orphan = log.emit({ ...base, causeId: 42 })
     expect(log.chain(orphan.id)).toEqual([orphan])
     expect(log.chain(99)).toEqual([])
+  })
+})
+
+describe('기척(강도 0)', () => {
+  it('isStir는 강도 0만 기척으로 본다', () => {
+    expect(isStir(makeEvent({ intensity: 0 }))).toBe(true)
+    expect(isStir(makeEvent({ intensity: 1 }))).toBe(false)
+  })
+
+  it('기척 소음은 2m 안에서만, 기척 웃음은 4m 안이고 어둡지 않을 때만 인지한다', () => {
+    const noise = makeEvent({ kind: 'noise', intensity: 0 })
+    expect(perceives(noise, makePerceiver({ x: 2 }))).toBe(true)
+    expect(perceives(noise, makePerceiver({ x: 2.01 }))).toBe(false)
+
+    const laughter = makeEvent({ kind: 'laughter', intensity: 0 })
+    expect(perceives(laughter, makePerceiver({ x: 4 }))).toBe(true)
+    expect(perceives(laughter, makePerceiver({ x: 4.01 }))).toBe(false)
+    expect(perceives(laughter, makePerceiver({ x: 1, inDarkness: true }))).toBe(false)
+  })
+
+  it('대상이 있는 기척 분노는 대상만 인지한다', () => {
+    const anger = makeEvent({ kind: 'anger', intensity: 0, targetId: 'me' })
+    expect(perceives(anger, makePerceiver({ id: 'me', x: 3 }))).toBe(true)
+    expect(perceives(anger, makePerceiver({ id: 'other', x: 0 }))).toBe(false)
+    const open = makeEvent({ kind: 'anger', intensity: 0, targetId: null })
+    expect(perceives(open, makePerceiver({ x: 4 }))).toBe(true)
+    expect(perceives(open, makePerceiver({ x: 4.5 }))).toBe(false)
+  })
+})
+
+describe('EventLog 깊이와 뿌리', () => {
+  const strong: Omit<PhenomenonEvent, 'id' | 'depth'> = {
+    kind: 'anger',
+    intensity: 2,
+    sourceId: 's',
+    targetId: null,
+    x: 0,
+    y: 0,
+    z: 0,
+    step: 0,
+    causeId: null,
+  }
+  const stir: Omit<PhenomenonEvent, 'id' | 'depth'> = { ...strong, kind: 'laughter', intensity: 0 }
+
+  it('원인 없는 기척의 깊이는 0, 깊이 2 사건이 원인인 기척은 2, 기척이 원인인 강도 1은 1이다', () => {
+    const log = new EventLog()
+    expect(log.emit(stir).depth).toBe(0)
+
+    const root = log.emit(strong)
+    const second = log.emit({ ...strong, causeId: root.id })
+    expect(second.depth).toBe(2)
+    expect(log.emit({ ...stir, causeId: second.id }).depth).toBe(2)
+
+    const lonelyStir = log.emit(stir)
+    expect(log.emit({ ...strong, intensity: 1, causeId: lonelyStir.id }).depth).toBe(1)
+  })
+
+  it('광고 전 사건이 원인인 기척은 0, 강도 1은 1이다', () => {
+    const log = new EventLog()
+    const root = log.emit(strong)
+    const second = log.emit({ ...strong, causeId: root.id })
+    log.breakChains()
+    expect(log.emit({ ...stir, causeId: second.id }).depth).toBe(0)
+    expect(log.emit({ ...strong, intensity: 1, causeId: second.id }).depth).toBe(1)
+  })
+
+  it('rootOf는 기척을 거쳐 원인 없는 사건까지 가고, 광고로 끊긴 연결은 넘지 않는다', () => {
+    const log = new EventLog()
+    const root = log.emit(strong)
+    const middle = log.emit({ ...stir, causeId: root.id })
+    const leaf = log.emit({ ...strong, causeId: middle.id })
+    expect(log.rootOf(leaf.id)).toBe(root)
+    expect(log.rootOf(root.id)).toBe(root)
+    expect(log.rootOf(99)).toBeUndefined()
+
+    log.breakChains()
+    const after = log.emit({ ...strong, causeId: leaf.id })
+    const afterLeaf = log.emit({ ...strong, causeId: after.id })
+    expect(log.rootOf(afterLeaf.id)).toBe(after)
+  })
+
+  it('강도 0인 충격이나 어둠은 emit이 throw한다', () => {
+    const log = new EventLog()
+    expect(() => log.emit({ ...strong, kind: 'impact', intensity: 0 })).toThrow()
+    expect(() => log.emit({ ...strong, kind: 'darkness', intensity: 0 })).toThrow()
+    expect(() => log.emit({ ...strong, kind: 'silence', intensity: 0 })).toThrow()
   })
 })

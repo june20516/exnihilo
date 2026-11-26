@@ -112,10 +112,12 @@ export function resolveReactions(
 ): [PlannedAction[], RngState] {
   const planned: PlannedAction[] = []
   let currentRng = rng
+  // 기척(강도 0)은 반사 반응을 일으키지 않는다. 난수도 쓰지 않는다.
+  const reactable = events.filter((event) => event.intensity !== 0)
 
   for (const reactor of reactors) {
     if (reactor.walkedOut) continue
-    const picked = pickCandidate(events, reactor, cooldowns, step)
+    const picked = pickCandidate(reactable, reactor, cooldowns, step)
     if (picked === null) continue
 
     const { chance } = picked.reaction

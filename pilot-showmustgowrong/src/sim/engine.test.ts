@@ -931,6 +931,30 @@ describe('반응과 시선', () => {
     expect(chain[0].text).toBe('렉스가 모에게 버럭 화를 낸다')
     expect(chain[1].text).toBe('모가 욕설을 했다! (삐—)')
   })
+
+  it('summary.rootLine은 가장 깊은 연쇄의 원인 없는 첫 사건 줄이다', async () => {
+    const broadcast = await open(setup({ staff: [], equipment: [] }))
+    expect(broadcast.summary().rootLine).toBeNull()
+    run(broadcast, 10)
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'shout' }])
+    broadcast.step([])
+    expect(broadcast.summary().maxChainDepth).toBe(2)
+    expect(broadcast.summary().rootLine).toEqual({ step: 10, text: '렉스가 모에게 버럭 화를 낸다' })
+  })
+
+  it('longestChain은 광고 뒤 사건만 담는다', async () => {
+    const broadcast = await open(setup({ staff: [], equipment: [] }))
+    run(broadcast, 10)
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'shout' }])
+    broadcast.step([])
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    broadcast.resumeFromAd()
+    run(broadcast, 30)
+    const chain = broadcast.longestChain()
+    expect(chain.map((line) => line.depth)).toEqual([1, 2])
+    expect(chain.every((line) => line.step <= 11)).toBe(true)
+    expect(broadcast.summary().rootLine?.step).toBe(10)
+  })
 })
 
 describe('장비 파손 연쇄', () => {

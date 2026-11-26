@@ -70,7 +70,7 @@ export class BroadcastScore {
     sourcePresence: 1 | 2 | 3,
     hitViolenceMultiplier: number,
   ): number {
-    if (event.kind === 'gaze' || event.kind === 'silence') return 0
+    if (event.kind === 'gaze' || event.kind === 'silence' || event.intensity === 0) return 0
 
     const countKey = `${event.sourceId}|${event.kind}`
     const airedBefore = this.airedCounts.get(countKey) ?? 0

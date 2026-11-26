@@ -196,3 +196,15 @@ describe('BroadcastScore 시청자', () => {
     expect(score.averageViewers()).toBeCloseTo((VIEWERS_START + (VIEWERS_START + 36)) / 2)
   })
 })
+
+describe('기척(강도 0)', () => {
+  it('기척은 점수 0이고 게이지를 올리지 않는다', () => {
+    const score = new BroadcastScore(show())
+    const viewersBefore = score.viewers
+    const gaugesBefore = score.gauges
+    expect(score.scoreEvent(event({ kind: 'laughter', intensity: 0 }), 1, 1)).toBe(0)
+    expect(score.scoreEvent(event({ kind: 'noise', intensity: 0 }), 3, 1)).toBe(0)
+    expect(score.viewers).toBe(viewersBefore)
+    expect(score.gauges).toEqual(gaugesBefore)
+  })
+})

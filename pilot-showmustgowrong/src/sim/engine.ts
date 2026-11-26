@@ -48,9 +48,9 @@ import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame } from './broadcast'
 import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
-import { describeEvent, withObject, withSubject } from './describe'
+import { describeEvent, describeRootEvent, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
-import { EventLog, perceives, type PhenomenonEvent } from './phenomena'
+import { EventLog, isStir, perceives, type PhenomenonEvent } from './phenomena'
 import { PhysicsWorld, initPhysics, type Contact } from './physics'
 import {
   ShowValidationError,
@@ -115,8 +115,16 @@ function cloneInput(input: BroadcastInput): BroadcastInput {
   return input.type === 'ad' ? { type: 'ad', effects: [...input.effects] } : { ...input }
 }
 
-function isPhenomenonShown(event: PhenomenonEvent): boolean {
-  return event.kind !== 'gaze' && event.kind !== 'silence'
+type StrongEvent = PhenomenonEvent & { intensity: Intensity }
+
+/** 강도 1 이상인 사건. 기척(강도 0)이 아니다. */
+function isStrong(event: PhenomenonEvent): event is StrongEvent {
+  return !isStir(event)
+}
+
+/** 화면에 보이는 사고인가. gaze와 silence, 기척(강도 0)은 아니다. */
+function isPhenomenonShown(event: PhenomenonEvent): event is StrongEvent {
+  return event.kind !== 'gaze' && event.kind !== 'silence' && isStrong(event)
 }
 
 /** from에서 to로 향하는 바닥 평면 단위 벡터. 같은 자리면 null. */
@@ -387,6 +395,7 @@ export class Broadcast {
     if (this.deepestEvent === null) return []
     return this.log
       .chain(this.deepestEvent.id)
+      .filter(isStrong)
       .slice(-this.deepestEvent.depth)
       .map((event) => ({ step: event.step, text: this.describe(event), depth: event.depth }))
   }
@@ -397,7 +406,18 @@ export class Broadcast {
       averageViewers: this.score.averageViewers(),
       eventCount: this.log.since(0).length,
       maxChainDepth: this.deepestEvent?.depth ?? 0,
+      rootLine: this.rootLine(),
     }
+  }
+
+  /** 가장 깊은 연쇄의 뿌리 사건이 남긴 로그 줄. 줄이 없으면(묵음 emit) 그 사건의 문구다. */
+  private rootLine(): BroadcastSummary['rootLine'] {
+    if (this.deepestEvent === null) return null
+    const root = this.log.rootOf(this.deepestEvent.id)
+    if (root === undefined) return null
+    const line = this.lines.find((candidate) => candidate.eventId === root.id)
+    if (line !== undefined) return { step: line.step, text: line.text }
+    return { step: root.step, text: describeRootEvent(root, this.names) }
   }
 
   /** 물리 월드(wasm 메모리)를 해제한다. 두 번 불러도 안전하다. 이후 step과 view는 오류를 던진다. */
@@ -843,8 +863,11 @@ export class Broadcast {
 
   // ── 송출, 정적, 슬로모션 ───────────────────────────────
 
-  private scoreAiredEvents(): PhenomenonEvent[] {
-    const aired = this.currentEvents.filter((event) => this.isAired(event))
+  private scoreAiredEvents(): StrongEvent[] {
+    // 기척(강도 0)은 점수·정적·슬로모션에 들어가지 않으므로 송출 집계에서 뺀다.
+    const aired = this.currentEvents.filter(
+      (event): event is StrongEvent => isStrong(event) && this.isAired(event),
+    )
     for (const event of aired) {
       this.score.scoreEvent(event, this.presenceOf(event.sourceId), this.hitMultiplierOf(event))
     }
@@ -884,7 +907,7 @@ export class Broadcast {
     return Math.max(...multipliers)
   }
 
-  private updateSilence(aired: PhenomenonEvent[]): void {
+  private updateSilence(aired: StrongEvent[]): void {
     this.silentSteps = aired.some(isPhenomenonShown) ? 0 : this.silentSteps + 1
     const reached = this.silenceThresholds.find(({ steps }) => this.silentSteps === steps)
     if (reached === undefined) return
@@ -910,7 +933,7 @@ export class Broadcast {
   }
 
   /** 게이지가 상한의 80%에 처음 이르거나(게이지마다 한 번) 강도 3 현상이 송출되면 건다. */
-  private updateAutoSlowmo(aired: PhenomenonEvent[]): void {
+  private updateAutoSlowmo(aired: StrongEvent[]): void {
     const step = this.stepCount - 1
     const newGauge = this.score.nearLimitGauges().find((gauge) => !this.slowmoGauges.has(gauge))
     if (newGauge !== undefined) {
@@ -1038,6 +1061,8 @@ export class Broadcast {
   private emit(partial: Omit<PhenomenonEvent, 'id' | 'depth' | 'step'>): PhenomenonEvent {
     const event = this.log.emit({ ...partial, step: this.stepCount })
     this.currentEvents.push(event)
+    // 기척은 로그 줄이 없고 가장 깊은 연쇄 후보도 아니다.
+    if (isStir(event)) return event
     if (this.deepestEvent === null || event.depth > this.deepestEvent.depth) {
       this.deepestEvent = event
     }

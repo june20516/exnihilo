@@ -1,3 +1,4 @@
+import type { StirKind } from '@/content/types'
 import type { PhenomenonEvent } from './phenomena'
 
 const HANGUL_FIRST = 0xac00
@@ -38,8 +39,29 @@ export function withPartner(word: string): string {
   return attach(word, '과', '와')
 }
 
+const STIR_NOUNS: Record<StirKind, string> = {
+  noise: '기척 소리',
+  laughter: '웃음 기척',
+  anger: '짜증 기척',
+  exposure: '드러남 기척',
+}
+
+/**
+ * 정산의 뿌리 줄 문구. 강도 1 이상은 describeEvent 문장이고,
+ * 기척은 문장이 없으므로 label(없으면 종류 명사)을 쓴다. 어느 경우에도 throw하지 않는다.
+ */
+export function describeRootEvent(
+  event: PhenomenonEvent,
+  shortNames: Record<string, string>,
+): string {
+  if (event.intensity !== 0) return describeEvent(event, shortNames)
+  if (event.label !== undefined) return event.label
+  return event.kind in STIR_NOUNS ? STIR_NOUNS[event.kind as StirKind] : '기척'
+}
+
 /** 사고 로그 한 줄. 이름은 shortNames(출연자·스태프 shortName, 장비 name, 카메라 label)에서 찾는다. */
 export function describeEvent(event: PhenomenonEvent, shortNames: Record<string, string>): string {
+  if (event.intensity === 0) throw new Error('기척은 문장이 없습니다')
   const nameOf = (id: string): string => shortNames[id] ?? BUILT_IN_NAMES[id] ?? id
   const source = nameOf(event.sourceId)
   const target = event.targetId === null ? null : nameOf(event.targetId)

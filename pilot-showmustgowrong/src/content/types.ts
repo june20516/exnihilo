@@ -12,6 +12,12 @@ export type PhenomenonKind =
 
 export type Intensity = 1 | 2 | 3
 
+/** 강도 0인 기척이 될 수 있는 현상 종류 */
+export type StirKind = 'noise' | 'laughter' | 'anger' | 'exposure'
+
+/** 0은 기척(출연자 버릇이 내는 아주 작은 낌새)이다. */
+export type EventIntensity = 0 | Intensity
+
 /** 정의 순서가 동시 초과 때의 우선순위다. */
 export const GAUGE_KINDS = ['sexual', 'violence', 'drugs', 'language'] as const
 export type GaugeKind = (typeof GAUGE_KINDS)[number]

@@ -66,6 +66,11 @@ export const VIEWERS_TREND_EPSILON = 0.5
 export const NOISE_RADIUS: Record<Intensity, number> = { 1: 3, 2: 6, 3: 12 }
 /** 웃음과 노출이 보이는 반경(m) */
 export const SIGHT_RADIUS = 6
+
+/** 기척(강도 0) 소음 인지 반경(m). 소음 1의 3m보다 좁다. */
+export const STIR_NOISE_RADIUS = 2
+/** 기척(강도 0) 시야 인지 반경(m). 시야 6m보다 좁다. */
+export const STIR_SIGHT_RADIUS = 4
 /** 충격이 발생하는 상대 속도 하한(m/s) */
 export const IMPACT_SPEED: Record<Intensity, number> = { 1: 3, 2: 6, 3: 9 }
 

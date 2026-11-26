@@ -15,7 +15,7 @@ import {
 import type { BroadcastResult } from './useBroadcastLoop'
 
 const HALTED: BroadcastResult = {
-  summary: { peakViewers: 612.5, averageViewers: 540, eventCount: 30, maxChainDepth: 3 },
+  summary: { peakViewers: 612.5, averageViewers: 540, eventCount: 30, maxChainDepth: 3, rootLine: null },
   longestChain: [
     { step: 300, text: '모가 렉스에게 달려든다', depth: 1 },
     { step: 302, text: '렉스가 넘어진다', depth: 2 },
