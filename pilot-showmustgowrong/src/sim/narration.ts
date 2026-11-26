@@ -21,10 +21,14 @@ export const KIND_NOUNS: Record<Exclude<PhenomenonKind, 'gaze' | 'silence'>, str
 /** 쌓임 문형에 쓰는 이유의 최대 개수 */
 const MAX_ACCUMULATED_REASONS = 2
 
+/** KIND_NOUNS에 없는 종류의 명사. 사건 이유로 올 일은 드물지만 throw하지 않고 읽히게 한다 */
+export const EXTRA_KIND_NOUNS: Record<'gaze' | 'silence', string> = {
+  gaze: '시선',
+  silence: '정적',
+}
+
 function kindNoun(kind: PhenomenonKind): string {
-  if (kind === 'gaze') return '시선'
-  if (kind === 'silence') return '정적'
-  return KIND_NOUNS[kind]
+  return kind === 'gaze' || kind === 'silence' ? EXTRA_KIND_NOUNS[kind] : KIND_NOUNS[kind]
 }
 
 function applyParticle(word: string, particle: string | undefined): string {
@@ -129,8 +133,9 @@ function burstSubject(
       return `${first.source.label.clause} ${withSubject(name)}`
     case 'directive':
       return `${reasonNoun(first, nameOf)}에 ${withSubject(name)}`
-    case 'event':
-    case 'relief': {
+    case 'relief':
+      throw new Error('relief 이유는 터짐 주어를 만들 수 없습니다')
+    case 'event': {
       const nouns = top.slice(0, MAX_ACCUMULATED_REASONS).map((reason) => reasonNoun(reason, nameOf))
       const joined =
         nouns.length === 2 ? `${withPartner(nouns[0])} ${nouns[1]}` : nouns[0]

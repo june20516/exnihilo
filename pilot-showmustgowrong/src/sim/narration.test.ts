@@ -3,6 +3,7 @@ import type { BurstAction, EmotionDef, HabitDef } from '@/content/types'
 import type { Reason } from './emotion'
 import type { PhenomenonEvent } from './phenomena'
 import {
+  KIND_NOUNS,
   burstLine,
   fillTemplate,
   habitLine,
@@ -89,6 +90,14 @@ describe('fillTemplate', () => {
     expect(fillTemplate('{target:을} 본다', { target: '오카포' })).toBe('오카포를 본다')
     expect(fillTemplate('{reasons:을} 참던', { reasons: '정적' })).toBe('정적을 참던')
   })
+  it('받침 있는 대상은 을/과', () => {
+    expect(fillTemplate('{target:을} 본다', { target: '준' })).toBe('준을 본다')
+    expect(fillTemplate('{target:와} 논다', { target: '준' })).toBe('준과 논다')
+  })
+  it('한글이 아닌 끝 글자는 조사를 괄호로 병기한다', () => {
+    expect(fillTemplate('{target:을} 본다', { target: 'Rex' })).toBe('Rex을(를) 본다')
+    expect(fillTemplate('{target:와} 논다', { target: 'Rex' })).toBe('Rex과(와) 논다')
+  })
   it('에게·에는 받침과 무관하게 그대로 붙인다', () => {
     expect(fillTemplate('{target:에게} 화낸다', { target: '렉스' })).toBe('렉스에게 화낸다')
     expect(fillTemplate('{reasons:에} 시달린', { reasons: '정적' })).toBe('정적에 시달린')
@@ -97,6 +106,19 @@ describe('fillTemplate', () => {
   it('값이 없는 토큰은 프로그래밍 오류로 throw한다', () => {
     expect(() => fillTemplate('{target:을} 본다', {})).toThrow(Error)
     expect(() => fillTemplate('{reasons:에} 시달린', { target: '모' })).toThrow(Error)
+  })
+})
+
+describe('KIND_NOUNS', () => {
+  it('종류별 명사를 고정한다', () => {
+    expect(KIND_NOUNS).toEqual({
+      noise: '소란',
+      laughter: '웃음',
+      anger: '화',
+      impact: '충돌',
+      darkness: '어둠',
+      exposure: '민망한 모습',
+    })
   })
 })
 
@@ -196,10 +218,17 @@ describe('burstLine', () => {
     )
     expect(burstLine('오카포', null, ANNOYANCE, RAGE, null, false, [], nameOf)).toBe('오카포가 버럭 화를 낸다')
   })
-  it('프리야의 킥킥거림과 무시를 참던 오카포가 폭발한다', () => {
+  it('intense여도 쌓임 접두는 유지되고 술어만 intenseLine이 된다', () => {
     const top = [eventReason('priya', '킥킥거림'), situationReason]
     expect(burstLine('오카포', null, ANNOYANCE, RAGE, null, true, top, nameOf)).toBe(
       '프리야의 킥킥거림과 무시를 참던 오카포가 폭발한다',
     )
+  })
+  it('relief가 섞인 top은 throw한다', () => {
+    const relief: Reason = { emotion: 'annoyance', source: { type: 'relief' }, amount: 1 }
+    expect(() => burstLine('오카포', null, ANNOYANCE, DASH, null, false, [relief], nameOf)).toThrow(Error)
+    expect(() =>
+      burstLine('오카포', null, ANNOYANCE, DASH, null, false, [eventReason('priya', '킥킥거림'), relief], nameOf),
+    ).toThrow(Error)
   })
 })
