@@ -3,6 +3,7 @@ import {
   BIG_BURST_GRACE_BODY_SECONDS,
   BIG_BURST_MTB_BODY_SECONDS,
   DEFAULT_THRESHOLDS,
+  HABIT_BOREDOM_SHORTEN,
   HABIT_COOLDOWN_SHOW_SECONDS,
   LIFE_TICK_BODY_SECONDS,
   LOG_NUDGE_BODY_SECONDS,
@@ -226,9 +227,11 @@ describe('체감 목표', () => {
     expect(Math.abs(mean - expected)).toBeLessThanOrEqual(expected * 0.15)
   })
 
+  // 지루함 100이면 간격 × (1 - HABIT_BOREDOM_SHORTEN)이다(기본 0.55면 실제 4.5~9초)
+  const boredShorten = 1 - HABIT_BOREDOM_SHORTEN
   it.each([
     { boredom: 0, minReal: 10, maxReal: 20 },
-    { boredom: 100, minReal: 6, maxReal: 12 },
+    { boredom: 100, minReal: 10 * boredShorten, maxReal: 20 * boredShorten },
   ])('버릇 간격은 지루함 $boredom이면 실제 $minReal~$maxReal초다', ({ boredom, minReal, maxReal }) => {
     const habitList = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].map((id) => habit(id))
     const gaps: number[] = []
@@ -466,6 +469,23 @@ it('단계 진입 줄은 같은 감정·단계에 실제 12초 안에 두 번 �
   expect(life.mood('a')?.stage).toBe(1)
   expect(stages(reentered)).toEqual([])
   expect(600).toBeLessThan(cooldown)
+})
+
+it('단계 진입 기록은 줄 쿨다운에 생략된 진입도 남긴다', () => {
+  const life = makeLife(1, [performer('a', mindDef())])
+  life.addDirective('a', [{ emotion: 'irritation', amount: 60 }], 'a', 0)
+  run(life, ['a'], 0, 390, { nudge: false })
+  life.addDirective('a', [{ emotion: 'irritation', amount: 20 }], 'b', 390)
+  const reentered = run(life, ['a'], 420, 600, { nudge: false })
+  // 다시 들어간 1단계는 줄이 없지만(쿨다운) 기록은 남는다
+  expect(stages(reentered)).toEqual([])
+  const records = life.stageRecords()
+  expect(records.map(({ actorId, emotion, stage }) => [actorId, emotion, stage])).toEqual([
+    ['a', 'irritation', 1],
+    ['a', 'irritation', 1],
+  ])
+  expect(records[0].step).toBe(0)
+  expect(records[1].step).toBeGreaterThanOrEqual(420)
 })
 
 describe('응답', () => {

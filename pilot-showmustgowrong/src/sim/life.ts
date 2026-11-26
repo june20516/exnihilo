@@ -93,6 +93,15 @@ export interface BurstRecord {
   stage2Step: number | null
 }
 
+/** 감정이 단계에 올라간 기록. 진입 줄은 쿨다운으로 생략될 수 있지만 기록은 모든 진입을 남긴다 */
+export interface StageRecord {
+  step: number
+  actorId: string
+  emotion: EmotionId
+  /** 도착 단계. 한 틱에 0에서 2로 올라가면 2만 남는다 */
+  stage: 1 | 2
+}
+
 export interface MoodView {
   emotion: EmotionId
   name: string
@@ -164,6 +173,7 @@ export class StudioLife {
   private readonly show: ShowDef
   private readonly actors = new Map<string, Actor>()
   private readonly records: BurstRecord[] = []
+  private readonly stageEntries: StageRecord[] = []
   private rng: RngState
   private readonly tickSteps = bodySecondsToSteps(LIFE_TICK_BODY_SECONDS)
   private readonly graceSteps = bodySecondsToSteps(BIG_BURST_GRACE_BODY_SECONDS)
@@ -315,6 +325,11 @@ export class StudioLife {
     return this.records.map((record) => ({ ...record }))
   }
 
+  /** 지금까지의 단계 진입 기록(복사본) */
+  stageRecords(): StageRecord[] {
+    return this.stageEntries.map((record) => ({ ...record }))
+  }
+
   // 1. 단계 변화: 올라가는 변화만, 도착 단계 하나만, 진입 줄 쿨다운 밖이면 출력
   private advanceStages(state: TickState): void {
     const { context, present, outputs } = state
@@ -327,6 +342,7 @@ export class StudioLife {
       }
       for (const change of actor.mind.advance(situations, context.step)) {
         if (change.to <= change.from || change.to === 0) continue
+        this.stageEntries.push({ step: context.step, actorId: member.id, emotion: change.emotion, stage: change.to })
         const emotion = this.emotionDef(actor, change.emotion)
         const key = `${change.emotion}:${change.to}`
         const lastAt = actor.stageLineAt.get(key)

@@ -138,7 +138,9 @@ export class AutoDirector {
       this.cut = { ...target, sinceStep: view.step }
       return this.inputsFor(view, target)
     }
-    if (this.cut !== null) this.cut = { ...this.cut, sinceStep: view.step }
+    // 쓸 칸이 없는 것은 rotation이 추적 카메라뿐이고 활동 출연자가 남지 않았을 때다. 처음 부를 때 그렇다면 잡을 것이 없는
+    // 방송이라 requireCut이 오류로 알린다(토크쇼 rotation은 와이드로 시작해 처음 부를 때 늘 칸을 찾는다)
+    this.cut = { ...this.requireCut(), sinceStep: view.step }
     return []
   }
 

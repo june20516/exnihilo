@@ -52,7 +52,7 @@ import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
 import { describeEvent, describeRootEvent, entityName, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
-import { StudioLife, type BurstRecord, type LifeMember } from './life'
+import { StudioLife, type BurstRecord, type LifeMember, type StageRecord } from './life'
 import { eventNoun } from './narration'
 import { LifeActions, type ActionOptions, type ActionResult, type LineInput } from './lifeActions'
 import { EventLog, isStir, type Perceiver, type PhenomenonEvent } from './phenomena'
@@ -471,6 +471,11 @@ export class Broadcast {
   /** 지금까지의 감정 터짐 기록(복사본) */
   burstRecords(): BurstRecord[] {
     return this.life.burstRecords()
+  }
+
+  /** 지금까지의 감정 단계 진입 기록(복사본). 진입 줄과 달리 쿨다운으로 생략되지 않는다 */
+  stageRecords(): StageRecord[] {
+    return this.life.stageRecords()
   }
 
   /** 방송 시작부터의 모든 로그 줄(복사본). view().log는 최근 줄만 담는다. */

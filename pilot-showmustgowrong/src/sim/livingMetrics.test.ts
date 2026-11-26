@@ -3,8 +3,14 @@ import { STEP_SECONDS } from '@/content/balance'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
 import { Broadcast, type BroadcastSummary, type LogKind, type LogLine } from './engine'
-import type { BurstRecord } from './life'
-import { evaluateGates, measureBroadcast, type BroadcastMetrics } from './livingMetrics'
+import type { BurstRecord, StageRecord } from './life'
+import {
+  evaluateGates,
+  measureBroadcast,
+  measureFinishedBroadcast,
+  type BroadcastMeasureInput,
+  type BroadcastMetrics,
+} from './livingMetrics'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 const seconds = (value: number) => Math.round(value * STEPS_PER_SECOND)
@@ -39,7 +45,24 @@ function summary(maxChainDepth: number): BroadcastSummary {
   return { peakViewers: 0, averageViewers: 0, eventCount: 0, maxChainDepth, rootLine: null }
 }
 
-/** 모든 게이트를 통과하는 지표 한 판 */
+function stage(step: number, actorId: string, emotion: StageRecord['emotion'], to: 1 | 2): StageRecord {
+  return { step, actorId, emotion, stage: to }
+}
+
+/** 빈 방송 입력에 필요한 칸만 덮어 잰다. 렉스는 기본으로 무대에 있다 */
+function measure(overrides: Partial<BroadcastMeasureInput> & Pick<BroadcastMeasureInput, 'endStep'>) {
+  return measureBroadcast({
+    lines: [],
+    bursts: [],
+    stages: [],
+    summary: summary(0),
+    halted: false,
+    rexId: 'rex',
+    ...overrides,
+  })
+}
+
+/** 렉스 게이트 밖의 모든 게이트를 통과하는 지표 한 판. 렉스 판정은 판 비율이라 기본은 렉스 없음(null)이다 */
 function passing(overrides: Partial<BroadcastMetrics> = {}): BroadcastMetrics {
   return {
     maxGapRealSeconds: 4,
@@ -51,6 +74,7 @@ function passing(overrides: Partial<BroadcastMetrics> = {}): BroadcastMetrics {
     halted: false,
     maxChainDepth: 2,
     lineCount: 60,
+    rexAttentionReached: null,
     ...overrides,
   }
 }
@@ -71,18 +95,18 @@ function gate(runs: readonly BroadcastMetrics[], name: string) {
 describe('measureBroadcast', () => {
   it('방송 시작·줄들·방송 끝 사이 가장 긴 공백을 실제 초로 잰다', () => {
     const lines = [line(seconds(2)), line(seconds(5)), line(seconds(9))]
-    const metrics = measureBroadcast(lines, [], summary(0), false, seconds(12))
+    const metrics = measure({ lines, endStep: seconds(12) })
     expect(metrics.maxGapRealSeconds).toBe(4)
   })
 
   it('첫 줄 전 공백과 마지막 줄 뒤 공백도 센다', () => {
-    expect(measureBroadcast([line(seconds(6))], [], summary(0), false, seconds(8)).maxGapRealSeconds).toBe(6)
-    expect(measureBroadcast([line(seconds(1))], [], summary(0), false, seconds(8)).maxGapRealSeconds).toBe(7)
+    expect(measure({ lines: [line(seconds(6))], endStep: seconds(8) }).maxGapRealSeconds).toBe(6)
+    expect(measure({ lines: [line(seconds(1))], endStep: seconds(8) }).maxGapRealSeconds).toBe(7)
   })
 
   it('묶인 줄은 처음 스텝의 1줄로 센다', () => {
     const lines = [line(seconds(1), 'silence', 5), line(seconds(3))]
-    const metrics = measureBroadcast(lines, [], summary(0), false, seconds(4))
+    const metrics = measure({ lines, endStep: seconds(4) })
     expect(metrics.lineCount).toBe(2)
     expect(metrics.silenceLineRatio).toBe(0.5)
   })
@@ -90,16 +114,16 @@ describe('measureBroadcast', () => {
   it('묶인 줄의 공백은 처음 스텝부터 잰다(뒤 반복이 공백을 메우지 않는다)', () => {
     // 1초에 처음 찍히고 이후 몇 번 묶였더라도 줄의 step은 1초다. 다음 줄(7초)까지 6초 공백으로 본다
     const lines = [line(seconds(1), 'habit', 4), line(seconds(7))]
-    expect(measureBroadcast(lines, [], summary(0), false, seconds(8)).maxGapRealSeconds).toBe(6)
+    expect(measure({ lines, endStep: seconds(8) }).maxGapRealSeconds).toBe(6)
   })
 
   it('정적 줄 비율은 silence 줄 수 / 전체 줄 수다', () => {
     const lines = [line(0, 'silence'), line(1), line(2, 'incident'), line(3, 'stage'), line(4, 'staff')]
-    expect(measureBroadcast(lines, [], summary(0), false, 5).silenceLineRatio).toBe(0.2)
+    expect(measure({ lines, endStep: 5 }).silenceLineRatio).toBe(0.2)
   })
 
   it('줄이 없으면 정적 줄 비율은 0이고 공백은 방송 전체다', () => {
-    const metrics = measureBroadcast([], [], summary(0), false, seconds(10))
+    const metrics = measure({ endStep: seconds(10) })
     expect(metrics.silenceLineRatio).toBe(0)
     expect(metrics.maxGapRealSeconds).toBe(10)
     expect(metrics.lineCount).toBe(0)
@@ -113,7 +137,7 @@ describe('measureBroadcast', () => {
       burst(seconds(5), 'mo', 'small'),
       burst(seconds(6), 'mo', 'small', seconds(1)),
     ]
-    const metrics = measureBroadcast([], records, summary(0), false, seconds(100))
+    const metrics = measure({ bursts: records, endStep: seconds(100) })
     expect(metrics.bigBursts).toBe(3)
     expect(metrics.maxBigBurstsPerActor).toBe(2)
     expect(metrics.smallBursts).toBe(2)
@@ -121,22 +145,44 @@ describe('measureBroadcast', () => {
   })
 
   it('큰 터짐이 없으면 출연자당 최대는 0이다', () => {
-    expect(measureBroadcast([], [], summary(0), false, 1).maxBigBurstsPerActor).toBe(0)
+    expect(measure({ endStep: 1 }).maxBigBurstsPerActor).toBe(0)
   })
 
   it('2단계 진입 스텝이 없는 큰 터짐은 기록 오류로 throw한다', () => {
-    expect(() => measureBroadcast([], [burst(10, 'rex', 'big')], summary(0), false, 20)).toThrow()
+    expect(() => measure({ bursts: [burst(10, 'rex', 'big')], endStep: 20 })).toThrow()
   })
 
   it('중단 여부와 최대 연쇄 깊이를 그대로 옮긴다', () => {
-    const metrics = measureBroadcast([], [], summary(4), true, 10)
+    const metrics = measure({ summary: summary(4), halted: true, endStep: 10 })
     expect(metrics.halted).toBe(true)
     expect(metrics.maxChainDepth).toBe(4)
   })
 })
 
+describe('measureBroadcast 렉스 주목 욕구', () => {
+  it('렉스 주목 욕구가 1단계에 닿은 기록이 있으면 true다', () => {
+    const stages = [stage(seconds(30), 'rex', 'attention', 1)]
+    expect(measure({ stages, endStep: seconds(60) }).rexAttentionReached).toBe(true)
+  })
+
+  it('한 번에 2단계로 올라간 기록도 1단계에 닿은 것으로 친다', () => {
+    const stages = [stage(seconds(30), 'rex', 'attention', 2)]
+    expect(measure({ stages, endStep: seconds(60) }).rexAttentionReached).toBe(true)
+  })
+
+  it('다른 감정이나 다른 출연자의 주목 욕구 기록만 있으면 false다', () => {
+    const stages = [stage(seconds(10), 'rex', 'irritation', 2), stage(seconds(20), 'priya', 'attention', 1)]
+    expect(measure({ stages, endStep: seconds(60) }).rexAttentionReached).toBe(false)
+  })
+
+  it('렉스가 없는 방송이면 null이다', () => {
+    const stages = [stage(seconds(30), 'rex', 'attention', 1)]
+    expect(measure({ stages, rexId: null, endStep: seconds(60) }).rexAttentionReached).toBeNull()
+  })
+})
+
 describe('evaluateGates', () => {
-  it('게이트 8개를 정해진 이름으로 낸다', () => {
+  it('게이트 9개를 정해진 이름으로 낸다', () => {
     expect(evaluateGates([passing()]).map((result) => result.name)).toEqual([
       '로그 공백',
       '정적 줄',
@@ -146,8 +192,11 @@ describe('evaluateGates', () => {
       '중단',
       '연쇄 깊이',
       '경고 창',
+      '렉스 주목 욕구',
     ])
-    expect(evaluateGates([passing()]).every((result) => result.pass)).toBe(true)
+    // 렉스 게이트는 판 비율이라 두 판 중 한 판(50%)이 닿게 둔다
+    const runs = [passing({ rexAttentionReached: true }), passing({ rexAttentionReached: false })]
+    expect(evaluateGates(runs).every((result) => result.pass)).toBe(true)
   })
 
   it('로그 공백: 정확히 5초는 통과, 한 시드라도 넘으면 실패', () => {
@@ -192,6 +241,33 @@ describe('evaluateGates', () => {
     expect(gate([passing({ warningDelaysBodySeconds: [] })], '경고 창').pass).toBe(false)
   })
 
+  /** 50판 중 reached판만 렉스 주목 욕구가 1단계에 닿는다 */
+  function rexRuns(reached: number, absent = 0) {
+    return Array.from({ length: 50 }, (_, index) =>
+      passing({ rexAttentionReached: index < absent ? null : index < absent + reached }),
+    )
+  }
+
+  it('렉스 주목 욕구: 도달 비율 40~60%면 통과, 밖이면 실패', () => {
+    expect(gate(rexRuns(20), '렉스 주목 욕구').pass).toBe(true)
+    expect(gate(rexRuns(30), '렉스 주목 욕구').pass).toBe(true)
+    expect(gate(rexRuns(19), '렉스 주목 욕구').pass).toBe(false)
+    expect(gate(rexRuns(31), '렉스 주목 욕구').pass).toBe(false)
+  })
+
+  it('렉스 주목 욕구: 렉스가 없는(null) 판은 분모에서 빠진다', () => {
+    // 렉스가 있는 30판 중 12판 = 40%: 통과. null 20판을 분모에 넣으면 24%로 실패했을 것이다
+    const runs = rexRuns(12, 20)
+    expect(gate(runs, '렉스 주목 욕구').pass).toBe(true)
+    expect(gate(runs, '렉스 주목 욕구').detail).toContain('12/30')
+    // 렉스가 있는 30판 중 11판 = 36.7%: 실패
+    expect(gate(rexRuns(11, 20), '렉스 주목 욕구').pass).toBe(false)
+  })
+
+  it('렉스 주목 욕구: 렉스가 있는 판이 하나도 없으면 실패', () => {
+    expect(gate(rexRuns(0, 50), '렉스 주목 욕구').pass).toBe(false)
+  })
+
   it('detail에 통과 시드 수를 적는다', () => {
     expect(gate(runsWith(11, { bigBursts: 0 }), '큰 터짐 수').detail).toContain('39/50')
   })
@@ -202,13 +278,7 @@ describe('결정론', () => {
     const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed })
     try {
       while (broadcast.phase === 'live') broadcast.step([])
-      return measureBroadcast(
-        broadcast.logLines(),
-        broadcast.burstRecords(),
-        broadcast.summary(),
-        broadcast.view().haltedBy !== null,
-        broadcast.currentStep,
-      )
+      return measureFinishedBroadcast(broadcast, LINEUP.performers)
     } finally {
       broadcast.dispose()
     }

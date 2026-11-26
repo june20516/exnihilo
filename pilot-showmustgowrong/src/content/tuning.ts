@@ -121,14 +121,16 @@ export const TUNABLES: readonly TunableDef[] = [
       defaultValue: 6,
       description: '기준 상황이 참일 때 극 중 1분에 쌓이는 감정. 0 -> 50이 실제 약 50초다.',
     },
-    // 토크쇼(극 중 1분 = 실제 6초)에서 실제 초당 약 0.67이라 50이 실제 75초에 0이 된다. 사건 하나가 정적을 끊는
-    // 실제 5초 동안 모두의 정적 감정이 약 3.3만 빠진다. 12(실제 5초에 10)였을 때는 1단계 출연자 셋의 작은 터짐이
+    // 토크쇼(극 중 1분 = 실제 6초)에서 실제 초당 약 0.58이라 50이 실제 약 86초에 0이 된다. 사건 하나가 정적을 끊는
+    // 실제 5초 동안 모두의 정적 감정이 약 2.9만 빠진다. 12(실제 5초에 10)였을 때는 1단계 출연자 셋의 작은 터짐이
     // 서로의 지루함을 계속 깎아 아무도 2단계에 닿지 못하는 방송이 시드의 30% 가까이 나왔다(Task 10).
+    // 4 -> 3.5(Plan B1 Task 8): 자동 PD의 관객석 컷은 관객 소음을 송출해 컷마다 밋밋함을 끊는다(실제 약 27초에 한 번).
+    // 4에서는 끊길 때마다 3.3씩 깎여 기본 라인업 큰 터짐 1~3회가 시드 70%(35/50)였다(다른 값은 최종).
     {
       key: 'SITUATION_FADE_PER_SHOW_MINUTE',
       label: '상황 빠짐',
       unit: '극 중 분당',
-      defaultValue: 4,
+      defaultValue: 3.5,
       description: '상황 조건이 끝나면 극 중 1분에 빠지는 감정. 크면 사건 하나가 정적 감정을 크게 깎는다.',
     },
     {
@@ -280,9 +282,13 @@ export const TUNABLES: readonly TunableDef[] = [
       key: 'HABIT_BOREDOM_SHORTEN',
       label: '지루함의 버릇 재촉',
       unit: '비율',
-      defaultValue: 0.4,
+      // 0.4 -> 0.55(Plan B1 Task 8): 자동 PD 클로즈업·관객석 컷에서는 화면 밖 출연자의 소리 버릇이 송출되지 않아 방송
+      // 정적(실제 5초)이 잦아진다. 지루할수록 버릇이 잦아지게 해 지루한 출연자가 정적을 메운다. 지루함 100이면 간격이
+      // 실제 10~20초에서 4.5~9초로 줄고(0.4일 때 6~12초), 지루함 0의 버릇 간격(living spec 1.1 실제 10~20초)은 그대로다.
+      // 0.4에서는 준 라인업 정적 줄 20% 이하가 시드 78%(39/50)였다.
+      defaultValue: 0.55,
       range: 'ratio',
-      description: '지루함 100일 때 버릇 간격이 줄어드는 비율. 간격 × (1 - 0.4 × 지루함/100)이라 실제 6~12초가 된다.',
+      description: '지루함 100일 때 버릇 간격이 줄어드는 비율. 간격 × (1 - 0.55 × 지루함/100)이라 실제 4.5~9초가 된다.',
     },
     {
       key: 'HABIT_COOLDOWN_SHOW_SECONDS',
@@ -468,14 +474,18 @@ export const TUNABLES: readonly TunableDef[] = [
   ]),
 
   // 실제 토크쇼 컷 4~8초에서 골랐다(spec Plan B1 2.3). Task 7이 상수로 쓴다.
+  // 컷 길이 5 -> 8(Plan B1 Task 8): 관객석 컷은 4컷 순환에 한 번이고 관객 소음(실제 3초마다)이 송출되어 밋밋함을
+  // 끊는다. 순환 한 바퀴가 와이드·클로즈업·와이드 각 5초 + 관객석 약 3초 = 실제 약 18초에서 8초면 약 27초가 되어
+  // 관객이 밋밋함을 끊는 횟수가 실제 분당 약 3.3 -> 2.2회로 준다. 5에서는 기본 라인업 큰 터짐 1~3회가 시드 64%였다
+  // (다른 값은 최종).
   ...group('자동 PD', [
     {
       key: 'AUTO_SHOT_BODY_SECONDS',
       positive: true,
       label: '평소 컷 길이',
       unit: '몸 초',
-      defaultValue: 5,
-      description: '자동 PD가 한 컷을 잡고 다음 순서로 넘기기까지의 시간(평소 실제 5초).',
+      defaultValue: 8,
+      description: '자동 PD가 한 컷을 잡고 다음 순서로 넘기기까지의 시간(평소 실제 8초, 실제 토크쇼 컷 4~8초의 긴 쪽).',
     },
     {
       key: 'AUTO_MIN_HOLD_BODY_SECONDS',
@@ -503,16 +513,21 @@ export const TUNABLES: readonly TunableDef[] = [
       positive: true,
       label: '렉스 주목 욕구 쌓임',
       unit: '극 중 분당',
-      defaultValue: 7,
-      description: '렉스가 화면에 안 잡힐 때 쌓이는 주목 욕구.',
+      // spec Plan B1 4: 1단계 문턱 50을 화면 밖 누적 실제 약 25초에 닿게 한다.
+      // 50 ÷ 실제 25초 = 실제 초당 2 = 극 중 분당 12(토크쇼 배율 10, 극 중 1분 = 실제 6초)
+      defaultValue: 12,
+      description: '렉스가 화면에 안 잡힐 때 쌓이는 주목 욕구. 화면 밖 누적 실제 약 25초에 1단계.',
     },
     {
       key: 'mind.rex.attention.offScreen.fadePerShowMinute',
       positive: true,
       label: '렉스 주목 욕구 빠짐',
       unit: '극 중 분당',
-      defaultValue: 40,
-      description: '렉스가 다시 화면에 잡히면 빠지는 주목 욕구.',
+      // 40 -> 15(spec Plan B1 4, Task 8): 극 중 분당 15 = 실제 초당 2.5라 화면에 잡힌 1초가 화면 밖 1.25초를 지운다
+      // (쌓임 실제 초당 2). 40(실제 초당 약 6.7)에서는 화면 밖 3.3초를 지워 자동 PD 방송에서 1단계 도달이 2%였다.
+      // 최종 조합(컷 8초 등, 작업 로그 "B1 무입력 검증(자동 PD)")의 자동 PD 기본 라인업 시드 50에서 1단계 도달 50%다.
+      defaultValue: 15,
+      description: '렉스가 다시 화면에 잡히면 빠지는 주목 욕구. 화면에 잡힌 1초가 화면 밖 1.25초만큼을 지운다.',
     },
     {
       key: 'mind.rex.boredom.silence.perShowMinute',

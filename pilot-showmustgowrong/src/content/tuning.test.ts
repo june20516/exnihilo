@@ -155,7 +155,8 @@ describe('게임 조정 목록', () => {
     expect(balance.SMALL_BURST_MTB_SHOW_SECONDS).toBe(50)
     expect(balance.RELIEF_AMOUNT).toBe(-40)
     expect(tuned('TAKEOVER_BODY_SECONDS')).toBe(5)
-    expect(tuned('AUTO_SHOT_BODY_SECONDS')).toBe(5)
+    // Plan B1 Task 8이 자동 PD 무입력 검증에 맞춰 5에서 8로 바꿨다(tuning.ts 근거)
+    expect(tuned('AUTO_SHOT_BODY_SECONDS')).toBe(8)
     expect(tuned('AUTO_MIN_HOLD_BODY_SECONDS')).toBe(1.5)
   })
 
@@ -209,9 +210,10 @@ describe('게임 조정 목록', () => {
     expect(isValidThresholds(thresholds)).toBe(valid)
   })
 
+  const shotSeconds = tuned('AUTO_SHOT_BODY_SECONDS')
   it.each([
-    ['최소 유지 = 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: 5 }, true],
-    ['최소 유지 > 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: 5.5 }, false],
+    ['최소 유지 = 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: shotSeconds }, true],
+    ['최소 유지 > 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: shotSeconds + 0.5 }, false],
     ['컷 길이를 최소 유지 아래로', { AUTO_SHOT_BODY_SECONDS: 1 }, false],
   ])('자동 PD 관계: %s', (_name, changes: Record<string, number>, valid) => {
     const defaults = Object.fromEntries(TUNABLES.map((def) => [def.key, def.defaultValue]))
@@ -251,9 +253,10 @@ describe('조정값 로드 순서', () => {
 
   it('조정 mind 속도도 불러올 때의 조정값을 쓴다', async () => {
     vi.resetModules()
-    globalThis.__EXNIHILO_TUNING__ = { 'mind.rex.attention.offScreen.perShowMinute': 12 }
+    // 기본값(12)과 다른 값이어야 조정값이 실제로 쓰였는지 가릴 수 있다
+    globalThis.__EXNIHILO_TUNING__ = { 'mind.rex.attention.offScreen.perShowMinute': 20 }
     const { REX_MIND: freshRex } = await import('@/content/minds/rex')
-    expect(situationRate(freshRex.sensitivities, 'attention', 'offScreen', 'perShowMinute')).toBe(12)
+    expect(situationRate(freshRex.sensitivities, 'attention', 'offScreen', 'perShowMinute')).toBe(20)
   })
 })
 

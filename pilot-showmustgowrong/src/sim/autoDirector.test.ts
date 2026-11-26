@@ -1,15 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { STEP_SECONDS } from '@/content/balance'
+import { AUTO_SHOT_BODY_SECONDS, STEP_SECONDS } from '@/content/balance'
 import type { Intensity } from '@/content/types'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
 import { AutoDirector } from './autoDirector'
 import { Broadcast, type BroadcastInput, type BroadcastView, type RecentPhenomenon } from './engine'
-import { measureBroadcast } from './livingMetrics'
+import { measureFinishedBroadcast } from './livingMetrics'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 const seconds = (value: number) => Math.round(value * STEPS_PER_SECOND)
-const SHOT = seconds(5)
+/** 평소 컷 길이(조정값, 몸 초) */
+const SHOT = seconds(AUTO_SHOT_BODY_SECONDS)
 const ORDER = ['rex', 'priya', 'okafor', 'mo']
 
 let baseView: BroadcastView
@@ -85,7 +86,7 @@ function newDirector(): AutoDirector {
 }
 
 describe('AutoDirector 평소 순서', () => {
-  it('평소에는 몸 5초마다 와이드→클로즈업(첫 출연자)→와이드→관객석 순서로 넘긴다', () => {
+  it('평소에는 컷 길이마다 와이드→클로즈업(첫 출연자)→와이드→관객석 순서로 넘긴다', () => {
     const director = newDirector()
     expect(director.decide(viewAt(0, { onAir: 'wide' }))).toEqual([])
     expect(director.decide(viewAt(SHOT, { onAir: 'wide' }))).toEqual([TRACK('rex'), SWITCH('close')])
@@ -322,13 +323,7 @@ describe('AutoDirector 결정론', () => {
         LINEUP.performers.map((performer) => performer.id),
       )
       while (broadcast.phase === 'live') broadcast.step(director.decide(broadcast.view()))
-      return measureBroadcast(
-        broadcast.logLines(),
-        broadcast.burstRecords(),
-        broadcast.summary(),
-        broadcast.view().haltedBy !== null,
-        broadcast.currentStep,
-      )
+      return measureFinishedBroadcast(broadcast, LINEUP.performers)
     } finally {
       broadcast.dispose()
     }
