@@ -51,8 +51,8 @@ export function validateTunables(defs: readonly TunableDef[]): string[] {
     for (const [name] of nonFinite) errors.push(`${name}은 유한한 수여야 합니다: ${def.key}`)
     // 유한하지 않은 값이 있으면 범위 비교가 무의미하므로 건너뛴다
     if (nonFinite.length > 0) continue
-    if (def.min > def.max) errors.push(`min이 max보다 큽니다: ${def.key}`)
-    if (def.step <= 0) errors.push(`step은 0보다 커야 합니다: ${def.key}`)
+    if (def.min > def.max) errors.push(`최솟값이 최댓값보다 큽니다: ${def.key}`)
+    if (def.step <= 0) errors.push(`간격은 0보다 커야 합니다: ${def.key}`)
     if (def.defaultValue < def.min || def.defaultValue > def.max) {
       errors.push(`기본값이 범위 밖입니다: ${def.key}`)
     }

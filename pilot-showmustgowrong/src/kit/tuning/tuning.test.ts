@@ -30,27 +30,21 @@ describe('validateTunables', () => {
   })
   it('키 중복', () => {
     const errors = validateTunables([def(), def()])
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('A')
-    expect(errors[0]).toContain('중복')
+    expect(errors).toEqual(['키가 중복됩니다: A'])
   })
   it('min > max', () => {
     const errors = validateTunables([def({ min: 10, max: 1, defaultValue: 5 })])
-    expect(errors.some((e) => e.includes('A') && e.includes('min'))).toBe(true)
+    expect(errors).toContain('최솟값이 최댓값보다 큽니다: A')
   })
   it('step <= 0', () => {
     for (const step of [0, -1]) {
       const errors = validateTunables([def({ step })])
-      expect(errors).toHaveLength(1)
-      expect(errors[0]).toContain('A')
-      expect(errors[0]).toContain('step')
+      expect(errors).toEqual(['간격은 0보다 커야 합니다: A'])
     }
   })
   it('기본값 범위 밖', () => {
     const errors = validateTunables([def({ defaultValue: 99 })])
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('A')
-    expect(errors[0]).toContain('기본값')
+    expect(errors).toEqual(['기본값이 범위 밖입니다: A'])
   })
   it('최솟값, 최댓값, 기본값, 간격이 유한한 수가 아니면 해당 필드 오류', () => {
     const cases: [Partial<TunableDef>, string][] = [
