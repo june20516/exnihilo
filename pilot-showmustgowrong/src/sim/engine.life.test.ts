@@ -572,9 +572,8 @@ describe('광고 경계와 줄 깊이(Ruling 9)', () => {
     expect(anger?.depth).toBeGreaterThanOrEqual(1)
     run(broadcast, seconds(2), recorder)
 
-    // 광고 입력 스텝(adStep) 자체는 광고 스텝이라 줄이 없으므로, 광고 뒤 첫 줄까지 포함하도록 >=로 비교한다
     const sulkLine = recorder.lines.find(
-      (line) => line.step >= adStep && line.text === '렉스의 화에 모가 토라진다',
+      (line) => line.step > adStep && line.text === '렉스의 화에 모가 토라진다',
     )
     expect(sulkLine).toMatchObject({ kind: 'habit', eventId: null, depth: 0 })
     // 그 사이 광고 뒤의 분노가 모를 겨누지 않았다(응답의 원인은 광고 전 분노다)
@@ -719,9 +718,9 @@ describe('지시의 감정 변화', () => {
     const broadcast = await open(setup({ performers: [rex, MO] }))
     const recorder = new LineRecorder()
     const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
-    // 터짐이 언제 나오는지는 시드가 정하고 이유는 시간이 지나면 옅어진다(실제 약 17초). 그래서 터짐 줄이
+    // 터짐이 언제 나오는지는 시드가 정하고 이유는 시간이 지나면 옅어진다(실제 약 18초, EVENT_REASON_SHOW_SECONDS). 그래서 터짐 줄이
     // 나올 때까지 기다린 뒤 줄만 본다. 터짐이 없으면 다시 지시하되, 지시는 내성(max) 한계인
-    // TOLERANCE_COUNT.max회를 넘기면 이탈하므로 그 횟수가 라운드 상한이다. 한 라운드는 이유가 옅어지는 길이다
+    // TOLERANCE_COUNT.max회를 넘기면 이탈하므로 그 횟수가 라운드 상한이다. 한 라운드(실제 10초)는 이유가 옅어지는 데 걸리는 약 18초보다 짧아, 이유가 남아 있는 동안 다시 지시한다
     const roundSteps = seconds(10)
     const maxRounds = TOLERANCE_COUNT.max
     const isBurstLine = (line: LogLine) =>
