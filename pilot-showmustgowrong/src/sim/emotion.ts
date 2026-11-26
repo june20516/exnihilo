@@ -12,6 +12,7 @@ import {
 import type {
   EmotionDef,
   EmotionId,
+  EmotionThresholds,
   MindDef,
   MoodShift,
   ReasonLabel,
@@ -211,6 +212,11 @@ export class Mind {
       }))
   }
 
+  /** 그 감정의 단계 문턱(개인 설정이 없으면 기본값) */
+  thresholds(emotion: EmotionId): EmotionThresholds {
+    return this.def.thresholds?.[emotion] ?? DEFAULT_THRESHOLDS
+  }
+
   relieveSmall(emotion: EmotionId): void {
     for (const reason of this.reasons) {
       if (reason.emotion !== emotion || reason.amount <= 0) continue
@@ -346,7 +352,7 @@ export class Mind {
   }
 
   private nextStage(emotion: EmotionId, current: Stage): Stage {
-    const thresholds = this.def.thresholds?.[emotion] ?? DEFAULT_THRESHOLDS
+    const thresholds = this.thresholds(emotion)
     const value = this.value(emotion)
     if (current === 2) {
       if (value < thresholds.fall[0]) return 0

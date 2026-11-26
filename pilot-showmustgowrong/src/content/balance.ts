@@ -244,7 +244,7 @@ export const STAGE_LINE_COOLDOWN_SHOW_SECONDS = 120
 /** 이웃을 근처로 보는 반경(m). 이웃 home spot 간격(2.5~3m)만 근처다. */
 export const NEAR_RADIUS = 3.5
 /** 버릇 간격(극 중 초). 토크쇼(배율 10)의 실제 10~20초이며 living spec 1.1 목표 그대로다. */
-export const HABIT_INTERVAL_SHOW_SECONDS = { min: 100, max: 200 }
+export const HABIT_INTERVAL_SHOW_SECONDS = { min: 100, max: 200 } as const
 /** 지루함 100일 때 버릇 간격이 줄어드는 비율. 간격 x (1 - 0.4 x 지루함/100)이라 실제 6~12초가 된다. */
 export const HABIT_BOREDOM_SHORTEN = 0.4
 /** 같은 버릇이 다시 뽑히지 않는 극 중 초(실제 30초). */
@@ -264,3 +264,9 @@ export const RECALL_SHOW_SECONDS = 120
 export const LIFE_TOP_REASON_COUNT = 3
 /** 감정·버릇 난수를 기존 난수와 분리하는 salt('life'의 ASCII). */
 export const LIFE_RNG_SALT = 0x6c696665
+/**
+ * intense 큰 터짐(값이 intense 문턱 이상)에서 이 강도인 행동 emit이 INTENSE_EMIT_INTENSITY로 올라간다.
+ * 한 단계 위로 올려 "참다 터진" 큰 터짐이 보통 큰 터짐보다 확실히 크게 번지게 한다(living spec 1.1의 intense 구분).
+ */
+export const INTENSE_SOURCE_INTENSITY: Intensity = 2
+export const INTENSE_EMIT_INTENSITY: Intensity = 3

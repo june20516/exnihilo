@@ -1,10 +1,11 @@
 import {
   BIG_BURST_GRACE_BODY_SECONDS,
   BIG_BURST_MTB_BODY_SECONDS,
-  DEFAULT_THRESHOLDS,
   HABIT_BOREDOM_SHORTEN,
   HABIT_COOLDOWN_SHOW_SECONDS,
   HABIT_INTERVAL_SHOW_SECONDS,
+  INTENSE_EMIT_INTENSITY,
+  INTENSE_SOURCE_INTENSITY,
   LIFE_RNG_SALT,
   LIFE_TICK_BODY_SECONDS,
   LIFE_TOP_REASON_COUNT,
@@ -21,8 +22,6 @@ import type {
   BurstAction,
   EmotionDef,
   EmotionId,
-  EmotionThresholds,
-  HabitCondition,
   HabitDef,
   MindDef,
   MoodShift,
@@ -30,6 +29,14 @@ import type {
   ShowDef,
 } from '@/content/types'
 import { createRng, forkSeed, nextFloat, type RngState } from '@/kit/rng'
+import {
+  clockCandidates,
+  hasResponder,
+  pickWeighted,
+  resolveHabitTarget,
+  responseCandidates,
+  type HabitTargetResolved,
+} from './habits'
 import { Mind, type ActiveSituations, type Reason, type Stage } from './emotion'
 import { perceives, targetsSelf, type Perceiver, type PhenomenonEvent } from './phenomena'
 import { showSecondsToSteps, stepsToShowSeconds } from './showClock'
@@ -56,11 +63,7 @@ export interface LifeContext {
   lastLineStep: number
 }
 
-/** selector를 실제 대상 출연자로 바꾸는 일은 엔진 몫이다 */
-export type HabitTargetResolved =
-  | { kind: 'actor'; id: string }
-  | { kind: 'selector'; selector: 'nearestPerformer' | { tag: string } }
-  | null
+export type { HabitTargetResolved }
 
 export type LifeOutput =
   | { type: 'stage'; actorId: string; emotion: EmotionDef; stage: 1 | 2 }
@@ -106,10 +109,6 @@ export interface EmotionView {
   rise: [number, number]
   reasons: Reason[]
 }
-
-/** intense 터짐에서 이 강도인 emit이 INTENSE_EMIT_INTENSITY로 올라간다 */
-const INTENSE_SOURCE_INTENSITY = 2
-const INTENSE_EMIT_INTENSITY = 3
 
 interface Actor {
   def: MindDef
@@ -219,7 +218,7 @@ export class StudioLife {
         const actor = this.actors.get(perceiver.id)
         if (!actor || !perceives(event, perceiver)) continue
         actor.mind.perceive(event, targetsSelf(event, perceiver.id), step)
-        if (event.targetId === perceiver.id && this.hasResponder(actor, event)) {
+        if (event.targetId === perceiver.id && hasResponder(actor.def.habits, event)) {
           actor.pendingResponse = event
         }
       }
@@ -301,7 +300,7 @@ export class StudioLife {
       name: emotion.name,
       value: actor.mind.value(emotion.id),
       stage: actor.mind.stage(emotion.id),
-      rise: [...this.thresholdsOf(actor, emotion.id).rise],
+      rise: [...actor.mind.thresholds(emotion.id).rise],
       reasons: actor.mind.topReasons(emotion.id, LIFE_TOP_REASON_COUNT),
     }))
   }
@@ -375,7 +374,7 @@ export class StudioLife {
     const top = actor.mind.topReasons(emotion.id, LIFE_TOP_REASON_COUNT)
     const intense =
       size === 'big' &&
-      actor.mind.value(emotion.id) >= this.thresholdsOf(actor, emotion.id).intense
+      actor.mind.value(emotion.id) >= actor.mind.thresholds(emotion.id).intense
     const burst: BurstAction = {
       ...source,
       action: intense ? intenseAction(source.action) : source.action,
@@ -402,9 +401,16 @@ export class StudioLife {
     const { step } = state.context
     for (const { member, actor } of state.present) {
       const event = actor.pendingResponse
-      if (!event || member.resting || this.inResponseCooldown(actor, step)) continue
-      const candidates = this.responseHabits(actor, member, event)
-      const habit = this.pickWeighted(actor, candidates)
+      if (!event || member.resting || state.acted.has(member.id)) continue
+      if (this.inResponseCooldown(actor, step)) continue
+      const candidates = responseCandidates(
+        actor.def.habits,
+        event,
+        member,
+        actor.mind,
+        this.show,
+      )
+      const habit = pickWeighted(candidates, actor.mind, () => this.roll())
       if (!habit || this.roll() >= (habit.respondsTo?.chance ?? 0)) continue
       actor.lastResponseStep = step
       state.acted.add(member.id)
@@ -448,7 +454,7 @@ export class StudioLife {
     candidates: readonly HabitDef[],
   ): void {
     const { step } = state.context
-    const habit = this.pickWeighted(actor, candidates)
+    const habit = pickWeighted(candidates, actor.mind, () => this.roll())
     if (!habit) return
     actor.nextHabitStep = this.nextHabitStepFrom(actor.mind, step)
     state.outputs.push(this.habitOutput(member.id, actor, habit, null, step))
@@ -467,102 +473,21 @@ export class StudioLife {
       type: 'habit',
       actorId,
       habit,
-      target: this.resolveTarget(actor, habit, cause),
+      target: resolveHabitTarget(habit, cause, actor.mind, (id) => this.has(id)),
       cause,
     }
   }
 
-  private resolveTarget(
-    actor: Actor,
-    habit: HabitDef,
-    cause: PhenomenonEvent | null,
-  ): HabitTargetResolved {
-    const target = habit.stir?.target ?? 'none'
-    if (target === 'none') return null
-    if (target === 'nearestPerformer') return { kind: 'selector', selector: 'nearestPerformer' }
-    if (target === 'cause') return this.actorTarget(cause?.sourceId)
-    if (target === 'topContributor') return this.actorTarget(this.topContributorSourceId(actor))
-    return { kind: 'selector', selector: { tag: target.tag } }
-  }
-
-  private actorTarget(id: string | undefined): HabitTargetResolved {
-    return id !== undefined && this.has(id) ? { kind: 'actor', id } : null
-  }
-
-  /** 지금 값이 가장 높은 감정의 가장 큰 이유가 사건이면 그 사건을 낸 쪽 */
-  private topContributorSourceId(actor: Actor): string | undefined {
-    let leading: EmotionDef | null = null
-    for (const emotion of actor.mind.emotions) {
-      if (!leading || actor.mind.value(emotion.id) > actor.mind.value(leading.id)) {
-        leading = emotion
-      }
-    }
-    if (!leading) return undefined
-    const top = actor.mind.topReasons(leading.id, 1)[0]
-    return top?.source.type === 'event' ? top.source.event.sourceId : undefined
-  }
-
-  private hasResponder(actor: Actor, event: PhenomenonEvent): boolean {
-    return actor.def.habits.some(
-      (habit) =>
-        habit.respondsTo !== undefined &&
-        (habit.respondsTo.kinds as readonly string[]).includes(event.kind),
-    )
-  }
-
-  private responseHabits(actor: Actor, member: LifeMember, event: PhenomenonEvent): HabitDef[] {
-    return actor.def.habits.filter(
-      (habit) =>
-        habit.respondsTo !== undefined &&
-        (habit.respondsTo.kinds as readonly string[]).includes(event.kind) &&
-        this.conditionsMet(actor, member, habit),
-    )
-  }
-
-  /** 응답이 아니고 조건을 만족하며 쿨다운 밖인 버릇 */
   private clockHabits(actor: Actor, member: LifeMember, step: number): HabitDef[] {
-    return actor.def.habits.filter((habit) => {
-      if (habit.respondsTo !== undefined || !this.conditionsMet(actor, member, habit)) return false
-      const usedAt = actor.habitUsedAt.get(habit.id)
-      return usedAt === undefined || step - usedAt >= this.habitCooldownSteps
-    })
-  }
-
-  private conditionsMet(actor: Actor, member: LifeMember, habit: HabitDef): boolean {
-    return (habit.when ?? []).every((condition) => this.conditionMet(actor, member, condition))
-  }
-
-  private conditionMet(actor: Actor, member: LifeMember, condition: HabitCondition): boolean {
-    switch (condition.kind) {
-      case 'onScreen':
-        return member.onAir
-      case 'offScreen':
-        return !member.onAir
-      case 'nearTag':
-        return member.nearTags.includes(condition.tag) === condition.present
-      case 'showTrait':
-        return this.show.traits.includes(condition.trait)
-      case 'stage':
-        return actor.mind.stage(condition.emotion) >= condition.atLeast
-    }
-  }
-
-  /** 가중치(boost 반영)로 하나 뽑는다. 후보가 없으면 난수를 쓰지 않는다 */
-  private pickWeighted(actor: Actor, candidates: readonly HabitDef[]): HabitDef | null {
-    if (candidates.length === 0) return null
-    const weights = candidates.map((habit) => {
-      const boost = habit.boost
-        ? 1 + (habit.boost.factor * actor.mind.value(habit.boost.emotion)) / 100
-        : 1
-      return habit.weight * boost
-    })
-    const total = weights.reduce((sum, weight) => sum + weight, 0)
-    let remaining = this.roll() * total
-    for (const [index, weight] of weights.entries()) {
-      remaining -= weight
-      if (remaining < 0) return candidates[index]
-    }
-    return candidates[candidates.length - 1]
+    return clockCandidates(
+      actor.def.habits,
+      member,
+      actor.mind,
+      this.show,
+      actor.habitUsedAt,
+      step,
+      this.habitCooldownSteps,
+    )
   }
 
   private inResponseCooldown(actor: Actor, step: number): boolean {
@@ -581,13 +506,9 @@ export class StudioLife {
   }
 
   private distanceToNextThreshold(actor: Actor, emotion: EmotionId, stage: Stage): number {
-    const thresholds = this.thresholdsOf(actor, emotion)
+    const thresholds = actor.mind.thresholds(emotion)
     const next = stage === 0 ? thresholds.rise[0] : stage === 1 ? thresholds.rise[1] : thresholds.intense
     return next - actor.mind.value(emotion)
-  }
-
-  private thresholdsOf(actor: Actor, emotion: EmotionId): EmotionThresholds {
-    return actor.def.thresholds?.[emotion] ?? DEFAULT_THRESHOLDS
   }
 
   private emotionDef(actor: Actor, id: EmotionId): EmotionDef {

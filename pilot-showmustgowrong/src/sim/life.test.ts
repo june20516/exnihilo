@@ -7,6 +7,8 @@ import {
   LOG_NUDGE_SHOW_SECONDS,
   RECALL_SHOW_SECONDS,
   RESPONSE_COOLDOWN_SHOW_SECONDS,
+  SMALL_BURST_COOLDOWN_SHOW_SECONDS,
+  SMALL_BURST_KEEP,
   STAGE_LINE_COOLDOWN_SHOW_SECONDS,
   STEP_SECONDS,
 } from '@/content/balance'
@@ -25,6 +27,8 @@ import {
   type LifeMember,
   type LifeOutput,
 } from './life'
+import { Mind } from './emotion'
+import { pickWeighted } from './habits'
 import type { Perceiver, PhenomenonEvent } from './phenomena'
 import { showSecondsToSteps } from './showClock'
 
@@ -372,16 +376,42 @@ describe('터짐', () => {
     expect(bySituation.output.cause).toBeNull()
   })
 
-  it('작은 터짐은 1단계 이상에서 일어나고 이유를 줄이며 쿨다운이 있다', () => {
-    const life = stage2Life(11, 60)
-    const timed = run(life, ['a'], 0, REAL_SECONDS_STEPS(300), { nudge: false })
-    const smalls = bursts(timed)
-    expect(smalls.length).toBeGreaterThan(5)
-    expect(smalls.every(({ output }) => output.size === 'small')).toBe(true)
-    const cooldown = showSecondsToSteps(120, TALK_SHOW)
-    smalls.slice(1).forEach(({ step }, index) => {
-      expect(step - smalls[index].step).toBeGreaterThanOrEqual(cooldown)
-    })
+  it('작은 터짐은 1단계 이상에서 일어나고 이유를 0.6배로 줄이며 쿨다운이 있다', () => {
+    const sensitivities: MindDef['sensitivities'] = [
+      { emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 10 },
+    ]
+    const cooldown = showSecondsToSteps(SMALL_BURST_COOLDOWN_SHOW_SECONDS, TALK_SHOW)
+    let checked = false
+    for (const seed of SEEDS.slice(0, 20)) {
+      const life = stage2Life(seed, 45, { sensitivities })
+      life.perceive([makeEvent({ intensity: 2 })], [perceiver('a')], 0)
+      const smallSteps: number[] = []
+      for (let step = 0; step <= REAL_SECONDS_STEPS(300); step += TICK_STEPS) {
+        const outputs = life.tick({
+          step,
+          silence: false,
+          members: [member('a')],
+          lastLineStep: step,
+        })
+        const small = bursts(outputs.map((output) => ({ step, output }))).find(
+          ({ output }) => output.size === 'small',
+        )
+        if (!small) continue
+        smallSteps.push(step)
+        const before = small.output.top[0]
+        if (before && !checked) {
+          const after = life.emotions('a')[0].reasons[0]
+          expect(after.amount).toBeCloseTo(before.amount * SMALL_BURST_KEEP, 6)
+          checked = true
+        }
+      }
+      expect(life.mood('a')?.stage).toBeGreaterThanOrEqual(1)
+      smallSteps.slice(1).forEach((step, index) => {
+        expect(step - smallSteps[index]).toBeGreaterThanOrEqual(cooldown)
+      })
+      expect(smallSteps.length).toBeGreaterThan(5)
+    }
+    expect(checked).toBe(true)
   })
 })
 
@@ -468,7 +498,7 @@ describe('응답', () => {
     }
     expect(respond(10, 30)).toHaveLength(1)
     expect(respond(40, 60)).toHaveLength(0)
-    expect(respond(400, 30 + cooldown)).toHaveLength(1)
+    expect(respond(30 + cooldown - 10, 30 + cooldown)).toHaveLength(1)
   })
 
   it('응답 대상이 그 사이에 leave했으면 대상 없이(null) 응답한다', () => {
@@ -755,4 +785,120 @@ it('같은 시드와 같은 컨텍스트 열이면 같은 출력이다', () => {
   expect(first.length).toBeGreaterThan(10)
   expect(build(12)).toEqual(first)
   expect(build(13)).not.toEqual(first)
+})
+
+it('resting 중에도 감정이 쌓인다(offScreen 상황)', () => {
+  const life = makeLife(1, [
+    performer(
+      'a',
+      mindDef({
+        sensitivities: [
+          {
+            emotion: 'irritation',
+            on: 'situation',
+            situation: { kind: 'offScreen' },
+            perShowMinute: 6,
+            label: { noun: '무시', clause: '한참 화면에 안 잡힌' },
+          },
+        ],
+        habits: [habit('h1')],
+      }),
+    ),
+  ])
+  const restingOffAir = () => [member('a', { onAir: false, resting: true })]
+  run(life, ['a'], 0, TICK_STEPS, { members: restingOffAir })
+  const early = life.emotions('a')[0].value
+  const timed = run(life, ['a'], TICK_STEPS * 2, REAL_SECONDS_STEPS(60), {
+    members: restingOffAir,
+  })
+  expect(timed.filter(({ output }) => output.type !== 'stage')).toEqual([])
+  expect(life.emotions('a')[0].value).toBeGreaterThan(early + 10)
+})
+
+describe('재촉 대상', () => {
+  const ids = ['a', 'b', 'c', 'd']
+  const defs = (): PerformerDef[] =>
+    ids.map((id) =>
+      performer(
+        id,
+        mindDef({
+          habits:
+            id === 'b'
+              ? [habit('never', { when: [{ kind: 'showTrait', trait: 'nowhere' }] })]
+              : [habit('h1'), habit('h2')],
+        }),
+      ),
+    )
+  const members = () => ids.map((id) => member(id, { resting: id === 'a' }))
+
+  it('resting이거나 후보가 없는 출연자는 제외하고 버릇 시각이 가장 이른 출연자가 뽑힌다', () => {
+    const nudgeSteps = showSecondsToSteps(LOG_NUDGE_SHOW_SECONDS, TALK_SHOW)
+    let compared = 0
+    for (const seed of SEEDS.slice(0, 30)) {
+      // 같은 시드의 시계만 돌려 버릇 시각이 가장 이른 출연자를 알아낸다
+      const reference = habits(
+        run(makeLife(seed, defs()), ids, 0, REAL_SECONDS_STEPS(30), {
+          nudge: false,
+          members,
+        }),
+      )
+      if (reference.length > 1 && reference[1].step === reference[0].step) continue
+      const nudged = habits(
+        run(makeLife(seed, defs()), ids, 0, nudgeSteps, { members }),
+      )
+      expect(nudged).toHaveLength(1)
+      expect(['c', 'd']).toContain(nudged[0].output.actorId)
+      expect(nudged[0].output.actorId).toBe(reference[0].output.actorId)
+      compared += 1
+    }
+    expect(compared).toBeGreaterThan(10)
+  })
+})
+
+it('같은 틱에 터진 출연자는 응답 대기 중이어도 응답하지 않는다', () => {
+  const chuckle = habit('chuckle', { respondsTo: { kinds: ['laughter'], chance: 1 } })
+  let burstTicks = 0
+  for (const seed of SEEDS.slice(0, 40)) {
+    const life = stage2Life(seed, 85, { habits: [chuckle] })
+    for (let step = 0; step <= REAL_SECONDS_STEPS(120); step += TICK_STEPS) {
+      life.perceive(
+        [makeEvent({ kind: 'laughter', intensity: 0, targetId: 'a', step })],
+        [perceiver('a')],
+        step - 1,
+      )
+      const outputs = life.tick({
+        step,
+        silence: false,
+        members: [member('a')],
+        lastLineStep: step,
+      })
+      if (!outputs.some((output) => output.type === 'burst')) continue
+      burstTicks += 1
+      expect(outputs.some((output) => output.type === 'habit')).toBe(false)
+    }
+  }
+  expect(burstTicks).toBeGreaterThan(10)
+})
+
+describe('pickWeighted', () => {
+  const mind = new Mind(mindDef(), TALK_SHOW, 0)
+  const neverRoll = () => {
+    throw new Error('난수를 쓰면 안 됩니다')
+  }
+
+  it('가중치 합이 0 이하이면 난수를 쓰지 않고 null이다', () => {
+    expect(pickWeighted([habit('zero', { weight: 0 })], mind, neverRoll)).toBeNull()
+    expect(
+      pickWeighted([habit('minus', { weight: -3 }), habit('zero', { weight: 0 })], mind, neverRoll),
+    ).toBeNull()
+  })
+
+  it('음수 가중치는 0으로 보고 나머지에서 고른다', () => {
+    const picked = pickWeighted([habit('minus', { weight: -5 }), habit('ok')], mind, () => 0)
+    expect(picked?.id).toBe('ok')
+  })
+
+  it('후보가 없으면 난수를 쓰지 않고 null이다', () => {
+    expect(pickWeighted([], mind, neverRoll)).toBeNull()
+  })
 })
