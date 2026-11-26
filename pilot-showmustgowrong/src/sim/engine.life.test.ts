@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LIFE_TICK_BODY_SECONDS, LOG_NUDGE_BODY_SECONDS, STEP_SECONDS } from '@/content/balance'
+import {
+  LIFE_TICK_BODY_SECONDS,
+  LOG_NUDGE_BODY_SECONDS,
+  STEP_SECONDS,
+  TOLERANCE_COUNT,
+} from '@/content/balance'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { TALK_SHOW } from '@/content/talkShow'
 import type {
@@ -236,6 +241,16 @@ function runUntilEvent(
  */
 const WAIT_LIMIT_STEPS = seconds(600)
 
+/** 큰 터짐이 나올 때까지 돌고 그 기록을 돌려준다(문구가 아니라 터짐 기록으로 기다린다) */
+function runUntilBigBurst(broadcast: Broadcast, recorder?: LineRecorder) {
+  for (let spent = 0; spent < WAIT_LIMIT_STEPS; spent += RECORD_EVERY) {
+    run(broadcast, RECORD_EVERY, recorder)
+    const big = broadcast.burstRecords().find((record) => record.size === 'big')
+    if (big !== undefined) return big
+  }
+  throw new Error(`${WAIT_LIMIT_STEPS} 스텝 안에 큰 터짐이 나오지 않았습니다.`)
+}
+
 /** 조건에 맞는 줄이 생길 때까지 돈다 */
 function runUntilLine(
   broadcast: Broadcast,
@@ -372,7 +387,7 @@ describe('생활 연결: 단계와 터짐', () => {
     const broadcast = await open(setup())
     const recorder = new LineRecorder()
     // 큰 터짐이 언제 나오는지는 시드가 정하므로, 나올 때까지 기다린 뒤 줄의 꼴만 본다
-    runUntilLine(broadcast, WAIT_LIMIT_STEPS, recorder, (line) => line.text.endsWith('욕을 퍼붓는다'))
+    runUntilBigBurst(broadcast, recorder)
 
     const stage2 = byKind(recorder.lines, 'stage').find((line) => line.text.endsWith('딴짓 직전이다'))
     expect(stage2).toMatchObject({ kind: 'stage', emotion: 'boredom', depth: 1, eventId: null })
@@ -404,12 +419,7 @@ describe('생활 연결: 단계와 터짐', () => {
     const firstBig = async () => {
       // 큰 터짐이 언제 나오는지는 시드가 정하므로, 나올 때까지 돌려 그 스텝을 얻는다
       const broadcast = await open(setup())
-      for (let spent = 0; spent < WAIT_LIMIT_STEPS; spent += RECORD_EVERY) {
-        run(broadcast, RECORD_EVERY)
-        const big = broadcast.burstRecords().find((record) => record.size === 'big')
-        if (big !== undefined) return big
-      }
-      throw new Error('큰 터짐이 없습니다')
+      return runUntilBigBurst(broadcast)
     }
     const big = await firstBig()
 
@@ -562,6 +572,7 @@ describe('광고 경계와 줄 깊이(Ruling 9)', () => {
     expect(anger?.depth).toBeGreaterThanOrEqual(1)
     run(broadcast, seconds(2), recorder)
 
+    // 광고 입력 스텝(adStep) 자체는 광고 스텝이라 줄이 없으므로, 광고 뒤 첫 줄까지 포함하도록 >=로 비교한다
     const sulkLine = recorder.lines.find(
       (line) => line.step >= adStep && line.text === '렉스의 화에 모가 토라진다',
     )
@@ -595,6 +606,8 @@ describe('이탈과 mind 없는 출연자', () => {
     // 렉스가 모를 보며 킥킥댄 직후 이탈시켜, 모가 응답할 대상(렉스)이 사라지게 한다
     runUntilEvent(
       broadcast,
+      // 렉스의 첫 버릇이 곧 킥킥대기이고 재촉(실제 4초+틱)이 보장하므로 짧게 잡는다. 다른 기다림의 상한과 달리
+      // 시드가 아니라 재촉 규칙이 시점을 정하기 때문이다
       seconds(30),
       (event) => event.sourceId === 'rex' && event.label === '킥킥거림' && event.targetId === 'mo',
       recorder,
@@ -706,13 +719,16 @@ describe('지시의 감정 변화', () => {
     const broadcast = await open(setup({ performers: [rex, MO] }))
     const recorder = new LineRecorder()
     const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
-    // 터짐이 언제 나오는지는 시드가 정하고 이유는 시간이 지나면 옅어진다. 그래서 터짐 줄이 나올 때까지
-    // 기다린 뒤 줄만 본다(옅어지도록 터짐이 없으면 다시 지시한다)
+    // 터짐이 언제 나오는지는 시드가 정하고 이유는 시간이 지나면 옅어진다(실제 약 17초). 그래서 터짐 줄이
+    // 나올 때까지 기다린 뒤 줄만 본다. 터짐이 없으면 다시 지시하되, 지시는 내성(max) 한계인
+    // TOLERANCE_COUNT.max회를 넘기면 이탈하므로 그 횟수가 라운드 상한이다. 한 라운드는 이유가 옅어지는 길이다
+    const roundSteps = seconds(10)
+    const maxRounds = TOLERANCE_COUNT.max
     const isBurstLine = (line: LogLine) =>
       line.emotion === 'irritation' && ventLine('렉스').test(line.text)
     let burstLine: LogLine | undefined
-    for (let round = 0; round < 6 && burstLine === undefined; round++) {
-      run(broadcast, seconds(10), recorder, new Map([[broadcast.currentStep, [direct]]]))
+    for (let round = 0; round < maxRounds && burstLine === undefined; round++) {
+      run(broadcast, roundSteps, recorder, new Map([[broadcast.currentStep, [direct]]]))
       burstLine = recorder.lines.find(isBurstLine)
     }
     if (burstLine === undefined) throw new Error('터짐 줄이 생기지 않았습니다.')
@@ -827,7 +843,8 @@ describe('정산 뿌리 줄', () => {
       on: 'event',
       kind: 'laughter',
       scope: 'perceived',
-      // 한 번 킥킥대는 것만으로 흥분이 오래 문턱 위에 머물러, 모의 터짐이 나올 시간이 넉넉하다
+      // 이유는 시간이 지나면 선형으로 옅어지고(EVENT_REASON_SHOW_SECONDS) 값은 100에서 막히므로, 초기량이
+      // 클수록 문턱 위에 머무는 시간이 길다. 킥킥대기 한 번으로 모의 터짐이 나올 시간을 벌려고 크게 잡았다
       amount: 1500,
     }
     const laughBurst: BurstAction = {
