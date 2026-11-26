@@ -139,6 +139,17 @@ const STARTLED_BY_SWEARING: ReactionDef = {
   action: { pose: 'panic', emits: [{ kind: 'noise', intensity: 1, target: 'none' }] },
 }
 
+/** 지시로 가장 가까운 출연자에게 분노(강도 1)를 내보낸다. 확률 없이 분노 사건을 만든다 */
+const SNAP: DirectiveDef = {
+  id: 'snap',
+  label: '다그쳐',
+  expect: '화를 낸다',
+  action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 1, target: 'nearestPerformer' }] },
+}
+
+/** mind 없이 지시로만 분노를 내는 렉스 */
+const snapperRex = () => performer('rex', '렉스', { tags: ['host'], directives: [SNAP] })
+
 const REX = performer('rex', '렉스', { tags: ['host'], mind: mind() })
 const MO = performer('mo', '모', { tags: ['guest'], mind: mind() })
 /** mind 없는 출연자 */
@@ -217,6 +228,27 @@ function runUntilEvent(
     }
   }
   throw new Error(`${maxSteps} 스텝 안에 기대한 사건이 생기지 않았습니다.`)
+}
+
+/**
+ * 확률로 일어나는 일(터짐 판정 등)을 기다리는 상한. 몇 초 안에 일어나는지는 시드가 정하므로,
+ * 테스트는 "언젠가 일어난 뒤" 그 일의 규칙만 본다. 상한은 일어날 확률이 사실상 1인 길이다.
+ */
+const WAIT_LIMIT_STEPS = seconds(600)
+
+/** 조건에 맞는 줄이 생길 때까지 돈다 */
+function runUntilLine(
+  broadcast: Broadcast,
+  maxSteps: number,
+  recorder: LineRecorder,
+  match: (line: LogLine) => boolean,
+): LogLine {
+  for (let spent = 0; spent < maxSteps; spent += RECORD_EVERY) {
+    run(broadcast, RECORD_EVERY, recorder)
+    const found = recorder.lines.find(match)
+    if (found !== undefined) return found
+  }
+  throw new Error(`${maxSteps} 스텝 안에 기대한 줄이 생기지 않았습니다.`)
 }
 
 const byKind = (lines: readonly LogLine[], kind: LogLine['kind']) =>
@@ -314,12 +346,13 @@ describe('생활 연결: 버릇 줄', () => {
   it('응답 버릇 줄은 "<이름>의 <명사>에 <이름>이 …" 꼴이고 원인 연결이 이어진다', async () => {
     const broadcast = await open(setup())
     const recorder = new LineRecorder()
-    run(broadcast, seconds(90), recorder)
 
+    // 킥킥대기가 언제 나오는지는 시드가 정하므로, 응답 줄이 나올 때까지 기다린 뒤 줄의 꼴만 본다
     const pattern = /^(렉스|모)의 킥킥거림에 (렉스|모)[이가] (렉스|모)에게 눈을 흘긴다$/
-    const response = recorder.lines.find((line) => pattern.test(line.text))
-    expect(response).toBeDefined()
-    if (response === undefined || response.eventId === null) throw new Error('응답 줄이 없습니다')
+    const response = runUntilLine(broadcast, WAIT_LIMIT_STEPS, recorder, (line) =>
+      pattern.test(line.text),
+    )
+    if (response.eventId === null) throw new Error('응답 줄에 기척 사건이 없습니다')
     const [, giver, responder, target] = pattern.exec(response.text) ?? []
     expect(giver).toBe(target)
     expect(responder).not.toBe(giver)
@@ -338,7 +371,8 @@ describe('생활 연결: 단계와 터짐', () => {
   it('지루함이 2단계에 이르면 stage 줄이 남고, 큰 터짐은 incident 줄 하나에 첫 사건 id를 가진다', async () => {
     const broadcast = await open(setup())
     const recorder = new LineRecorder()
-    run(broadcast, seconds(120), recorder)
+    // 큰 터짐이 언제 나오는지는 시드가 정하므로, 나올 때까지 기다린 뒤 줄의 꼴만 본다
+    runUntilLine(broadcast, WAIT_LIMIT_STEPS, recorder, (line) => line.text.endsWith('욕을 퍼붓는다'))
 
     const stage2 = byKind(recorder.lines, 'stage').find((line) => line.text.endsWith('딴짓 직전이다'))
     expect(stage2).toMatchObject({ kind: 'stage', emotion: 'boredom', depth: 1, eventId: null })
@@ -368,11 +402,14 @@ describe('생활 연결: 단계와 터짐', () => {
 
   it('터짐 줄의 사건은 점수와 연쇄에 들어간다', async () => {
     const firstBig = async () => {
+      // 큰 터짐이 언제 나오는지는 시드가 정하므로, 나올 때까지 돌려 그 스텝을 얻는다
       const broadcast = await open(setup())
-      run(broadcast, seconds(120))
-      const big = broadcast.burstRecords().find((record) => record.size === 'big')
-      if (big === undefined) throw new Error('큰 터짐이 없습니다')
-      return big
+      for (let spent = 0; spent < WAIT_LIMIT_STEPS; spent += RECORD_EVERY) {
+        run(broadcast, RECORD_EVERY)
+        const big = broadcast.burstRecords().find((record) => record.size === 'big')
+        if (big !== undefined) return big
+      }
+      throw new Error('큰 터짐이 없습니다')
     }
     const big = await firstBig()
 
@@ -471,70 +508,29 @@ describe('로그 묶기', () => {
 })
 
 describe('광고와 생활', () => {
-  it('재정비 광고 뒤 mood는 0단계이고, 재정비 없는 광고 뒤 터짐 사건의 깊이는 1이다', async () => {
+  it('재정비 광고 뒤 mind가 있는 출연자의 mood는 모두 0단계다', async () => {
     // 재정비: 지루함이 쌓인 뒤 reset 광고를 받으면 모두 0단계로 돌아간다
     const reset = await open(setup())
-    run(reset, seconds(30))
     const moodsOf = (broadcast: Broadcast) =>
       broadcast
         .view()
         .actors.filter((actor) => actor.mood !== null)
         .map((actor) => actor.mood)
-    expect(moodsOf(reset).some((mood) => (mood?.stage ?? 0) > 0)).toBe(true)
+    // 큰 터짐이 쌓임을 지우기도 하므로, 어느 출연자든 1단계 이상이 된 순간에 광고를 받는다
+    while (!moodsOf(reset).some((mood) => (mood?.stage ?? 0) > 0)) {
+      if (reset.currentStep >= seconds(60)) throw new Error('60초 안에 지루함이 쌓이지 않았습니다.')
+      reset.step([])
+    }
     reset.step([{ type: 'ad', effects: ['reset', 'relief'] }])
     reset.resumeFromAd()
     expect(moodsOf(reset)).toHaveLength(2)
     for (const mood of moodsOf(reset)) expect(mood).toMatchObject({ stage: 0, value: 0 })
-
-    // 재정비 없음: 광고 전 분노에 쌓인 짜증이 광고 뒤에 터지면 그 사건은 깊이 1부터다
-    const ANGERED: SensitivityDef = {
-      emotion: 'irritation',
-      on: 'event',
-      kind: 'anger',
-      scope: 'targetsSelf',
-      amount: 200,
-    }
-    const touchy = (def: PerformerDef): PerformerDef => ({
-      ...def,
-      mind: mind({ sensitivities: [BORED_BY_SILENCE, ANGERED] }),
-    })
-    const broadcast = await open(
-      setup({ performers: [touchy(REX), touchy(MO), PRIYA], bench: [performer('june', '준')] }),
-    )
-    const mindIds = new Set(['rex', 'mo'])
-    runUntilEvent(
-      broadcast,
-      seconds(120),
-      (event) =>
-        event.kind === 'anger' &&
-        event.intensity === 1 &&
-        event.targetId !== null &&
-        mindIds.has(event.targetId),
-    )
-    const lastBeforeAd = broadcast.events().at(-1)?.id ?? 0
-    const adStep = broadcast.currentStep
-    broadcast.step([{ type: 'ad', effects: ['relief', 'setup'] }])
-    broadcast.resumeFromAd()
-    run(broadcast, seconds(20))
-
-    const afterAd = broadcast.burstRecords().filter((record) => record.step > adStep)
-    const burstEvents = broadcast
-      .events()
-      .filter((event) =>
-        afterAd.some((record) => record.step === event.step && record.actorId === event.sourceId),
-      )
-      .filter((event) => !isStir(event))
-    const causedBeforeAd = burstEvents.filter(
-      (event) => event.causeId !== null && event.causeId <= lastBeforeAd,
-    )
-    expect(causedBeforeAd.length).toBeGreaterThan(0)
-    for (const event of causedBeforeAd) expect(event.depth).toBe(1)
   })
 })
 
 describe('광고 경계와 줄 깊이(Ruling 9)', () => {
   it('광고 전 사건에 광고 뒤 응답한 기척 없는 버릇 줄의 깊이는 0이다', async () => {
-    // 모는 자기를 겨눈 분노(렉스의 작은 터짐, 깊이 1 이상)에 기척 없이 토라진다
+    // 모는 자기를 겨눈 분노(렉스의 지시, 깊이 1 이상)에 기척 없이 토라진다
     const sulk: HabitDef = {
       id: 'sulk',
       line: '토라진다',
@@ -548,25 +544,26 @@ describe('광고 경계와 줄 깊이(Ruling 9)', () => {
       tags: ['guest'],
       mind: mind({ habits: [NOSE_PICK, sulk] }),
     })
+    // 분노는 지시로 직접 만든다(렉스 → 모, 깊이 1). 그래야 시드가 분노 시점을 정하지 않는다
     const broadcast = await open(
-      setup({ performers: [REX, mo], bench: [performer('june', '준')] }),
+      setup({ performers: [snapperRex(), mo], bench: [performer('june', '준')] }),
     )
     const recorder = new LineRecorder()
-    const anger = runUntilEvent(
-      broadcast,
-      seconds(180),
-      (event) => event.kind === 'anger' && event.intensity === 1 && event.targetId === 'mo',
-      recorder,
-    )
-    expect(anger.depth).toBeGreaterThanOrEqual(1)
+    // 출연자는 방송 시작 직후 잠깐 쉬므로(버릇 휴지) 응답할 수 있을 때까지 3초를 보낸다
+    run(broadcast, seconds(3), recorder)
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'snap' }])
     // 모가 인지하기 전에 재정비 없는 광고를 받는다(인지와 응답은 광고 뒤)
     const adStep = broadcast.currentStep
     broadcast.step([{ type: 'ad', effects: ['relief', 'setup'] }])
     broadcast.resumeFromAd()
+    const anger = broadcast
+      .events()
+      .find((event) => event.kind === 'anger' && event.intensity === 1 && event.targetId === 'mo')
+    expect(anger?.depth).toBeGreaterThanOrEqual(1)
     run(broadcast, seconds(2), recorder)
 
     const sulkLine = recorder.lines.find(
-      (line) => line.step > adStep && line.text === '렉스의 화에 모가 토라진다',
+      (line) => line.step >= adStep && line.text === '렉스의 화에 모가 토라진다',
     )
     expect(sulkLine).toMatchObject({ kind: 'habit', eventId: null, depth: 0 })
     // 그 사이 광고 뒤의 분노가 모를 겨누지 않았다(응답의 원인은 광고 전 분노다)
@@ -581,13 +578,24 @@ describe('광고 경계와 줄 깊이(Ruling 9)', () => {
 
 describe('이탈과 mind 없는 출연자', () => {
   it('이탈한 출연자를 겨눈 응답은 대상 없이 실행되고, 그 뒤 이탈자를 겨누는 사건과 줄이 없다', async () => {
-    const lowRex: PerformerDef = { ...REX, tolerance: 'low' }
-    const broadcast = await open(setup({ performers: [lowRex, MO, PRIYA] }))
+    // 렉스는 킥킥대기 버릇만 가져 첫 버릇이 곧 모를 겨눈 킥킥대기다. 모는 버릇 시계로는 아무것도 하지 않고
+    // 응답(눈 흘김)만 해서 쉬거나 쿨다운에 걸리지 않으므로, 응답이 시드에 기대지 않고 일어난다(감정 터짐도 없다)
+    const idleClock: HabitDef = { ...NOSE_PICK, when: [{ kind: 'showTrait', trait: 'never' }] }
+    const lowRex: PerformerDef = {
+      ...REX,
+      tolerance: 'low',
+      mind: mind({ sensitivities: [], habits: [GIGGLE] }),
+    }
+    const glarer: PerformerDef = {
+      ...MO,
+      mind: mind({ sensitivities: [], habits: [idleClock, GLARE] }),
+    }
+    const broadcast = await open(setup({ performers: [lowRex, glarer] }))
     const recorder = new LineRecorder()
     // 렉스가 모를 보며 킥킥댄 직후 이탈시켜, 모가 응답할 대상(렉스)이 사라지게 한다
     runUntilEvent(
       broadcast,
-      seconds(90),
+      seconds(30),
       (event) => event.sourceId === 'rex' && event.label === '킥킥거림' && event.targetId === 'mo',
       recorder,
     )
@@ -689,19 +697,25 @@ describe('지시의 감정 변화', () => {
   })
 
   it('지시 이유가 가장 큰 터짐 줄은 "PD의 \'<지시>\'에 <이름>이 …" 꼴이고 깊이 1이다', async () => {
-    const broadcast = await open(
-      setup({ performers: [withVent('rex', '렉스', { small: QUIET_BURST, big: QUIET_BURST }), MO] }),
-    )
+    // 지시 한 번이 짜증을 문턱 위로 한참 유지하는 큰 지시다(터짐이 나올 시간을 번다)
+    const strongVent: DirectiveDef = { ...VENT, moodShifts: [{ emotion: 'irritation', amount: 1000 }] }
+    const rex = {
+      ...withVent('rex', '렉스', { small: QUIET_BURST, big: QUIET_BURST }),
+      directives: [strongVent],
+    }
+    const broadcast = await open(setup({ performers: [rex, MO] }))
     const recorder = new LineRecorder()
     const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
-    // 지시를 거듭해 짜증을 터짐 문턱 위로 올린다
-    for (let i = 0; i < 6; i++) run(broadcast, 3, recorder, new Map([[broadcast.currentStep, [direct]]]))
-    run(broadcast, seconds(20), recorder)
-
-    const burstLine = recorder.lines.find(
-      (line) => line.emotion === 'irritation' && ventLine('렉스').test(line.text),
-    )
-    expect(burstLine).toBeDefined()
+    // 터짐이 언제 나오는지는 시드가 정하고 이유는 시간이 지나면 옅어진다. 그래서 터짐 줄이 나올 때까지
+    // 기다린 뒤 줄만 본다(옅어지도록 터짐이 없으면 다시 지시한다)
+    const isBurstLine = (line: LogLine) =>
+      line.emotion === 'irritation' && ventLine('렉스').test(line.text)
+    let burstLine: LogLine | undefined
+    for (let round = 0; round < 6 && burstLine === undefined; round++) {
+      run(broadcast, seconds(10), recorder, new Map([[broadcast.currentStep, [direct]]]))
+      burstLine = recorder.lines.find(isBurstLine)
+    }
+    if (burstLine === undefined) throw new Error('터짐 줄이 생기지 않았습니다.')
     expect(burstLine).toMatchObject({ kind: 'incident', eventId: null, depth: 1 })
   })
 
@@ -813,7 +827,8 @@ describe('정산 뿌리 줄', () => {
       on: 'event',
       kind: 'laughter',
       scope: 'perceived',
-      amount: 150,
+      // 한 번 킥킥대는 것만으로 흥분이 오래 문턱 위에 머물러, 모의 터짐이 나올 시간이 넉넉하다
+      amount: 1500,
     }
     const laughBurst: BurstAction = {
       line: '웃음을 참지 못한다',
@@ -839,7 +854,13 @@ describe('정산 뿌리 줄', () => {
     })
     const broadcast = await open(setup({ performers: [rex, mo] }))
     const recorder = new LineRecorder()
-    run(broadcast, seconds(60), recorder)
+    // 모의 터짐이 언제 나오는지는 시드가 정하므로, 렉스가 그 웃음에 소리를 낼 때까지 기다린 뒤 정산을 본다
+    runUntilEvent(
+      broadcast,
+      WAIT_LIMIT_STEPS,
+      (event) => event.sourceId === 'rex' && event.kind === 'noise',
+      recorder,
+    )
 
     const summary = broadcast.summary()
     expect(summary.maxChainDepth).toBeGreaterThanOrEqual(2)

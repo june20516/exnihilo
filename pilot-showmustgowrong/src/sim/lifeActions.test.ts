@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
-import type { BurstAction, EmotionDef, PerformerDef } from '@/content/types'
+import type { ActionDef, BurstAction, EmotionDef, PerformerDef } from '@/content/types'
 import type { CastMember } from './cast'
+import type { Reason } from './emotion'
 import type { LifeOutput } from './life'
-import { LifeActions, type LineInput } from './lifeActions'
+import { LifeActions, type ActionResult, type LineInput } from './lifeActions'
 import { EventLog, type PhenomenonEvent } from './phenomena'
 import { NO_TARGET } from './targeting'
 
@@ -45,7 +46,31 @@ function member(def: PerformerDef): CastMember {
   }
 }
 
-function setup() {
+/** 원인에 이어 분노(강도 1) 하나를 내뿜는 행동. 엔진의 executeAction처럼 원인을 이어 사건을 낸다 */
+function emitAngerFrom(log: EventLog) {
+  return (
+    _member: CastMember,
+    _action: ActionDef,
+    cause: PhenomenonEvent | null,
+  ): ActionResult => ({
+    events: [
+      log.emit({
+        kind: 'anger',
+        intensity: 1,
+        sourceId: 'mo',
+        targetId: 'rex',
+        x: 0,
+        y: 0,
+        z: 0,
+        causeId: cause?.id ?? null,
+        step: 100,
+      }),
+    ],
+    moveTarget: NO_TARGET,
+  })
+}
+
+function setup(options: { emitsAnger?: boolean } = {}) {
   const log = new EventLog()
   const lines: LineInput[] = []
   const mo = member(MO_DEF)
@@ -57,13 +82,15 @@ function setup() {
     names: { mo: '모', rex: '렉스' },
     currentStep: () => 100,
     emit: () => {
-      throw new Error('현상 없는 터짐은 emit하지 않는다')
+      throw new Error('터짐은 emit을 직접 부르지 않는다')
     },
     addLine: (line) => lines.push(line),
     move: () => NO_TARGET,
     setMotionCause: () => {},
-    // 현상을 내지 않는 행동: 사건 없이 끝난다
-    executeAction: () => ({ events: [], moveTarget: NO_TARGET }),
+    // 기본은 현상을 내지 않는 행동(사건 없이 끝난다). emitsAnger면 원인에 이어 분노 하나를 낸다
+    executeAction: options.emitsAnger
+      ? emitAngerFrom(log)
+      : () => ({ events: [], moveTarget: NO_TARGET }),
   })
   return { log, lines, actions }
 }
@@ -82,7 +109,7 @@ function anger(log: EventLog): PhenomenonEvent {
   })
 }
 
-function quietBurst(cause: PhenomenonEvent): LifeOutput {
+function quietBurst(cause: PhenomenonEvent | null, top: Reason[] = []): LifeOutput {
   return {
     type: 'burst',
     actorId: 'mo',
@@ -91,7 +118,7 @@ function quietBurst(cause: PhenomenonEvent): LifeOutput {
     burst: QUIET_BURST,
     intense: false,
     cause,
-    top: [],
+    top,
   }
 }
 
@@ -111,5 +138,42 @@ describe('터짐 줄의 깊이(Ruling 9)', () => {
     log.breakChains()
     actions.execute(quietBurst(cause))
     expect(lines[0]).toMatchObject({ kind: 'incident', eventId: null, depth: 1 })
+  })
+
+  it('지시가 이유라 원인 사건이 없는 터짐 줄은 깊이 1이고 "PD의 \'<지시>\'에 <이름>이 …" 꼴이다', () => {
+    const { lines, actions } = setup()
+    const directive: Reason = {
+      emotion: 'irritation',
+      amount: 40,
+      source: { type: 'directive', label: '참아' },
+    }
+    actions.execute(quietBurst(null, [directive]))
+    expect(lines[0]).toMatchObject({ kind: 'incident', eventId: null, depth: 1, emotion: 'irritation' })
+    expect(lines[0].text).toBe("PD의 '참아'에 모가 몸을 비튼다")
+  })
+})
+
+describe('사건을 내는 터짐의 깊이와 줄(Ruling 9)', () => {
+  it('터짐이 내뿜은 사건의 깊이는 원인 깊이 + 1이고, 줄은 그 사건을 가리키며 같은 깊이다', () => {
+    const { log, lines, actions } = setup({ emitsAnger: true })
+    const cause = anger(log)
+    actions.execute(quietBurst(cause))
+    const burstEvent = log.since(0).at(-1)
+    expect(burstEvent).toMatchObject({ kind: 'anger', causeId: cause.id, depth: cause.depth + 1 })
+    expect(lines[0]).toMatchObject({
+      kind: 'incident',
+      eventId: burstEvent?.id,
+      depth: cause.depth + 1,
+    })
+  })
+
+  it('원인이 광고 전 사건이면 터짐이 내뿜은 사건의 깊이는 1이고, 줄도 같다', () => {
+    const { log, lines, actions } = setup({ emitsAnger: true })
+    const cause = anger(log)
+    log.breakChains()
+    actions.execute(quietBurst(cause))
+    const burstEvent = log.since(0).at(-1)
+    expect(burstEvent).toMatchObject({ kind: 'anger', causeId: cause.id, depth: 1 })
+    expect(lines[0]).toMatchObject({ kind: 'incident', eventId: burstEvent?.id, depth: 1 })
   })
 })
