@@ -140,12 +140,13 @@ export function EventLog({ log, highlightedEventId, show }: EventLogProps) {
     >
       <div className="mb-1 text-[11px] font-bold text-slate-500">사고 로그</div>
       {recent.length === 0 && <div className="text-xs text-slate-500">아직 아무 일도 없습니다.</div>}
-      <ol className="flex flex-col gap-0.5 text-xs leading-4 text-slate-300">
+      {/* 긴 줄은 자르지 않고 줄바꿈한다. 넘치면 아래(최신)를 붙들고 오래된 줄이 위로 밀려난다 */}
+      <ol className="flex min-h-0 flex-1 flex-col justify-end gap-0.5 overflow-hidden text-xs leading-4 text-slate-300">
         {recent.map((line) => (
           <li
             key={line.index}
             data-log-index={line.index}
-            className={`flex rounded-sm ${
+            className={`flex shrink-0 rounded-sm ${
               containsEvent(line, highlightedEventId) ? 'bg-amber-500/30 text-amber-100' : ''
             }`}
           >
@@ -153,8 +154,8 @@ export function EventLog({ log, highlightedEventId, show }: EventLogProps) {
               {formatShowClock(line.step, show)}
             </span>
             <span
-              className={`min-w-0 truncate ${logTextClass(line)}`}
-              title={line.text}
+              className={`min-w-0 break-keep ${logTextClass(line)}`}
+              data-log-text={line.text}
               style={{ paddingLeft: `${logIndent(line.depth)}px` }}
             >
               {line.depth > 1 && <span className="text-slate-500">└ </span>}

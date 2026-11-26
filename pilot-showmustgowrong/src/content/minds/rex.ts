@@ -1,4 +1,4 @@
-import { COMMON_BURSTS, COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withSensitivities } from '../commonMind'
+import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
 
@@ -33,7 +33,34 @@ export const REX_MIND: MindDef = {
     },
   ]),
   bursts: {
-    ...COMMON_BURSTS,
+    ...withBurstTexts({
+      irritation: {
+        small: {
+          line: '방송용 미소를 유지한 채 이를 간다',
+          targetLine: '{target:을} 보며 방송용 미소를 유지한 채 이를 간다',
+        },
+        big: {
+          line: '방송용 미소를 벗어던지고 버럭한다',
+          targetLine: '{target:에게} 방송용 미소를 벗어던지고 버럭한다',
+          intenseLine: '생방송인 걸 잊고 욕설을 퍼붓는다! (삐—)',
+        },
+      },
+      excitement: {
+        small: { line: '과장되게 박수를 친다' },
+        big: { line: '펄쩍 뛰며 "바로 이거죠!"를 외친다' },
+      },
+      anxiety: {
+        small: { line: '큐카드를 떨어뜨릴 뻔한다' },
+        big: { line: '"잠시 광고 보고 오겠습니다!"를 외치며 뒷걸음질한다' },
+      },
+      boredom: {
+        small: { line: '모니터에 비친 자기 얼굴을 확인한다' },
+        big: {
+          line: '진행을 가로채 자기 얘기를 꺼낸다',
+          targetLine: '{target:에게} 다가가 말을 끊고 자기 얘기를 꺼낸다',
+        },
+      },
+    }),
     attention: {
       small: {
         action: { pose: 'idle', emits: [{ kind: 'noise', intensity: 1, target: 'none' }] },

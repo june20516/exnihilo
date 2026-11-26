@@ -1,4 +1,5 @@
 import type {
+  BurstAction,
   BurstDef,
   CommonEmotionId,
   HabitDef,
@@ -111,6 +112,37 @@ export const COMMON_BURSTS: Record<CommonEmotionId, BurstDef> = {
       targetLine: '{target:에게} 다가가 엉뚱한 얘기로 끼어든다',
     },
   },
+}
+
+/** 터짐 하나의 문장. 주면 공용 문장(line·targetLine·intenseLine)을 통째로 바꾼다 */
+export type BurstText = Pick<BurstAction, 'line'> & Partial<Pick<BurstAction, 'targetLine' | 'intenseLine'>>
+export type BurstTexts = Partial<Record<CommonEmotionId, { small?: BurstText; big?: BurstText }>>
+
+function withText(base: BurstAction, text: BurstText | undefined): BurstAction {
+  if (text === undefined) return base
+  return {
+    action: base.action,
+    line: text.line,
+    ...(text.targetLine !== undefined && { targetLine: text.targetLine }),
+    ...(text.intenseLine !== undefined && { intenseLine: text.intenseLine }),
+  }
+}
+
+/**
+ * 공용 터짐의 행동(포즈·이동·현상)은 그대로 두고 문장만 출연자 것으로 바꾼다.
+ * 다섯 명이 같은 문장을 쓰면 로그만으로 누가 누군지 구별되지 않는다.
+ */
+export function withBurstTexts(texts: BurstTexts): Record<CommonEmotionId, BurstDef> {
+  const result = { ...COMMON_BURSTS }
+  for (const emotion of Object.keys(texts) as CommonEmotionId[]) {
+    const text = texts[emotion]
+    if (text === undefined) continue
+    result[emotion] = {
+      small: withText(COMMON_BURSTS[emotion].small, text.small),
+      big: withText(COMMON_BURSTS[emotion].big, text.big),
+    }
+  }
+  return result
 }
 
 /** 모든 출연자가 갖는 공용 버릇(weight 1) */

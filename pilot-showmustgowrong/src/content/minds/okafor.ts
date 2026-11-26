@@ -1,4 +1,4 @@
-import { COMMON_BURSTS, COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withSensitivities } from '../commonMind'
+import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
 
@@ -19,16 +19,34 @@ export const OKAFOR_MIND: MindDef = {
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),
-  bursts: {
-    ...COMMON_BURSTS,
+  bursts: withBurstTexts({
     irritation: {
-      ...COMMON_BURSTS.irritation,
+      small: {
+        line: '"정확한 표현이 아닙니다" 하고 끼어든다',
+        targetLine: '{target:에게} "정확한 표현이 아닙니다" 하고 끼어든다',
+      },
       big: {
-        ...COMMON_BURSTS.irritation.big,
+        line: '학위를 들먹이며 버럭한다',
         targetLine: '{target:에게} 학위를 들먹이며 버럭한다',
+        intenseLine: '학위를 들먹이다 욕설을 퍼붓는다! (삐—)',
       },
     },
-  },
+    excitement: {
+      small: { line: '"흥미롭군요!" 하고 무릎을 친다' },
+      big: { line: '벌떡 일어나 "유레카!"를 외친다' },
+    },
+    anxiety: {
+      small: { line: '안경을 떨어뜨린다' },
+      big: { line: '"이건 제 전공이 아닙니다" 하며 물러난다' },
+    },
+    boredom: {
+      small: { line: '각주 내용을 혼자 중얼거린다' },
+      big: {
+        line: '불쑥 강의를 시작한다',
+        targetLine: '{target:에게} 다가가 강의를 시작한다',
+      },
+    },
+  }),
   habits: [
     ...COMMON_HABITS,
     {

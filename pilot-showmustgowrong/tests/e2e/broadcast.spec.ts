@@ -135,7 +135,7 @@ async function logTextsAfter(page: Page, after: number): Promise<string[]> {
       (items, minIndex) =>
         items
           .filter((item) => Number(item.getAttribute('data-log-index')) > minIndex)
-          .map((item) => item.querySelector('[title]')?.getAttribute('title') ?? ''),
+          .map((item) => item.querySelector('[data-log-text]')?.getAttribute('data-log-text') ?? ''),
       after,
     )
 }

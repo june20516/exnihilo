@@ -239,6 +239,19 @@ describe('라인업 감정·버릇·반사 반응 옮기기', () => {
     expect(triggers('june')).toEqual([t({ kind: 'noise', min: 3, scope: 'perceived' })])
   })
 
+  it('공용 감정의 터짐 문장은 출연자마다 달라 로그만으로 누군지 구별된다', () => {
+    for (const emotion of COMMON_EMOTIONS) {
+      for (const size of ['small', 'big'] as const) {
+        const lines = allPerformers.map((performer) => {
+          const burst = performer.mind?.bursts[emotion]?.[size]
+          if (burst === undefined) throw new Error(`${performer.id} ${emotion} ${size} 터짐 없음`)
+          return burst.line
+        })
+        expect(new Set(lines).size, `${emotion} ${size}`).toBe(lines.length)
+      }
+    }
+  })
+
   it('출연자마다 응답이 아닌 대표 버릇이 3~5개, 응답 버릇이 1개 있다', () => {
     for (const performer of allPerformers) {
       const habits = personalHabits(performer.id)

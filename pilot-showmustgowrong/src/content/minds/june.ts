@@ -1,4 +1,4 @@
-import { COMMON_BURSTS, COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withSensitivities } from '../commonMind'
+import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
 
@@ -40,7 +40,34 @@ export const JUNE_MIND: MindDef = {
     },
   ]),
   bursts: {
-    ...COMMON_BURSTS,
+    ...withBurstTexts({
+      irritation: {
+        small: {
+          line: '"요즘 젊은 사람들은…" 하고 혀를 찬다',
+          targetLine: '{target:을} 보며 "요즘 젊은 사람들은…" 하고 혀를 찬다',
+        },
+        big: {
+          line: '지팡이로 바닥을 쾅 치며 호통친다',
+          targetLine: '{target:에게} 지팡이로 바닥을 쾅 치며 호통친다',
+          intenseLine: '호통 끝에 욕설을 퍼붓는다! (삐—)',
+        },
+      },
+      excitement: {
+        small: { line: '무릎을 치며 껄껄 웃는다' },
+        big: { line: '벌떡 일어나 덩실덩실 춤을 춘다' },
+      },
+      anxiety: {
+        small: { line: '"아이고 깜짝이야" 하고 가슴을 쓸어내린다' },
+        big: { line: '"아이고 나 죽네" 하며 뒷걸음질한다' },
+      },
+      boredom: {
+        small: { line: '보청기를 툭툭 친다' },
+        big: {
+          line: '손주 자랑을 늘어놓는다',
+          targetLine: '{target:에게} 다가가 손주 사진을 보여 준다',
+        },
+      },
+    }),
     chatter: {
       small: {
         action: { pose: 'laugh', emits: [{ kind: 'laughter', intensity: 1, target: 'none' }] },

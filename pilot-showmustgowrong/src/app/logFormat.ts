@@ -30,11 +30,14 @@ function stageColor(emotion: string | null): string {
     : LOG_PERSONAL_EMOTION_COLOR
 }
 
-/** 줄 종류에 따른 글씨 스타일. staff와 silence는 로그의 기본 색을 그대로 쓴다. */
+/**
+ * 줄 종류에 따른 글씨 스타일. staff와 silence는 로그의 기본 색을 그대로 쓴다.
+ * 버릇은 이탤릭으로 눕혀 사건·감정 줄보다 한 단계 낮은 배경 소리로 읽히게 한다.
+ */
 export function logTextClass(line: LogLine): string {
   switch (line.kind) {
     case 'habit':
-      return 'text-slate-500'
+      return 'italic text-slate-500'
     case 'stage':
       return stageColor(line.emotion)
     case 'incident':

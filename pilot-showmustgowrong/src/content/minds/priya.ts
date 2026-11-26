@@ -1,4 +1,4 @@
-import { COMMON_BURSTS, COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withSensitivities } from '../commonMind'
+import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
 
@@ -18,7 +18,34 @@ export const PRIYA_MIND: MindDef = {
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),
-  bursts: { ...COMMON_BURSTS },
+  bursts: withBurstTexts({
+    irritation: {
+      small: {
+        line: '웃는 얼굴로 뼈 있는 농담을 던진다',
+        targetLine: '{target:에게} 웃는 얼굴로 뼈 있는 농담을 던진다',
+      },
+      big: {
+        line: '웃음기를 싹 지우고 쏘아붙인다',
+        targetLine: '{target:에게} 웃음기를 싹 지우고 쏘아붙인다',
+        intenseLine: '웃음기를 지우고 욕설을 퍼붓는다! (삐—)',
+      },
+    },
+    excitement: {
+      small: { line: '책상을 두드리며 깔깔댄다' },
+      big: { line: '펄쩍 뛰며 배를 잡고 웃어 젖힌다' },
+    },
+    anxiety: {
+      small: { line: '"헐" 하고 입을 틀어막는다' },
+      big: { line: '"이거 편집해 주세요!" 하며 뒷걸음질한다' },
+    },
+    boredom: {
+      small: { line: '휴대폰 알림음을 울리고 만다' },
+      big: {
+        line: '휴대폰 영상을 틀어 놓고 수다를 떤다',
+        targetLine: '{target:에게} 다가가 휴대폰 영상을 들이민다',
+      },
+    },
+  }),
   habits: [
     ...COMMON_HABITS,
     {

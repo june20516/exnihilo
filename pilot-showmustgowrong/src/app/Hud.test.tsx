@@ -59,8 +59,15 @@ describe('EventLog 줄 종류', () => {
     line({ index: 8, kind: 'silence', text: '정적이 흐른다' }),
   ])
 
-  it('버릇 줄은 slate-500이다', () => {
+  it('버릇 줄은 이탤릭 slate-500이라 사건·감정 줄보다 낮은 단계로 읽힌다', () => {
+    expect(rowOf(html, 0)).toContain('italic')
     expect(rowOf(html, 0)).toContain('text-slate-500')
+    expect(rowOf(html, 4)).not.toContain('italic')
+  })
+
+  it('긴 줄은 자르지 않고 줄바꿈한다', () => {
+    expect(html).not.toContain('truncate')
+    expect(html).toContain('break-keep')
   })
 
   it('단계 줄은 감정별 색이고 개인 감정은 violet-300이다', () => {
