@@ -32,7 +32,7 @@ export interface ResolvedTuning {
 
 /** 항목 사이의 관계(예: 내림 문턱 < 진입 문턱). 범위 검사만으로 막지 못하는 조합을 막는다 */
 export interface TuningConstraint {
-  /** 관계에 걸린 키 */
+  /** 관계에 걸린 키. holds가 읽는 키를 빠짐없이 적는다(어긋나면 이 키들의 바뀐 값을 되돌린다) */
   keys: readonly string[]
   /** 한국어 한 줄 설명. 패널 경고에 보인다 */
   description: string
@@ -113,6 +113,8 @@ export function violatedConstraints(
 /**
  * 어긋난 관계에 걸린 바뀐 값을 기본값으로 되돌리고 rejected에 conflict로 남긴다.
  * 되돌린 값 때문에 다른 관계가 어긋날 수 있으므로 모두 지켜질 때까지 되풀이한다.
+ * 관계의 keys가 holds가 읽는 키를 빠뜨려 한 바퀴에 되돌릴 값이 없으면, 어느 값 탓인지 알 수 없으므로 바뀐 값을
+ * 모두 되돌린다. 바퀴마다 하나 이상 되돌리므로 항목 수 안에 끝난다.
  * 기본값끼리 어긋나는 관계는 정의 오류라 throw한다.
  */
 export function enforceConstraints(
@@ -129,12 +131,23 @@ export function enforceConstraints(
   const values: Record<string, number> = { ...resolved.values }
   const rejected: RejectedOverride[] = [...resolved.rejected]
   let violated = violatedConstraints(values, constraints)
+  const revert = (key: string, detail: string): void => {
+    rejected.push({ key, value: values[key], reason: 'conflict', detail })
+    values[key] = defaults[key]
+  }
   while (violated.length > 0) {
+    let revertedAny = false
     for (const constraint of violated) {
       for (const key of constraint.keys) {
         if (values[key] === defaults[key]) continue
-        rejected.push({ key, value: values[key], reason: 'conflict', detail: constraint.description })
-        values[key] = defaults[key]
+        revert(key, constraint.description)
+        revertedAny = true
+      }
+    }
+    if (!revertedAny) {
+      // 기본값은 모든 관계를 지키므로 바뀐 값을 모두 되돌리면 끝난다
+      for (const def of defs) {
+        if (values[def.key] !== def.defaultValue) revert(def.key, violated[0].description)
       }
     }
     violated = violatedConstraints(values, constraints)

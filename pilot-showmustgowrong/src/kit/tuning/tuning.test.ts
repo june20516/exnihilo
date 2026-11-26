@@ -229,6 +229,20 @@ describe('enforceConstraints', () => {
     expect(enforced.rejected.map((item) => item.key)).toEqual(['B', 'C', 'A'])
   })
 
+  it('keys에 빠진 키에 기대는 관계가 어긋나도 끝나며, 바뀐 값을 모두 기본값으로 되돌린다', () => {
+    // keys 계약을 어긴 관계: B에 기대지만 keys에는 A만 있다
+    const leaky: TuningConstraint = {
+      keys: ['A'],
+      description: 'B는 6보다 작아야 합니다',
+      holds: (values) => values.B < 6,
+    }
+    const enforced = enforceConstraints(orderedDefs, resolveTuning(orderedDefs, { B: 7 }), [leaky])
+    expect(enforced.values).toEqual({ A: 2, B: 5 })
+    expect(enforced.rejected).toEqual([
+      { key: 'B', value: 7, reason: 'conflict', detail: 'B는 6보다 작아야 합니다' },
+    ])
+  })
+
   it('기본값끼리 어긋나는 관계는 오류다', () => {
     const resolved = resolveTuning(defs, undefined)
     expect(() => enforceConstraints(defs, resolved, [A_BELOW_B])).toThrow('A는 B보다 작아야 합니다')

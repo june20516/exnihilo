@@ -73,14 +73,15 @@ export function TuningPanel({
   const [values, setValues] = useState<TuningValues>(() =>
     initialValues(defs, storage, storageKey, constraints),
   )
-  /** 마지막으로 저장에 성공한 값. 다음 방송에 실제로 쓰일 값이다 */
+  /** 저장소에 있는 값: 처음에는 저장값에서 푼 편집값, 그 뒤로는 마지막으로 저장에 성공한 편집값. 관계를 어긴 값은 다음 방송에서 기본값으로 돌아간다 */
   const [savedValues, setSavedValues] = useState<TuningValues>(values)
   /** 숫자 입력 칸에 사용자가 치고 있는 글자 */
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
+  /** 항목별 숫자 입력 경고(범위 밖이라 저장하지 않음) */
   const [warnings, setWarnings] = useState<Readonly<Record<string, string>>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
-  /** 저장소가 없으면 저장되지 않으므로, 열 때부터 계속 알린다 */
+  /** 저장소가 없는지. 없으면 바꾼 값이 저장되지 않으므로 열 때부터 계속 알린다 */
   const storageMissing = storage === null
 
   // 패널이 열려 있는 동안만 window에서 Esc를 받는다(포커스가 패널 밖이어도 닫힌다)
@@ -201,7 +202,7 @@ export function TuningPanel({
           {items.map((def) => {
             const value = values[def.key] ?? def.defaultValue
             const isChanged = value !== def.defaultValue
-            // 저장되지 않으면 다음 방송 값이 아니다
+            // 저장소의 값이 지금 방송 값과 다르면 다음 방송부터 바뀐다. 저장소가 없으면 저장되지 않으니 보이지 않는다
             const isPending = !storageMissing && savedValues[def.key] !== applied[def.key]
             const warning = warnings[def.key]
             return (
