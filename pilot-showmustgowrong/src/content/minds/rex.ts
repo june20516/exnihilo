@@ -75,7 +75,7 @@ export const REX_MIND: MindDef = {
       line: '카메라 쪽으로 미소를 연습한다',
       recall: '미소를 연습하던',
       noun: '미소 연습',
-      pose: 'laugh',
+      pose: 'idle',
       weight: 2,
       boost: { emotion: 'attention', factor: 2 },
       when: [{ kind: 'offScreen' }],

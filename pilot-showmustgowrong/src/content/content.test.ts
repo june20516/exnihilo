@@ -251,24 +251,26 @@ describe('라인업 감정·버릇·반사 반응 옮기기', () => {
   })
 
   it('버릇 문장을 narration으로 만들면 빈 토큰이 남지 않는다', () => {
-    const fill = (template: string) => fillTemplate(template, { target: '대상', reasons: '이유' })
+    // 자리마다 허용된 값만 넘겨, 잘못된 자리의 토큰이 있으면 fillTemplate이 throw한다.
+    const fillTarget = (template: string) => fillTemplate(template, { target: '대상' })
+    const fillReasons = (template: string) => fillTemplate(template, { reasons: '이유' })
     for (const performer of allPerformers) {
       const { habits, bursts } = mindOf(performer.id)
       for (const habit of habits) {
         const lines = [habit.line, habit.recall, habit.noun]
-        if (habit.targetLine !== undefined) lines.push(fill(habit.targetLine))
+        if (habit.targetLine !== undefined) lines.push(fillTarget(habit.targetLine))
         for (const line of lines) expect(line, `${performer.id}.${habit.id}`).not.toContain('{')
       }
       for (const [emotionId, burst] of Object.entries(bursts)) {
         for (const action of [burst.small, burst.big]) {
           const lines = [action.line]
-          if (action.targetLine !== undefined) lines.push(fill(action.targetLine))
-          if (action.intenseLine !== undefined) lines.push(fill(action.intenseLine))
+          if (action.targetLine !== undefined) lines.push(fillTarget(action.targetLine))
+          if (action.intenseLine !== undefined) lines.push(fillTarget(action.intenseLine))
           for (const line of lines) expect(line, `${performer.id}.${emotionId}`).not.toContain('{')
         }
       }
       for (const emotion of mindOf(performer.id).emotions) {
-        expect(fill(emotion.accumulate), `${performer.id}.${emotion.id}`).not.toContain('{')
+        expect(fillReasons(emotion.accumulate), `${performer.id}.${emotion.id}`).not.toContain('{')
       }
     }
   })

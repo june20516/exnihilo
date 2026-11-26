@@ -40,7 +40,7 @@ const REX: PerformerDef = {
     {
       id: 'stepUp',
       label: '카메라 앞으로 나오세요',
-      expect: '송출 화면 안으로 걸어 들어가 소음 1(잡히면 분노가 풀림) (주목 욕구 ▼)',
+      expect: '송출 화면 안으로 걸어 들어가 소음 1 (주목 욕구 ▼)',
       action: {
         pose: 'idle',
         move: { type: 'walk', toward: 'onAirFrame', speed: 4 },
@@ -95,7 +95,7 @@ const PRIYA: PerformerDef = {
     {
       id: 'cutHost',
       label: 'MC 한 번 끊어 주세요',
-      expect: 'MC에게 웃음 2 → 렉스가 분노 3로 받을 수 있음 (흥분 ▲)',
+      expect: 'MC에게 웃음 2 → 렉스의 짜증이 쌓임 (흥분 ▲)',
       action: {
         pose: 'laugh',
         emits: [{ kind: 'laughter', intensity: 2, target: { tag: 'host' } }],

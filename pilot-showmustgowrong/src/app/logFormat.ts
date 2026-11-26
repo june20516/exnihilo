@@ -1,3 +1,4 @@
+import { COMMON_EMOTIONS, type CommonEmotionId } from '@/content/types'
 import type { LogLine } from '@/sim/engine'
 
 /** 연쇄 깊이 한 단계의 들여쓰기(px) */
@@ -10,8 +11,8 @@ export function logIndent(depth: number): number {
   return Math.max(0, Math.min(depth, LOG_INDENT_MAX_LEVEL) - 1) * LOG_INDENT_PX
 }
 
-/** 단계 줄의 감정별 색. 목록에 없는 감정(개인 감정)은 LOG_PERSONAL_EMOTION_COLOR */
-const LOG_STAGE_COLORS: Record<string, string> = {
+/** 공용 감정의 단계 줄 색. 개인 감정은 LOG_PERSONAL_EMOTION_COLOR */
+const LOG_STAGE_COLORS: Record<CommonEmotionId, string> = {
   irritation: 'text-red-300',
   excitement: 'text-amber-300',
   anxiety: 'text-sky-300',
@@ -19,13 +20,23 @@ const LOG_STAGE_COLORS: Record<string, string> = {
 }
 const LOG_PERSONAL_EMOTION_COLOR = 'text-violet-300'
 
+function isCommonEmotion(emotion: string): emotion is CommonEmotionId {
+  return (COMMON_EMOTIONS as readonly string[]).includes(emotion)
+}
+
+function stageColor(emotion: string | null): string {
+  return emotion !== null && isCommonEmotion(emotion)
+    ? LOG_STAGE_COLORS[emotion]
+    : LOG_PERSONAL_EMOTION_COLOR
+}
+
 /** 줄 종류에 따른 글씨 스타일. staff와 silence는 로그의 기본 색을 그대로 쓴다. */
 export function logTextClass(line: LogLine): string {
   switch (line.kind) {
     case 'habit':
       return 'text-slate-500'
     case 'stage':
-      return (line.emotion !== null && LOG_STAGE_COLORS[line.emotion]) || LOG_PERSONAL_EMOTION_COLOR
+      return stageColor(line.emotion)
     case 'incident':
       return 'font-semibold'
     default:
@@ -33,8 +44,13 @@ export function logTextClass(line: LogLine): string {
   }
 }
 
-/** 자동 슬로모션 계기 사건이 이 줄(묶인 줄이면 첫~마지막 사건 사이)에 속하는지 */
+/**
+ * 자동 슬로모션 계기 사건이 이 줄(묶인 줄이면 첫~마지막 사건 사이)에 속하는지.
+ * 가정: 묶인 줄 사이에 줄을 남기지 않는 강도 1 이상 사건이 끼지 않는다(버릇·터짐은 줄 하나에
+ * 사건 하나만 대표하고, 기척은 슬로모션 계기가 아니다). 그래서 id 범위가 곧 그 줄의 사건들이다.
+ */
 export function containsEvent(line: LogLine, eventId: number | null): boolean {
-  if (eventId === null || line.eventId === null) return false
-  return line.eventId <= eventId && eventId <= (line.lastEventId ?? line.eventId)
+  const { eventId: first, lastEventId: last } = line
+  if (eventId === null || first === null || last === null) return false
+  return first <= eventId && eventId <= last
 }
