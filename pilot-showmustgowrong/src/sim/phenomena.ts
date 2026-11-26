@@ -25,10 +25,9 @@ export function isStir(event: PhenomenonEvent): boolean {
   return event.intensity === 0
 }
 
-function canBeStir(kind: PhenomenonKind): kind is StirKind {
+export function canBeStir(kind: PhenomenonKind): kind is StirKind {
   return (STIR_KINDS as readonly PhenomenonKind[]).includes(kind)
 }
-
 
 export interface Perceiver {
   id: string

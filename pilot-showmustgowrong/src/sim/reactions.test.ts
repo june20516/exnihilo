@@ -241,5 +241,10 @@ describe('기척(강도 0)', () => {
     const [planned, nextRng] = resolveReactions([stir], reactors, new CooldownTable(), 0, rng, describeEvent)
     expect(planned).toEqual([])
     expect(nextRng).toEqual(rng)
+
+    // 대조: 같은 배치에서 강도만 1로 바꾸면 반응이 계획된다
+    const strong = event({ id: 1, kind: 'laughter', intensity: 1, targetId: null })
+    const [plannedStrong] = resolveReactions([strong], reactors, new CooldownTable(), 0, rng, describeEvent)
+    expect(plannedStrong).not.toEqual([])
   })
 })

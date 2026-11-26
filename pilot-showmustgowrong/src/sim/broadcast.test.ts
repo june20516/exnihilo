@@ -201,10 +201,13 @@ describe('기척(강도 0)', () => {
   it('기척은 점수 0이고 게이지를 올리지 않는다', () => {
     const score = new BroadcastScore(show())
     const viewersBefore = score.viewers
-    const gaugesBefore = score.gauges
+    const gaugesBefore = { ...score.gauges }
     expect(score.scoreEvent(event({ kind: 'laughter', intensity: 0 }), 1, 1)).toBe(0)
     expect(score.scoreEvent(event({ kind: 'noise', intensity: 0 }), 3, 1)).toBe(0)
     expect(score.viewers).toBe(viewersBefore)
-    expect(score.gauges).toEqual(gaugesBefore)
+    expect({ ...score.gauges }).toEqual(gaugesBefore)
+    // 대조: 같은 사건이 강도 1이면 점수와 시청자가 움직인다
+    expect(score.scoreEvent(event({ kind: 'laughter', intensity: 1 }), 1, 1)).toBeGreaterThan(0)
+    expect(score.viewers).not.toBe(viewersBefore)
   })
 })

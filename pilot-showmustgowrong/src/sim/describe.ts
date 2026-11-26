@@ -1,5 +1,5 @@
 import type { StirKind } from '@/content/types'
-import type { PhenomenonEvent } from './phenomena'
+import { canBeStir, type PhenomenonEvent } from './phenomena'
 
 const HANGUL_FIRST = 0xac00
 const HANGUL_LAST = 0xd7a3
@@ -56,7 +56,7 @@ export function describeRootEvent(
 ): string {
   if (event.intensity !== 0) return describeEvent(event, shortNames)
   if (event.label !== undefined) return event.label
-  return event.kind in STIR_NOUNS ? STIR_NOUNS[event.kind as StirKind] : '기척'
+  return canBeStir(event.kind) ? STIR_NOUNS[event.kind] : '기척'
 }
 
 /** 사고 로그 한 줄. 이름은 shortNames(출연자·스태프 shortName, 장비 name, 카메라 label)에서 찾는다. */

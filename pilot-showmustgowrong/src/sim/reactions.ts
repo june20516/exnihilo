@@ -1,7 +1,7 @@
 import { REACTION_COOLDOWN_SECONDS, STEP_SECONDS } from '@/content/balance'
 import type { ActionDef, ReactionDef, Trigger } from '@/content/types'
 import { nextFloat, type RngState } from '@/kit/rng'
-import { perceives, targetsSelf, type PhenomenonEvent } from './phenomena'
+import { isStir, perceives, targetsSelf, type PhenomenonEvent } from './phenomena'
 
 const COOLDOWN_STEPS = Math.round(REACTION_COOLDOWN_SECONDS / STEP_SECONDS)
 
@@ -113,7 +113,7 @@ export function resolveReactions(
   const planned: PlannedAction[] = []
   let currentRng = rng
   // 기척(강도 0)은 반사 반응을 일으키지 않는다. 난수도 쓰지 않는다.
-  const reactable = events.filter((event) => event.intensity !== 0)
+  const reactable = events.filter((event) => !isStir(event))
 
   for (const reactor of reactors) {
     if (reactor.walkedOut) continue
