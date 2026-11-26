@@ -1,19 +1,19 @@
 import type { FloorPoint } from '@/sim/vec'
 import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import { TEMPLATE_TOKEN } from './templateTokens'
-import { COMMON_EMOTIONS } from './types'
-import type {
-  ActionDef,
-  EmotionThresholds,
-  EquipmentDef,
-  HabitDef,
-  MindDef,
-  MoodShift,
-  PerformerDef,
-  ReactionDef,
-  ShowDef,
-  StaffDef,
-  TargetSelector,
+import {
+  COMMON_EMOTIONS,
+  type ActionDef,
+  type EmotionThresholds,
+  type EquipmentDef,
+  type HabitDef,
+  type MindDef,
+  type MoodShift,
+  type PerformerDef,
+  type ReactionDef,
+  type ShowDef,
+  type StaffDef,
+  type TargetSelector,
 } from './types'
 
 function* actionTargets(action: ActionDef): Generator<TargetSelector> {
@@ -58,12 +58,18 @@ function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean 
 type TemplateSlot = 'plain' | 'target' | 'accumulate'
 
 /** 자리별 필수 접두사와 허용 토큰. plain은 토큰 없음, target은 {target} 계열, accumulate는 {reasons[:을|에]} */
-const SLOT_RULES: Record<TemplateSlot, { required: string | null; isAllowed: (name: string, josa?: string) => boolean }> = {
+interface SlotRule {
+  required: string | null
+  isAllowed: (name: string, josa?: string) => boolean
+}
+
+const SLOT_RULES: Record<TemplateSlot, SlotRule> = {
   plain: { required: null, isAllowed: () => false },
   target: { required: null, isAllowed: (name) => name === 'target' },
   accumulate: {
     required: '{reasons',
-    isAllowed: (name, josa) => name === 'reasons' && (josa === undefined || josa === '을' || josa === '에'),
+    isAllowed: (name, josa) =>
+      name === 'reasons' && (josa === undefined || josa === '을' || josa === '에'),
   },
 }
 
@@ -180,7 +186,10 @@ function checkHabit(habit: HabitDef, knownTags: ReadonlySet<string>, owner: stri
   for (const tag of tags) {
     if (!knownTags.has(tag)) errors.push(`알 수 없는 태그: ${tag} (${owner})`)
   }
-  errors.push(...checkTemplate(habit.line, 'line', 'plain', owner), ...checkTemplate(habit.recall, 'recall', 'plain', owner))
+  errors.push(
+    ...checkTemplate(habit.line, 'line', 'plain', owner),
+    ...checkTemplate(habit.recall, 'recall', 'plain', owner),
+  )
   if (habit.targetLine !== undefined) {
     errors.push(...checkTemplate(habit.targetLine, 'targetLine', 'target', owner, true))
   }
@@ -202,14 +211,15 @@ function checkHabits(mind: MindDef, knownTags: ReadonlySet<string>, owner: strin
 
 function checkBurstLines(mind: MindDef, owner: string): string[] {
   const errors: string[] = []
-  for (const { small, big } of Object.values(mind.bursts)) {
-    for (const burst of [small, big]) {
-      errors.push(...checkTemplate(burst.line, 'line', 'plain', owner))
+  for (const [emotionId, { small, big }] of Object.entries(mind.bursts)) {
+    for (const [size, burst] of [['small', small], ['big', big]] as const) {
+      const field = (name: string) => `${emotionId}.${size}.${name}`
+      errors.push(...checkTemplate(burst.line, field('line'), 'plain', owner))
       if (burst.targetLine !== undefined) {
-        errors.push(...checkTemplate(burst.targetLine, 'targetLine', 'target', owner, true))
+        errors.push(...checkTemplate(burst.targetLine, field('targetLine'), 'target', owner, true))
       }
       if (burst.intenseLine !== undefined) {
-        errors.push(...checkTemplate(burst.intenseLine, 'intenseLine', 'target', owner))
+        errors.push(...checkTemplate(burst.intenseLine, field('intenseLine'), 'target', owner))
       }
     }
   }

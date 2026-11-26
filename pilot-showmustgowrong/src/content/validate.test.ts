@@ -553,15 +553,17 @@ describe('validateShow', () => {
         return errorsFor(mind).join('\n')
       }
       expect(withBurst(burstAction, { ...burstAction, targetLine: '{target 를 때린다' })).toContain(
-        '문형 오류: targetLine의 허용되지 않는 토큰 {target 를 때린다 (a)',
+        '문형 오류: irritation.big.targetLine의 허용되지 않는 토큰 {target 를 때린다 (a)',
       )
       expect(withBurst(burstAction, { ...burstAction, targetLine: '때린다' })).toContain(
-        '문형 오류: targetLine에 {target 없음 (a)',
+        '문형 오류: irritation.big.targetLine에 {target 없음 (a)',
       )
       expect(withBurst(burstAction, { ...burstAction, intenseLine: '{who}에게 달려든다' })).toContain(
-        '문형 오류: intenseLine의 허용되지 않는 토큰 {who} (a)',
+        '문형 오류: irritation.big.intenseLine의 허용되지 않는 토큰 {who} (a)',
       )
-      expect(withBurst({ ...burstAction, targetLine: '때린다' })).toContain('문형 오류: targetLine에 {target 없음 (a)')
+      expect(withBurst({ ...burstAction, targetLine: '때린다' })).toContain(
+        '문형 오류: irritation.small.targetLine에 {target 없음 (a)',
+      )
       expect(withBurst({ ...burstAction, intenseLine: '{target:을} 노려본다' })).toBe('')
     })
 
@@ -576,7 +578,9 @@ describe('validateShow', () => {
 
       const mind = makeMind()
       mind.bursts.irritation = { small: { ...burstAction, line: '{target}를 친다' }, big: burstAction }
-      expect(errorsFor(mind).join('\n')).toContain('문형 오류: line의 허용되지 않는 토큰 {target} (a)')
+      expect(errorsFor(mind).join('\n')).toContain(
+        '문형 오류: irritation.small.line의 허용되지 않는 토큰 {target} (a)',
+      )
 
       const accumulate = (text: string) =>
         errorsFor(makeMind({ emotions: [...COMMON_EMOTION_DEFS, { ...shy, accumulate: text }] })).join('\n')
