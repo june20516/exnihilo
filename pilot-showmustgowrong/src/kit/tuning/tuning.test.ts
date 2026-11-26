@@ -29,17 +29,41 @@ describe('validateTunables', () => {
     expect(validateTunables(defs)).toEqual([])
   })
   it('키 중복', () => {
-    expect(validateTunables([def(), def()]).length).toBeGreaterThanOrEqual(1)
+    const errors = validateTunables([def(), def()])
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('A')
+    expect(errors[0]).toContain('중복')
   })
   it('min > max', () => {
-    expect(validateTunables([def({ min: 10, max: 1, defaultValue: 5 })]).length).toBeGreaterThanOrEqual(1)
+    const errors = validateTunables([def({ min: 10, max: 1, defaultValue: 5 })])
+    expect(errors.some((e) => e.includes('A') && e.includes('min'))).toBe(true)
   })
   it('step <= 0', () => {
-    expect(validateTunables([def({ step: 0 })]).length).toBeGreaterThanOrEqual(1)
-    expect(validateTunables([def({ step: -1 })]).length).toBeGreaterThanOrEqual(1)
+    for (const step of [0, -1]) {
+      const errors = validateTunables([def({ step })])
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toContain('A')
+      expect(errors[0]).toContain('step')
+    }
   })
   it('기본값 범위 밖', () => {
-    expect(validateTunables([def({ defaultValue: 99 })]).length).toBeGreaterThanOrEqual(1)
+    const errors = validateTunables([def({ defaultValue: 99 })])
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('A')
+    expect(errors[0]).toContain('기본값')
+  })
+  it('min, max, 기본값, step이 유한한 수가 아니면 오류', () => {
+    const cases: Partial<TunableDef>[] = [
+      { min: NaN },
+      { max: Infinity },
+      { defaultValue: NaN },
+      { step: Infinity },
+    ]
+    for (const bad of cases) {
+      const errors = validateTunables([def(bad)])
+      expect(errors.length).toBeGreaterThanOrEqual(1)
+      expect(errors.some((e) => e.includes('A') && e.includes('유한'))).toBe(true)
+    }
   })
 })
 
