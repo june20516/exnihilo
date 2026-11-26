@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TuningPanel } from './TuningPanel'
-import type { RejectedOverride, TunableDef, TuningStorage } from './tuning'
+import type { RejectedOverride, TunableDef, TuningConstraint, TuningStorage } from './tuning'
 import { useTuningHotkey } from './useTuningHotkey'
 
 const DEFS: TunableDef[] = [
@@ -237,6 +237,49 @@ describe('TuningPanel', () => {
     renderPanel(fakeStorage(), [{ key: 'speed', value: 99, reason: 'outOfRange' }])
     expect(screen.getByText('저장값 1개를 쓰지 않았습니다')).toBeTruthy()
     expect(screen.getByText(/speed/)).toBeTruthy()
+  })
+
+  it('관계 충돌로 버린 저장값은 이유와 설명을 보인다', () => {
+    renderPanel(fakeStorage(), [
+      { key: 'speed', value: 2, reason: 'conflict', detail: '속도 × 10은 지루함 이하여야 합니다' },
+    ])
+    expect(screen.getByText('speed: 다른 값과 맞지 않음 (속도 × 10은 지루함 이하여야 합니다)')).toBeTruthy()
+  })
+
+  describe('관계(constraints)', () => {
+    const SPEED_WITHIN_BOREDOM: TuningConstraint = {
+      keys: ['speed', 'boredom'],
+      description: '속도 × 10은 지루함 이하여야 합니다',
+      holds: (values) => values.speed * 10 <= values.boredom,
+    }
+
+    function renderWithConstraint(storage: TuningStorage) {
+      return render(
+        <TuningPanel
+          defs={DEFS}
+          applied={APPLIED}
+          rejected={[]}
+          storage={storage}
+          storageKey={KEY}
+          constraints={[SPEED_WITHIN_BOREDOM]}
+          onClose={() => {}}
+        />,
+      )
+    }
+
+    it('저장값이 관계를 어기면 다음 방송에 쓰일 기본값을 편집값으로 보인다', () => {
+      renderWithConstraint(fakeStorage('{"speed": 2}'))
+      expect((screen.getByLabelText('진행 속도 숫자') as HTMLInputElement).value).toBe('1')
+    })
+
+    it('편집값이 관계를 어기면 기본값으로 돌아간다고 경고한다', () => {
+      renderWithConstraint(fakeStorage())
+      expect(screen.queryByRole('alert')).toBeNull()
+      fireEvent.change(screen.getByLabelText('지루함 증가 슬라이더'), { target: { value: '5' } })
+      expect(screen.getByRole('alert').textContent).toBe(
+        '관계가 맞지 않아 다음 방송에서 기본값으로 돌아갑니다: 속도 × 10은 지루함 이하여야 합니다',
+      )
+    })
   })
 
   it('setItem이 throw하면 오류 문구를 보인다', () => {

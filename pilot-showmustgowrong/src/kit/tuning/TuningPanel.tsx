@@ -1,11 +1,14 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import {
   changedValues,
+  enforceConstraints,
   readOverrides,
   resolveTuning,
+  violatedConstraints,
   writeOverrides,
   type RejectedOverride,
   type TunableDef,
+  type TuningConstraint,
   type TuningStorage,
   type TuningValues,
 } from './tuning'
@@ -20,24 +23,35 @@ export interface TuningPanelProps {
   storageKey: string
   /** 페이지를 불러올 때 저장값을 읽지 못한 오류(깨진 JSON 등). 없으면 null */
   loadError?: string | null
+  /** 항목 사이의 관계. 페이지를 불러올 때와 같은 관계를 넘겨야 편집값이 다음 방송 값과 맞는다 */
+  constraints?: readonly TuningConstraint[]
   onClose(): void
 }
+
+const NO_CONSTRAINTS: readonly TuningConstraint[] = []
 
 const REJECT_REASON_TEXT: Record<RejectedOverride['reason'], string> = {
   unknownKey: '모르는 항목',
   notNumber: '숫자가 아님',
   outOfRange: '범위 밖',
   notObject: '저장 형식이 잘못됨',
+  conflict: '다른 값과 맞지 않음',
 }
 
-/** 처음 열 때의 편집값: 기본값 위에 저장된 값을 덮은 것, 즉 다음 방송에 쓰일 값 */
+function rejectText(item: RejectedOverride): string {
+  const reason = REJECT_REASON_TEXT[item.reason]
+  return item.detail === undefined ? `${item.key}: ${reason}` : `${item.key}: ${reason} (${item.detail})`
+}
+
+/** 처음 열 때의 편집값: 기본값 위에 저장된 값을 덮고 관계를 어긴 값은 되돌린 것, 즉 다음 방송에 쓰일 값 */
 function initialValues(
   defs: readonly TunableDef[],
   storage: TuningStorage | null,
   storageKey: string,
+  constraints: readonly TuningConstraint[],
 ): TuningValues {
   const { overrides } = readOverrides(storage, storageKey)
-  return resolveTuning(defs, overrides).values
+  return enforceConstraints(defs, resolveTuning(defs, overrides), constraints).values
 }
 
 function groupDefs(defs: readonly TunableDef[]): [group: string, items: TunableDef[]][] {
@@ -53,10 +67,11 @@ export function TuningPanel({
   storage,
   storageKey,
   loadError = null,
+  constraints = NO_CONSTRAINTS,
   onClose,
 }: TuningPanelProps): ReactElement {
   const [values, setValues] = useState<TuningValues>(() =>
-    initialValues(defs, storage, storageKey),
+    initialValues(defs, storage, storageKey, constraints),
   )
   /** 마지막으로 저장에 성공한 값. 다음 방송에 실제로 쓰일 값이다 */
   const [savedValues, setSavedValues] = useState<TuningValues>(values)
@@ -148,6 +163,9 @@ export function TuningPanel({
         storageMissing ? '저장소를 쓸 수 없어 바꾼 값이 저장되지 않습니다.' : null,
         saveError,
         copyError,
+        ...violatedConstraints(values, constraints).map(
+          (constraint) => `관계가 맞지 않아 다음 방송에서 기본값으로 돌아갑니다: ${constraint.description}`,
+        ),
       ].map(
         (text) =>
           text !== null && (
@@ -162,9 +180,7 @@ export function TuningPanel({
           <p>저장값 {rejected.length}개를 쓰지 않았습니다</p>
           <ul className="mt-1 list-disc pl-4">
             {rejected.map((item) => (
-              <li key={`${item.key}-${item.reason}`}>
-                {item.key}: {REJECT_REASON_TEXT[item.reason]}
-              </li>
+              <li key={`${item.key}-${item.reason}`}>{rejectText(item)}</li>
             ))}
           </ul>
         </div>

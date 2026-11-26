@@ -341,6 +341,18 @@ test('범위 밖 저장값은 버리고 알리며 게임은 기본값으로 정�
   await expect(page.getByTestId('broadcast-time')).not.toHaveText(startTime ?? '', { timeout: 15_000 })
 })
 
+test('서로 어긋나는 저장값은 버리고 관계를 알리며 게임은 정상 시작한다', async ({ page }) => {
+  await storeTuning(page, '{"threshold.fall1": 60}')
+  await openBroadcast(page)
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await expect(dialog).toContainText('저장값 1개를 쓰지 않았습니다')
+  await expect(dialog).toContainText(
+    'threshold.fall1: 다른 값과 맞지 않음 (1단계 내림 문턱은 0보다 크고 1단계 진입 문턱보다 작아야 합니다)',
+  )
+  await expect(dialog.getByLabel('1단계 내림 문턱 숫자')).toHaveValue('40')
+  await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
+})
+
 test('패널에서 바꾼 값은 다음 방송부터 표시되고 새로고침 뒤 지금 값이 된다', async ({ page }) => {
   await openBroadcast(page)
   await page.keyboard.press('`')

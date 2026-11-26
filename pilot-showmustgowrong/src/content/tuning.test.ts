@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { validateTunables } from '@/kit/tuning/tuning'
+import { validateTunables, violatedConstraints } from '@/kit/tuning/tuning'
 import * as balance from './balance'
 import { COMMON_SENSITIVITIES } from './commonMind'
 import { JUNE_MIND } from './minds/june'
@@ -7,8 +7,9 @@ import { MO_MIND } from './minds/mo'
 import { OKAFOR_MIND } from './minds/okafor'
 import { PRIYA_MIND } from './minds/priya'
 import { REX_MIND } from './minds/rex'
-import { TUNABLES, tuned } from './tuning'
+import { TUNABLES, TUNING_CONSTRAINTS, scaledRange, tuned } from './tuning'
 import type { MindDef, SensitivityDef, Situation } from './types'
+import { isValidThresholds } from './validate'
 
 /** balance.ts 상수 이름과 같은 키(brief 표). 값이 숫자 하나인 상수만 */
 const BALANCE_KEYS = [
@@ -78,6 +79,23 @@ const MIND_KEYS: [string, readonly SensitivityDef[], string, SituationKind, Rate
   ['mind.june.chatter.silence.fadePerShowMinute', JUNE_MIND.sensitivities, 'chatter', 'silence', 'fadePerShowMinute'],
   ['mind.june.anxiety.nearTag.perShowMinute', JUNE_MIND.sensitivities, 'anxiety', 'nearTag', 'perShowMinute'],
   ['mind.june.boredom.silence.perShowMinute', JUNE_MIND.sensitivities, 'boredom', 'silence', 'perShowMinute'],
+]
+
+/** 0이면 고장 나는 항목(tuning.ts 머리 주석의 규칙) */
+const POSITIVE_KEYS: readonly string[] = [
+  'BROADCAST_REAL_SECONDS',
+  'INTERVENTION_SPEED',
+  'SMALL_BURST_MTB_SHOW_SECONDS',
+  'BIG_BURST_MTB_BODY_SECONDS',
+  'HABIT_INTERVAL_SHOW_SECONDS',
+  'LOG_NUDGE_BODY_SECONDS',
+  'AUTO_SHOT_BODY_SECONDS',
+  'EVENT_REASON_SHOW_SECONDS',
+  'RELIEF_SHOW_SECONDS',
+  'INTERVENTION_REAL_SECONDS',
+  'AD_BREAK_REAL_SECONDS',
+  // 콘텐츠 검증이 0을 거부한다
+  ...MIND_KEYS.map(([key]) => key),
 ]
 
 function situationRate(
@@ -154,6 +172,43 @@ describe('게임 조정 목록', () => {
     )
   })
 
+  it('0이면 고장 나는 항목은 하한이 간격 한 칸이고, 나머지는 0(음수 기본값이면 기본값×4)이다', () => {
+    for (const def of TUNABLES) {
+      if (POSITIVE_KEYS.includes(def.key)) expect(def.min, def.key).toBe(def.step)
+      else expect(def.min, def.key).toBe(Math.min(0, def.defaultValue * 4))
+    }
+  })
+
+  it('기본값이 0이면 범위를 직접 적으라고 throw한다', () => {
+    expect(() => scaledRange('ZERO', 0)).toThrow('기본값이 0인 항목은 range를 직접 적어야 합니다: ZERO')
+  })
+
+  it('기본값은 모든 관계를 지킨다', () => {
+    const defaults = Object.fromEntries(TUNABLES.map((def) => [def.key, def.defaultValue]))
+    expect(violatedConstraints(defaults, TUNING_CONSTRAINTS)).toEqual([])
+  })
+
+  it.each([
+    ['기본값', {}, true],
+    ['내림 문턱 0', { 'threshold.fall1': 0 }, false],
+    ['1단계 내림 = 진입', { 'threshold.fall1': 50 }, false],
+    ['2단계 내림 > 진입', { 'threshold.fall2': 85 }, false],
+    ['1단계 진입 >= 2단계 진입', { 'threshold.rise1': 80, 'threshold.fall2': 79 }, false],
+    ['1단계 내림 >= 2단계 내림', { 'threshold.fall1': 45, 'threshold.rise1': 70, 'threshold.fall2': 45 }, false],
+    ['2단계 진입 > 참다 터짐', { 'threshold.intense': 79 }, false],
+    ['2단계 진입 = 참다 터짐', { 'threshold.intense': 80 }, true],
+  ])('문턱 관계는 콘텐츠 문턱 검증과 같다: %s', (_name, changes: Record<string, number>, valid) => {
+    const defaults = Object.fromEntries(TUNABLES.map((def) => [def.key, def.defaultValue]))
+    const values = { ...defaults, ...changes }
+    expect(violatedConstraints(values, TUNING_CONSTRAINTS).length === 0).toBe(valid)
+    const thresholds = {
+      rise: [values['threshold.rise1'], values['threshold.rise2']] as [number, number],
+      fall: [values['threshold.fall1'], values['threshold.fall2']] as [number, number],
+      intense: values['threshold.intense'],
+    }
+    expect(isValidThresholds(thresholds)).toBe(valid)
+  })
+
   it('모르는 키를 물으면 throw한다', () => {
     expect(() => tuned('없는키')).toThrow('없는키')
   })
@@ -190,5 +245,65 @@ describe('조정값 로드 순서', () => {
     globalThis.__EXNIHILO_TUNING__ = { 'mind.rex.attention.offScreen.perShowMinute': 12 }
     const { REX_MIND: freshRex } = await import('@/content/minds/rex')
     expect(situationRate(freshRex.sensitivities, 'attention', 'offScreen', 'perShowMinute')).toBe(12)
+  })
+})
+
+/** 값 안의 모든 수가 유한한지(NaN·Infinity가 없는지). 어긋난 첫 경로를 돌려준다 */
+function firstNonFinitePath(value: unknown, path = '', seen = new Set<object>()): string | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? null : `${path} = ${value}`
+  if (typeof value !== 'object' || value === null || seen.has(value)) return null
+  seen.add(value)
+  for (const [key, child] of Object.entries(value)) {
+    const found = firstNonFinitePath(child, `${path}.${key}`, seen)
+    if (found !== null) return found
+  }
+  return null
+}
+
+describe('조정값 극단', () => {
+  afterEach(() => {
+    delete globalThis.__EXNIHILO_TUNING__
+    vi.resetModules()
+  })
+
+  it('관계를 어긴 저장값은 기본값으로 되돌리고 conflict로 남기며 방송은 시작한다', async () => {
+    vi.resetModules()
+    globalThis.__EXNIHILO_TUNING__ = { 'threshold.fall1': 60 }
+    const { TUNING } = await import('@/content/tuning')
+    const fresh = await import('@/content/balance')
+    expect(fresh.DEFAULT_THRESHOLDS).toEqual({ rise: [50, 80], fall: [40, 70], intense: 100 })
+    expect(TUNING.rejected).toEqual([
+      expect.objectContaining({ key: 'threshold.fall1', value: 60, reason: 'conflict' }),
+    ])
+    const { Broadcast } = await import('@/sim/engine')
+    const { LINEUP } = await import('@/content/lineup')
+    const { TALK_SHOW } = await import('@/content/talkShow')
+    const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed: 1 })
+    broadcast.dispose()
+  })
+
+  it('모든 항목을 최솟값으로 둬도 방송이 끝까지 돌고 NaN·Infinity·throw가 없다', async () => {
+    vi.resetModules()
+    globalThis.__EXNIHILO_TUNING__ = Object.fromEntries(TUNABLES.map((def) => [def.key, def.min]))
+    const { TUNING } = await import('@/content/tuning')
+    // 문턱은 모두 0이면 관계를 어겨 기본값으로 돌아간다. 그 밖에는 버려진 값이 없다
+    expect(TUNING.rejected.every((item) => item.reason === 'conflict' && item.key.startsWith('threshold.'))).toBe(true)
+    const { Broadcast } = await import('@/sim/engine')
+    const { LINEUP } = await import('@/content/lineup')
+    const { TALK_SHOW } = await import('@/content/talkShow')
+    const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed: 1 })
+    try {
+      let steps = 0
+      while (broadcast.phase === 'live') {
+        broadcast.step([])
+        steps += 1
+        if (steps % 60 === 0) expect(firstNonFinitePath(broadcast.view())).toBeNull()
+      }
+      expect(steps).toBeGreaterThan(0)
+      expect(firstNonFinitePath(broadcast.view())).toBeNull()
+      expect(firstNonFinitePath(broadcast.summary())).toBeNull()
+    } finally {
+      broadcast.dispose()
+    }
   })
 })

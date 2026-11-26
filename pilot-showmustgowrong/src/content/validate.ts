@@ -53,7 +53,8 @@ function isBlank(text: string): boolean {
   return text.trim() === ''
 }
 
-function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean {
+/** 감정 문턱이 0 < 내림 < 진입 <= 100, 1단계 < 2단계, 2단계 진입 <= intense <= 100을 지키는지. tuning.ts의 문턱 관계와 같은 규칙이다 */
+export function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean {
   const pairsValid = [0, 1].every((i) => 0 < fall[i] && fall[i] < rise[i] && rise[i] <= 100)
   return pairsValid && rise[0] < rise[1] && fall[0] < fall[1] && rise[1] <= intense && intense <= 100
 }

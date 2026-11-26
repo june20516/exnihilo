@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 
 const HOTKEY = '`'
 
-/** 글자를 입력받는 요소인지 */
-function isTextEntry(target: EventTarget | null): boolean {
+/** 글자를 입력받는 요소인지(input, textarea, contenteditable). 게임 단축키도 이것으로 입력 중인 키를 거른다 */
+export function isTextEntry(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return true
   // jsdom은 isContentEditable을 구현하지 않으므로 속성도 함께 본다

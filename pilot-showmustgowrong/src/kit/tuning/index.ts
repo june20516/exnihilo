@@ -1,8 +1,10 @@
 export {
   changedValues,
+  enforceConstraints,
   readOverrides,
   resolveTuning,
   validateTunables,
+  violatedConstraints,
   writeOverrides,
 } from './tuning'
 export type {
@@ -10,9 +12,10 @@ export type {
   RejectReason,
   ResolvedTuning,
   TunableDef,
+  TuningConstraint,
   TuningStorage,
   TuningValues,
 } from './tuning'
 export { TuningPanel } from './TuningPanel'
 export type { TuningPanelProps } from './TuningPanel'
-export { useTuningHotkey } from './useTuningHotkey'
+export { isTextEntry, useTuningHotkey } from './useTuningHotkey'

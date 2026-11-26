@@ -4,15 +4,31 @@
  *
  * 범위 규칙: 비율·확률은 0~1(간격 0.01), 감정 문턱은 0~100(간격 1), 그 밖은 0~기본값×4이고 간격은 기본값의
  * 1/20에 가장 가까운(로그 기준) 1·2·5×10ⁿ이다. 그 간격의 눈금에 기본값이 없으면 기본값이 눈금에 올 때까지 다음으로
- * 작은 1·2·5 값으로 내린다(슬라이더가 기본값을 가리킬 수 있게).
+ * 작은 1·2·5 값으로 내린다(슬라이더가 기본값을 가리킬 수 있게). 기본값이 0인 항목은 range를 직접 적는다.
+ *
+ * 하한 규칙: 0이 뜻이 있는 값은 하한 0이다. 비율·확률, 양·상한·배율(0 = 효과 없음), 쿨다운·유예·원인 연결 창·
+ * 회상 범위·반경(0 = 없음), 기본 상황 빠짐(0 = 빠지지 않음), 자동 슬로모션 길이(0 = 끔), 최소 컷 유지(0 = 바로
+ * 옮김)가 그렇다. 0이면 고장 나는 값은 positive로 표시하고 하한을 간격 한 칸으로 올린다.
+ * - 나누는 값: 방송 길이(쇼 배율 = 극 중 길이 / 방송 길이), 개입 슬로모션 속도(HUD가 1/속도를 보이고 0이면 개입 중
+ *   시간이 멈춘다).
+ * - 평균 대기와 주기: 터짐 평균 대기(0이면 매 틱 터짐), 버릇 간격, 로그 재촉, 자동 PD 컷 길이(0이면 매 스텝 반복).
+ * - 감쇠 지속: 사건 이유·후련함 지속(0이면 이유가 생기자마자 사라져 효과가 없다).
+ * - 플레이어가 쓰는 시간 창: 개입 선택 시간, 광고 길이(0이면 조작하거나 볼 틈이 없다).
+ * - 콘텐츠 검증이 0을 거부하는 값: 출연자 감정 속도(perShowMinute·fadePerShowMinute > 0, validate.ts). 0이면 엔진 생성이
+ *   throw해 화면이 깨진다.
+ *
+ * 관계 규칙(TUNING_CONSTRAINTS): 범위 안 값이라도 조합이 어긋나면(예: 내림 문턱 >= 진입 문턱) 걸린 저장값을
+ * 기본값으로 되돌리고 TUNING.rejected에 conflict로 남긴다. 감정 문턱 관계는 콘텐츠 문턱 검증(isValidThresholds)과 같다.
  *
  * 시간 단위: 몸 초는 물리 시간(평소 실제 1초, 개입 슬로모션 중 실제 5초), 극 중 초·분은 쇼 배율이 곱해진 시간
  * (토크쇼 배율 10: 극 중 1분 = 평소 실제 6초), 실제 초는 사람이 보는 시간이다.
  */
 import {
+  enforceConstraints,
   resolveTuning,
   type ResolvedTuning,
   type TunableDef,
+  type TuningConstraint,
 } from '../kit/tuning/tuning'
 import { initialOverrides } from './tuningSource'
 
@@ -48,8 +64,9 @@ function nearestNiceStepIndex(candidates: readonly number[], target: number): nu
   return best
 }
 
-/** 그 밖의 값: 0 ~ 기본값×4(음수 기본값이면 기본값×4 ~ 0) */
-function scaledRange(defaultValue: number): Range {
+/** 그 밖의 값: 0 ~ 기본값×4(음수 기본값이면 기본값×4 ~ 0). 기본값이 0이면 크기를 알 수 없어 throw한다 */
+export function scaledRange(key: string, defaultValue: number): Range {
+  if (defaultValue === 0) throw new Error(`기본값이 0인 항목은 range를 직접 적어야 합니다: ${key}`)
   const size = Math.abs(defaultValue)
   const candidates = niceSteps(size / 20)
   let index = nearestNiceStepIndex(candidates, size / 20)
@@ -62,17 +79,22 @@ function scaledRange(defaultValue: number): Range {
 const RATIO_RANGE: Range = { min: 0, max: 1, step: 0.01 }
 const THRESHOLD_RANGE: Range = { min: 0, max: 100, step: 1 }
 
-type Entry = Omit<TunableDef, 'group' | 'min' | 'max' | 'step'> & { range?: 'ratio' | 'threshold' | Range }
+type Entry = Omit<TunableDef, 'group' | 'min' | 'max' | 'step'> & {
+  range?: 'ratio' | 'threshold' | Range
+  /** 0이면 고장 나는 값. 하한을 간격 한 칸으로 올린다(머리 주석의 하한 규칙) */
+  positive?: true
+}
 
 function group(name: string, entries: readonly Entry[]): TunableDef[] {
-  return entries.map(({ range, ...entry }) => {
+  return entries.map(({ range, positive, ...entry }) => {
     const resolved =
       range === 'ratio'
         ? RATIO_RANGE
         : range === 'threshold'
           ? THRESHOLD_RANGE
-          : (range ?? scaledRange(entry.defaultValue))
-    return { ...entry, group: name, ...resolved }
+          : (range ?? scaledRange(entry.key, entry.defaultValue))
+    const min = positive ? resolved.step : resolved.min
+    return { ...entry, group: name, ...resolved, min }
   })
 }
 
@@ -80,6 +102,7 @@ export const TUNABLES: readonly TunableDef[] = [
   ...group('방송', [
     {
       key: 'BROADCAST_REAL_SECONDS',
+      positive: true,
       label: '방송 길이',
       unit: '실제 초',
       defaultValue: 180,
@@ -118,6 +141,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // 180초 = 토크쇼 실제 18초라 버릇 간격(실제 10~20초)과 겹쳐 쌓일 수 있다.
     {
       key: 'EVENT_REASON_SHOW_SECONDS',
+      positive: true,
       label: '사건 이유 지속',
       unit: '극 중 초',
       defaultValue: 180,
@@ -132,6 +156,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'RELIEF_SHOW_SECONDS',
+      positive: true,
       label: '후련함 지속',
       unit: '극 중 초',
       defaultValue: 600,
@@ -200,6 +225,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // 들었다(Task 10, 쿨다운 손잡이).
     {
       key: 'SMALL_BURST_MTB_SHOW_SECONDS',
+      positive: true,
       label: '작은 터짐 평균 대기',
       unit: '극 중 초',
       defaultValue: 50,
@@ -225,6 +251,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // p = 1 - e^(-0.5/8.5) ≈ 0.0571이라 약 8.25초다. living spec 1.1의 "유예 뒤 평균 8초 이상"을 만족한다.
     {
       key: 'BIG_BURST_MTB_BODY_SECONDS',
+      positive: true,
       label: '큰 터짐 평균 대기',
       unit: '몸 초',
       defaultValue: 8.5,
@@ -243,6 +270,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // living spec 1.1 목표 그대로 토크쇼(배율 10)의 실제 10~20초다. 긴 쪽은 늘 짧은 쪽의 2배로 둔다.
     {
       key: 'HABIT_INTERVAL_SHOW_SECONDS',
+      positive: true,
       label: '버릇 간격(짧은 쪽)',
       unit: '극 중 초',
       defaultValue: 100,
@@ -288,6 +316,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // 되게 몸 초로 둔다(Ruling 16). 틱 0.5초를 더해도 4.5초다.
     {
       key: 'LOG_NUDGE_BODY_SECONDS',
+      positive: true,
       label: '로그 재촉',
       unit: '몸 초',
       defaultValue: 4,
@@ -356,6 +385,7 @@ export const TUNABLES: readonly TunableDef[] = [
   ...group('개입', [
     {
       key: 'INTERVENTION_SPEED',
+      positive: true,
       label: '개입 슬로모션 속도',
       unit: '배',
       defaultValue: 0.2,
@@ -364,6 +394,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'INTERVENTION_REAL_SECONDS',
+      positive: true,
       label: '개입 선택 시간',
       unit: '실제 초',
       defaultValue: 10,
@@ -420,6 +451,7 @@ export const TUNABLES: readonly TunableDef[] = [
   ...group('광고', [
     {
       key: 'AD_BREAK_REAL_SECONDS',
+      positive: true,
       label: '광고 길이',
       unit: '실제 초',
       defaultValue: 3,
@@ -439,6 +471,7 @@ export const TUNABLES: readonly TunableDef[] = [
   ...group('자동 PD', [
     {
       key: 'AUTO_SHOT_BODY_SECONDS',
+      positive: true,
       label: '평소 컷 길이',
       unit: '몸 초',
       defaultValue: 5,
@@ -459,6 +492,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // (프리야 6, 오카포 5.5, 공용 4.5, 렉스 4) 같은 정적에 모두 함께 2단계에 닿지 않게 한다(Task 10).
     {
       key: 'mind.common.boredom.silence.perShowMinute',
+      positive: true,
       label: '공용 정적 지루함',
       unit: '극 중 분당',
       defaultValue: 4.5,
@@ -466,6 +500,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.rex.attention.offScreen.perShowMinute',
+      positive: true,
       label: '렉스 주목 욕구 쌓임',
       unit: '극 중 분당',
       defaultValue: 7,
@@ -473,6 +508,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.rex.attention.offScreen.fadePerShowMinute',
+      positive: true,
       label: '렉스 주목 욕구 빠짐',
       unit: '극 중 분당',
       defaultValue: 40,
@@ -480,6 +516,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.rex.boredom.silence.perShowMinute',
+      positive: true,
       label: '렉스 정적 지루함',
       unit: '극 중 분당',
       defaultValue: 4,
@@ -488,6 +525,7 @@ export const TUNABLES: readonly TunableDef[] = [
     // 8이면 방송당 큰 터짐이 두 번 나는 일이 잦았다(Task 10).
     {
       key: 'mind.priya.boredom.silence.perShowMinute',
+      positive: true,
       label: '프리야 정적 지루함',
       unit: '극 중 분당',
       defaultValue: 6,
@@ -495,6 +533,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.okafor.boredom.silence.perShowMinute',
+      positive: true,
       label: '오카포 정적 지루함',
       unit: '극 중 분당',
       defaultValue: 5.5,
@@ -502,6 +541,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.mo.excitement.studioAudience.perShowMinute',
+      positive: true,
       label: '모 관객 앞 흥분',
       unit: '극 중 분당',
       defaultValue: 2,
@@ -509,6 +549,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.june.chatter.silence.perShowMinute',
+      positive: true,
       label: '준 수다 욕구 쌓임',
       unit: '극 중 분당',
       defaultValue: 9,
@@ -516,6 +557,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.june.chatter.silence.fadePerShowMinute',
+      positive: true,
       label: '준 수다 욕구 빠짐',
       unit: '극 중 분당',
       defaultValue: 20,
@@ -523,6 +565,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.june.anxiety.nearTag.perShowMinute',
+      positive: true,
       label: '준 덩치 옆자리 불안',
       unit: '극 중 분당',
       defaultValue: 2,
@@ -530,6 +573,7 @@ export const TUNABLES: readonly TunableDef[] = [
     },
     {
       key: 'mind.june.boredom.silence.perShowMinute',
+      positive: true,
       label: '준 정적 지루함',
       unit: '극 중 분당',
       defaultValue: 3,
@@ -538,9 +582,41 @@ export const TUNABLES: readonly TunableDef[] = [
   ]),
 ]
 
+const THRESHOLD_CONSTRAINTS: readonly TuningConstraint[] = [
+  {
+    keys: ['threshold.fall1', 'threshold.rise1'],
+    description: '1단계 내림 문턱은 0보다 크고 1단계 진입 문턱보다 작아야 합니다',
+    holds: (v) => 0 < v['threshold.fall1'] && v['threshold.fall1'] < v['threshold.rise1'],
+  },
+  {
+    keys: ['threshold.fall2', 'threshold.rise2'],
+    description: '2단계 내림 문턱은 0보다 크고 2단계 진입 문턱보다 작아야 합니다',
+    holds: (v) => 0 < v['threshold.fall2'] && v['threshold.fall2'] < v['threshold.rise2'],
+  },
+  {
+    keys: ['threshold.rise1', 'threshold.rise2'],
+    description: '1단계 진입 문턱은 2단계 진입 문턱보다 작아야 합니다',
+    holds: (v) => v['threshold.rise1'] < v['threshold.rise2'],
+  },
+  {
+    keys: ['threshold.fall1', 'threshold.fall2'],
+    description: '1단계 내림 문턱은 2단계 내림 문턱보다 작아야 합니다',
+    holds: (v) => v['threshold.fall1'] < v['threshold.fall2'],
+  },
+  {
+    keys: ['threshold.rise2', 'threshold.intense'],
+    description: '2단계 진입 문턱은 참다 터짐 문턱 이하여야 합니다',
+    holds: (v) => v['threshold.rise2'] <= v['threshold.intense'],
+  },
+]
+
+/** 항목 사이의 관계. 엔진이 throw하는 관계는 없고, 감정 문턱만 조합이 어긋나면 단계 판정이 뒤엉킨다 */
+export const TUNING_CONSTRAINTS: readonly TuningConstraint[] = THRESHOLD_CONSTRAINTS
+
 function loadTuning(): ResolvedTuning & { storageError: string | null } {
   const { overrides, error } = initialOverrides(TUNING_STORAGE_KEY)
-  return { ...resolveTuning(TUNABLES, overrides), storageError: error }
+  const resolved = enforceConstraints(TUNABLES, resolveTuning(TUNABLES, overrides), TUNING_CONSTRAINTS)
+  return { ...resolved, storageError: error }
 }
 
 /** 모듈을 불러올 때 한 번 풀린다. 그 페이지(또는 sim 프로세스)의 모든 방송이 같은 값을 쓴다 */

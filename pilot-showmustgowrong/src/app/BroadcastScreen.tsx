@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { INTERVENTION_SPEED } from '@/content/balance'
 import type { PerformerDef } from '@/content/types'
+import { isTextEntry } from '@/kit/tuning'
 import { StudioRenderer, type StudioHit, type StudioMode } from '@/render/StudioRenderer'
 import { clientToCanvas } from '@/render/geometry'
 import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine'
@@ -200,7 +201,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const onKeyDown = useEffectEvent((event: KeyboardEvent): void => {
     if (event.repeat || view === null || view.phase === 'ended') return
     // 조정 패널의 입력 칸에 치는 숫자·Space가 카메라 전환과 개입으로 새지 않게 한다
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
+    if (isTextEntry(event.target)) return
     const cameraIndex = SWITCHER_KEYS.indexOf(event.key)
     if (cameraIndex >= 0) {
       const camera = show.cameras[cameraIndex]

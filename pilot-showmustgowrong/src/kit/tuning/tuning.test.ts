@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   changedValues,
+  enforceConstraints,
   readOverrides,
   resolveTuning,
   validateTunables,
+  violatedConstraints,
   writeOverrides,
   type TunableDef,
+  type TuningConstraint,
   type TuningStorage,
 } from './tuning'
 
@@ -164,5 +167,70 @@ describe('writeOverrides', () => {
       },
     })
     expect(typeof writeOverrides(storage, 'k', { A: 3 })).toBe('string')
+  })
+})
+
+/** A < B */
+const A_BELOW_B: TuningConstraint = {
+  keys: ['A', 'B'],
+  description: 'A는 B보다 작아야 합니다',
+  holds: (values) => values.A < values.B,
+}
+/** 기본값(A 2, B 5)이 A < B를 지키는 defs */
+const orderedDefs: readonly TunableDef[] = [def({ defaultValue: 2 }), def({ key: 'B', defaultValue: 5 })]
+
+describe('violatedConstraints', () => {
+  it('지켜지지 않는 관계만 돌려준다', () => {
+    expect(violatedConstraints({ A: 2, B: 5 }, [A_BELOW_B])).toEqual([])
+    expect(violatedConstraints({ A: 6, B: 5 }, [A_BELOW_B])).toEqual([A_BELOW_B])
+  })
+})
+
+describe('enforceConstraints', () => {
+  it('관계가 지켜지면 그대로 둔다', () => {
+    const resolved = resolveTuning(orderedDefs, { A: 3 })
+    expect(enforceConstraints(orderedDefs, resolved, [A_BELOW_B])).toEqual(resolved)
+  })
+
+  it('어긋나면 관계에 걸린 바뀐 값을 모두 기본값으로 되돌리고 conflict로 남긴다', () => {
+    const resolved = resolveTuning(orderedDefs, { A: 8, B: 4, C: 1 })
+    const enforced = enforceConstraints(orderedDefs, resolved, [A_BELOW_B])
+    expect(enforced.values).toEqual({ A: 2, B: 5 })
+    expect(enforced.rejected).toEqual([
+      { key: 'C', value: 1, reason: 'unknownKey' },
+      { key: 'A', value: 8, reason: 'conflict', detail: 'A는 B보다 작아야 합니다' },
+      { key: 'B', value: 4, reason: 'conflict', detail: 'A는 B보다 작아야 합니다' },
+    ])
+  })
+
+  it('하나만 바꿔 어긋나면 그 값만 버린다', () => {
+    const enforced = enforceConstraints(orderedDefs, resolveTuning(orderedDefs, { A: 7 }), [A_BELOW_B])
+    expect(enforced.values).toEqual({ A: 2, B: 5 })
+    expect(enforced.rejected).toEqual([
+      { key: 'A', value: 7, reason: 'conflict', detail: 'A는 B보다 작아야 합니다' },
+    ])
+  })
+
+  it('되돌린 값 때문에 다른 관계가 어긋나면 그것도 되돌린다', () => {
+    // B < C를 더한다.
+    // A 6, B 6.5, C 6.2: B < C가 어긋나 B·C가 되돌려지면(B 5) 이제 A < B가 어긋난다.
+    const threeDefs = [...orderedDefs, def({ key: 'C', defaultValue: 8 })]
+    const bBelowC: TuningConstraint = {
+      keys: ['B', 'C'],
+      description: 'B는 C보다 작아야 합니다',
+      holds: (values) => values.B < values.C,
+    }
+    const enforced = enforceConstraints(
+      threeDefs,
+      resolveTuning(threeDefs, { A: 6, B: 6.5, C: 6.2 }),
+      [A_BELOW_B, bBelowC],
+    )
+    expect(enforced.values).toEqual({ A: 2, B: 5, C: 8 })
+    expect(enforced.rejected.map((item) => item.key)).toEqual(['B', 'C', 'A'])
+  })
+
+  it('기본값끼리 어긋나는 관계는 오류다', () => {
+    const resolved = resolveTuning(defs, undefined)
+    expect(() => enforceConstraints(defs, resolved, [A_BELOW_B])).toThrow('A는 B보다 작아야 합니다')
   })
 })

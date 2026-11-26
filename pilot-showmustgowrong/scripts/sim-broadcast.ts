@@ -20,7 +20,10 @@ function parseTuneArg(args: readonly string[]): string | null {
   const index = args.indexOf('--tune')
   if (index < 0) return null
   const path = args[index + 1]
-  if (path === undefined || path.startsWith('--')) throw new Error('--tune 다음에 JSON 파일 경로가 필요합니다')
+  if (path === undefined || path.startsWith('--')) {
+    console.error('--tune 다음에 JSON 파일 경로가 필요합니다')
+    process.exit(TUNE_EXIT_CODE)
+  }
   return path
 }
 
@@ -44,7 +47,10 @@ const { TUNABLES, TUNING } = await import('@/content/tuning')
 
 if (TUNING.rejected.length > 0) {
   console.error(`쓰지 못한 조정값 ${TUNING.rejected.length}개:`)
-  for (const item of TUNING.rejected) console.error(`  ${item.key} = ${JSON.stringify(item.value)} (${item.reason})`)
+  for (const item of TUNING.rejected) {
+    const detail = item.detail === undefined ? '' : `: ${item.detail}`
+    console.error(`  ${item.key} = ${JSON.stringify(item.value)} (${item.reason}${detail})`)
+  }
   process.exit(TUNE_EXIT_CODE)
 }
 const changed = Object.entries(changedValues(TUNABLES, TUNING.values))

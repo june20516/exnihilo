@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
-import { TUNABLES, TUNING, TUNING_STORAGE_KEY } from '@/content/tuning'
+import { TUNABLES, TUNING, TUNING_CONSTRAINTS, TUNING_STORAGE_KEY } from '@/content/tuning'
 import { browserStorage } from '@/content/tuningSource'
 import { TuningPanel, useTuningHotkey } from '@/kit/tuning'
 import type { BroadcastSetup } from '@/sim/engine'
@@ -48,6 +48,7 @@ export default function App() {
           storage={tuningStorage}
           storageKey={TUNING_STORAGE_KEY}
           loadError={TUNING.storageError}
+          constraints={TUNING_CONSTRAINTS}
           onClose={closeTuning}
         />
       )}

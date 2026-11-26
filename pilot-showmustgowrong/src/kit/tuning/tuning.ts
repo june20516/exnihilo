@@ -17,15 +17,26 @@ export interface TunableDef {
 }
 
 export type TuningValues = Readonly<Record<string, number>>
-export type RejectReason = 'unknownKey' | 'notNumber' | 'outOfRange' | 'notObject'
+export type RejectReason = 'unknownKey' | 'notNumber' | 'outOfRange' | 'notObject' | 'conflict'
 export interface RejectedOverride {
   key: string
   value: unknown
   reason: RejectReason
+  /** 사람이 읽는 설명. conflict면 어긋난 관계 */
+  detail?: string
 }
 export interface ResolvedTuning {
   values: TuningValues
   rejected: readonly RejectedOverride[]
+}
+
+/** 항목 사이의 관계(예: 내림 문턱 < 진입 문턱). 범위 검사만으로 막지 못하는 조합을 막는다 */
+export interface TuningConstraint {
+  /** 관계에 걸린 키 */
+  keys: readonly string[]
+  /** 한국어 한 줄 설명. 패널 경고에 보인다 */
+  description: string
+  holds(values: TuningValues): boolean
 }
 
 export interface TuningStorage {
@@ -87,6 +98,46 @@ export function resolveTuning(defs: readonly TunableDef[], overrides: unknown): 
     } else {
       values[key] = value
     }
+  }
+  return { values, rejected }
+}
+
+/** values에서 지켜지지 않는 관계 */
+export function violatedConstraints(
+  values: TuningValues,
+  constraints: readonly TuningConstraint[],
+): TuningConstraint[] {
+  return constraints.filter((constraint) => !constraint.holds(values))
+}
+
+/**
+ * 어긋난 관계에 걸린 바뀐 값을 기본값으로 되돌리고 rejected에 conflict로 남긴다.
+ * 되돌린 값 때문에 다른 관계가 어긋날 수 있으므로 모두 지켜질 때까지 되풀이한다.
+ * 기본값끼리 어긋나는 관계는 정의 오류라 throw한다.
+ */
+export function enforceConstraints(
+  defs: readonly TunableDef[],
+  resolved: ResolvedTuning,
+  constraints: readonly TuningConstraint[],
+): ResolvedTuning {
+  const defaults = Object.fromEntries(defs.map((def) => [def.key, def.defaultValue]))
+  const brokenByDefaults = violatedConstraints(defaults, constraints)[0]
+  if (brokenByDefaults !== undefined) {
+    throw new Error(`기본값이 관계를 어깁니다: ${brokenByDefaults.description}`)
+  }
+
+  const values: Record<string, number> = { ...resolved.values }
+  const rejected: RejectedOverride[] = [...resolved.rejected]
+  let violated = violatedConstraints(values, constraints)
+  while (violated.length > 0) {
+    for (const constraint of violated) {
+      for (const key of constraint.keys) {
+        if (values[key] === defaults[key]) continue
+        rejected.push({ key, value: values[key], reason: 'conflict', detail: constraint.description })
+        values[key] = defaults[key]
+      }
+    }
+    violated = violatedConstraints(values, constraints)
   }
   return { values, rejected }
 }
