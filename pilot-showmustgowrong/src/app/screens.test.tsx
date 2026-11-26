@@ -181,7 +181,7 @@ describe('BroadcastStage 생방송 화면', () => {
     return (html.match(pattern) ?? []).length
   }
 
-  it('게이지 4개, 시청자 수, 남은 시간, 코너, ON AIR 이름표, 미리보기 2개, 개입·광고 버튼이 있다', () => {
+  it('게이지 4개, 시청자 수, 남은 시간, 코너, ON AIR 이름표, 카메라 칸 3개, 개입·광고 버튼이 있다', () => {
     const view: BroadcastView = {
       ...baseView,
       onAirCameraId: 'close',
@@ -196,7 +196,7 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toContain('data-testid="broadcast-time"')
     expect(html).toMatch(/data-testid="corner"[^>]*>[^<]*오프닝 1\/3/)
     expect(html).toMatch(/data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · 대상 렉스/)
-    expect(count(html, /data-testid="camera-preview"/g)).toBe(2)
+    expect(count(html, /data-testid="camera-preview"/g)).toBe(3)
     expect(html).toContain('data-testid="intervene-button"')
     expect(html).toContain('data-testid="ad-button"')
     expect(html).toContain('data-testid="event-log"')
@@ -269,10 +269,12 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toContain('내성 1 소모 · 누적 피로 +1')
   })
 
-  it('ON AIR 모니터는 버튼이 아니고, 미리보기 2개만 전환 버튼이다', () => {
+  it('ON AIR 모니터는 버튼이 아니고, 카메라 칸 3개는 송출 중인 칸만 표시가 다르다', () => {
     const html = render()
-    expect(html).toMatch(/<section[^>]*data-testid="switcher-wide"[^>]*data-on-air="true"/)
+    expect(html).toMatch(/<section[^>]*data-testid="program-monitor"[^>]*data-on-air="true"/)
+    expect(count(html, /<button[^>]*data-testid="switcher-slot-/g)).toBe(3)
     expect(count(html, /<button[^>]*data-on-air="false"/g)).toBe(2)
+    expect(html).toMatch(/<button[^>]*data-testid="switcher-slot-wide"[^>]*data-on-air="true"/)
   })
 
   it('스태프 카드는 콘텐츠의 역할과 담당 카메라를 보여 준다', () => {

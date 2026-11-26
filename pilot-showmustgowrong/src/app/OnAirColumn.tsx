@@ -7,8 +7,9 @@ import { SWITCHER_KEYS, cameraName } from './labels'
 
 const MONITOR_WIDTH = 264
 const MONITOR_HEIGHT = 149
-const PREVIEW_WIDTH = 122
-const PREVIEW_HEIGHT = 69
+// 열 안쪽 폭 288px에 칸 3개(테두리·안쪽 여백 포함 칸당 92px)가 들어가는 크기
+const PREVIEW_WIDTH = 84
+const PREVIEW_HEIGHT = 47
 
 interface OnAirColumnProps {
   view: BroadcastView
@@ -48,8 +49,9 @@ function trackingTarget(
 }
 
 /**
- * 오른쪽 열(spec 8.2 1·2단계): 위에 ON AIR 모니터, 그 아래 송출하지 않는 카메라 2대의 미리보기
- * (누르면 그 카메라로 전환), 맨 아래 개입·광고 버튼.
+ * 오른쪽 열(spec 8.2 1·2단계): 위에 ON AIR 모니터, 그 아래 카메라 3대의 미리보기 칸
+ * (누르면 그 카메라로 전환), 맨 아래 개입·광고 버튼. 칸은 송출이 바뀌어도 show.cameras 순서(= 숫자 키
+ * 순서)로 항상 같은 자리에 있어, 끌기 직후에도 손이 같은 자리로 간다.
  */
 export function OnAirColumn({
   view,
@@ -66,7 +68,6 @@ export function OnAirColumn({
       ? (event: PointerEvent<HTMLElement>) => onAimDragStart(camera.id, event)
       : undefined
   const onAir = show.cameras.find((camera) => camera.id === view.onAirCameraId) ?? show.cameras[0]
-  const others = show.cameras.filter((camera) => camera !== onAir)
   const onAirTarget = trackingTarget(view, onAir, performers)
   // 미리보기는 폭이 좁아 본명 4개가 겹치므로 짧은 이름을 쓴다.
   const shortNames = useMemo(
@@ -76,7 +77,7 @@ export function OnAirColumn({
   return (
     <aside className="relative flex w-[300px] shrink-0 flex-col gap-2 py-1 pr-3">
       <section
-        data-testid={`switcher-${onAir.id}`}
+        data-testid="program-monitor"
         data-on-air="true"
         aria-label="송출 중인 카메라"
         onPointerDown={aimHandler(onAir)}
@@ -106,21 +107,31 @@ export function OnAirColumn({
           />
         </span>
       </section>
-      <div className="flex gap-2">
-        {others.map((camera) => {
+      <div data-testid="switcher-slots" className="flex gap-1.5">
+        {show.cameras.map((camera, index) => {
           const target = trackingTarget(view, camera, performers)
+          const isOnAir = camera.id === onAir.id
           return (
             <button
               key={camera.id}
               type="button"
-              data-testid={`switcher-${camera.id}`}
-              data-on-air="false"
-              aria-label={`${cameraName(show.cameras, camera)}로 전환`}
-              onClick={() => onSwitch(camera.id)}
+              data-testid={`switcher-slot-${camera.id}`}
+              data-slot-index={index}
+              data-on-air={isOnAir}
+              aria-label={`${cameraName(show.cameras, camera)}${isOnAir ? ' 송출 중' : '로 전환'}`}
+              aria-current={isOnAir}
+              onClick={isOnAir ? undefined : () => onSwitch(camera.id)}
               onPointerDown={aimHandler(camera)}
-              className="flex flex-1 flex-col gap-1 rounded-xl border-2 border-slate-700 bg-slate-900 p-1.5 text-left hover:border-sky-400 active:translate-y-px"
+              className={`flex min-w-0 flex-1 flex-col gap-1 rounded-lg border-2 bg-slate-900 p-0.5 text-left ${
+                isOnAir
+                  ? 'border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]'
+                  : 'border-slate-700 hover:border-sky-400 active:translate-y-px'
+              }`}
             >
-              <span data-testid="camera-preview" className="overflow-hidden rounded-md opacity-90">
+              <span
+                data-testid="camera-preview"
+                className={`overflow-hidden rounded-md ${isOnAir ? '' : 'opacity-90'}`}
+              >
                 <CameraFeedCanvas
                   view={view}
                   camera={camera}
@@ -130,17 +141,22 @@ export function OnAirColumn({
                   shortNames={shortNames}
                 />
               </span>
-              <span className="flex items-center gap-1 text-xs font-bold text-slate-200">
+              <span className="flex items-center gap-1 px-0.5 text-[11px] font-bold text-slate-200">
                 <kbd className="rounded bg-slate-950 px-1 text-[10px] text-slate-400">
-                  {SWITCHER_KEYS[show.cameras.indexOf(camera)]}
+                  {SWITCHER_KEYS[index]}
                 </kbd>
-                <span className="truncate">{cameraName(show.cameras, camera)}</span>
+                <span className="truncate">{camera.label}</span>
               </span>
+              {isOnAir && (
+                <span className="mx-0.5 rounded-full bg-red-600 text-center text-[10px] font-black text-white">
+                  ON AIR
+                </span>
+              )}
               {target !== null && (
                 <span
                   data-testid="preview-target"
                   data-aim-mode={view.cameraAimModes[camera.id] ?? 'fixed'}
-                  className="text-[11px] leading-tight break-keep text-amber-300"
+                  className="px-0.5 text-[10px] leading-tight break-keep text-amber-300"
                 >
                   {target}
                 </span>
@@ -150,7 +166,7 @@ export function OnAirColumn({
         })}
       </div>
       <p className="mt-auto rounded-lg bg-slate-900/60 px-2 py-1.5 text-[11px] leading-4 text-slate-400">
-        미리보기를 누르거나 1·2·3: 카메라 전환
+        아래 카메라 칸을 누르거나 1·2·3: 카메라 전환(칸 자리는 고정)
         <br />
         클로즈업 카메라(노란 고리)나 화면을 출연자에게 끌기: 대상 바꾸기(공짜)
         <br />

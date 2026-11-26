@@ -40,7 +40,8 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
     'intervene-button',
     'ad-button',
     ...GAUGES.map((gauge) => `gauge-${gauge}`),
-    ...SWITCHERS.map((camera) => `switcher-${camera}`),
+    'program-monitor',
+    ...SWITCHERS.map((camera) => `switcher-slot-${camera}`),
   ]
   for (const id of ids) {
     await expect(page.getByTestId(id)).toBeVisible()
@@ -59,20 +60,38 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
 
 test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', async ({ page }) => {
   await openBroadcast(page)
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')
   await page.keyboard.press('2')
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'false')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'false')
+})
+
+test('송출이 바뀌어도 카메라 칸은 같은 자리에 있다', async ({ page }) => {
+  await openBroadcast(page)
+  const slotIndexes = async () =>
+    Promise.all(
+      SWITCHERS.map((camera) =>
+        page.getByTestId(`switcher-slot-${camera}`).getAttribute('data-slot-index'),
+      ),
+    )
+  await page.keyboard.press('2')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-slot-index', '1')
+  await page.keyboard.press('3')
+  await expect(page.getByTestId('switcher-slot-audienceCam')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-audienceCam')).toHaveAttribute('data-slot-index', '2')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-slot-index', '1')
+  expect(await slotIndexes()).toEqual(['0', '1', '2'])
 })
 
 test('미리보기를 누르면 그 카메라가 송출되고 ON AIR 이름표가 바뀐다', async ({ page }) => {
   await openBroadcast(page)
   const label = page.getByTestId('on-air-label')
   await expect(label).toContainText('CAM 1 무대 와이드')
-  await page.getByTestId('switcher-close').click()
+  await page.getByTestId('switcher-slot-close').click()
   await expect(label).toContainText('CAM 2 클로즈업')
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
-  await page.getByTestId('switcher-audienceCam').click()
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
+  await page.getByTestId('switcher-slot-audienceCam').click()
   await expect(label).toContainText('CAM 3 관객석')
 })
 
@@ -244,20 +263,20 @@ test('창 크기를 바꾼 뒤에도 클로즈업 카메라를 출연자에게 �
 
   // 클로즈업이 미리보기일 때도 끌기가 대상을 바꾸고 미리보기 이름표에 보인다.
   await page.keyboard.press('1')
-  const preview = page.getByTestId('switcher-close').getByTestId('preview-target')
+  const preview = page.getByTestId('switcher-slot-close').getByTestId('preview-target')
   await expect(preview).toContainText('대상 프리야')
   await dragCloseupTo(page, 'okafor')
   await expect(preview).toContainText('대상 오카포')
   await expect(page.getByTestId('intervention-panel')).toBeHidden()
   // 끌어 놓아도 미리보기 버튼의 카메라 전환은 일어나지 않는다.
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')
 })
 
 test('클로즈업 미리보기 화면에서 출연자에게 끌어도 대상이 바뀌고, 그냥 누르면 전환된다', async ({
   page,
 }) => {
   await openBroadcast(page)
-  const previewButton = page.getByTestId('switcher-close')
+  const previewButton = page.getByTestId('switcher-slot-close')
   const previewTarget = previewButton.getByTestId('preview-target')
   await expect(previewTarget).toContainText('대상 렉스')
   const box = await previewButton.boundingBox()
@@ -266,7 +285,7 @@ test('클로즈업 미리보기 화면에서 출연자에게 끌어도 대상이
   await expect(previewTarget).toContainText('대상 모')
 
   await previewButton.click()
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
 })
 
 test('출연자를 클릭하면 클로즈업은 그대로 두고 성향과 스탯 설명을 고정해 띄운다', async ({
@@ -278,7 +297,7 @@ test('출연자를 클릭하면 클로즈업은 그대로 두고 성향과 스�
   const tip = page.getByTestId('hover-tip')
   await expect(tip).toContainText('레슬러')
   await expect(tip).toContainText('존재감 2')
-  await expect(page.getByTestId('switcher-close').getByTestId('preview-target')).toContainText(
+  await expect(page.getByTestId('switcher-slot-close').getByTestId('preview-target')).toContainText(
     '대상 렉스',
   )
 })
@@ -363,7 +382,7 @@ test('패널에서 바꾼 값은 다음 방송부터 표시되고 새로고침 �
   await input.pressSequentially('120')
   await expect(input).toHaveValue('120')
   await expect(dialog.getByText('다음 방송부터')).toHaveCount(1)
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')
 
   await page.reload()
   await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
