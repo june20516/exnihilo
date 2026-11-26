@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
 import { Broadcast, type BroadcastView } from '@/sim/engine'
@@ -12,7 +12,7 @@ const CAMERA_IDS = TALK_SHOW.cameras.map((camera) => camera.id)
 
 describe('OnAirColumn 카메라 칸', () => {
   let baseView: BroadcastView
-  let getContextSpy: { mockRestore(): void }
+  let getContextSpy: MockInstance<HTMLCanvasElement['getContext']>
 
   beforeAll(async () => {
     // 캔버스 2D 컨텍스트가 없는 jsdom에서도 그리기를 건너뛰게 한다.
