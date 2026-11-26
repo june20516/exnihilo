@@ -237,14 +237,17 @@ export const RELIEF_SHOW_SECONDS = 600
 /** 터짐 확률을 판정하는 주기(몸 초). 감정 틱이 이 간격으로 돈다. */
 export const LIFE_TICK_BODY_SECONDS = 0.5
 /**
- * 1단계 이상에서 작은 터짐 사이의 평균 극 중 초. 토크쇼(배율 10)에서 실제 42초에 한 번이고 쿨다운(실제 12초)을
- * 더하면 감정 하나가 1단계에 머무는 동안 평균 실제 54초에 한 번이다. 실제 12초였을 때는 1단계에서 2단계(정적 속도에
- * 따라 실제 약 30~70초)로 가는 동안 거의 반드시 작은 터짐이 나 큰 터짐이 방송당 0.04회였다. 42초에서 무입력 방송당 작은 터짐
- * 평균 5.7~6.7회(living spec 7.1 목표 4~8회).
+ * 쿨다운이 끝난 뒤 작은 터짐까지의 평균 극 중 초(실제 5초). 간격은 쿨다운 + Exp(MTB)라 MTB를 짧게 두면 거의
+ * 쿨다운 주기로 터져 방송당 횟수가 고르게 나온다. MTB가 간격 대부분을 차지하던 때(극 중 420초)는 횟수가 포아송처럼
+ * 2~12회로 퍼져 living spec 7.1의 "4~8회"에 시드 66%만 들었다(Task 10, 쿨다운 손잡이).
  */
-export const SMALL_BURST_MTB_SHOW_SECONDS = 420
-/** 같은 감정의 작은 터짐 뒤 다시 터지지 않는 극 중 초(실제 12초). */
-export const SMALL_BURST_COOLDOWN_SHOW_SECONDS = 120
+export const SMALL_BURST_MTB_SHOW_SECONDS = 50
+/**
+ * 같은 감정의 작은 터짐 뒤 다시 터지지 않는 극 중 초(실제 85초). 무입력 sim에서 감정 하나가 1단계 이상에 머무는
+ * 시간이 실제 약 60~95초(출연진 합계 방송당 약 300~370초)라, 쿨다운 + MTB = 실제 90초면 1단계 구간마다 작은 터짐이
+ * 대략 한 번이고 방송당 평균 5~6회다(목표 4~8회).
+ */
+export const SMALL_BURST_COOLDOWN_SHOW_SECONDS = 850
 /** 2단계 진입 뒤 큰 터짐이 없는 유예(몸 초). living spec 1.1의 "2단계 진입 3초 안에는 터지지 않는다". */
 export const BIG_BURST_GRACE_BODY_SECONDS = 3
 /**
