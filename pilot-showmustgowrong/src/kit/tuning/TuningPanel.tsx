@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   changedValues,
   enforceConstraints,
@@ -73,11 +73,19 @@ export function TuningPanel({
   const [values, setValues] = useState<TuningValues>(() =>
     initialValues(defs, storage, storageKey, constraints),
   )
-  /** 저장소에 있는 값: 처음에는 저장값에서 푼 편집값, 그 뒤로는 마지막으로 저장에 성공한 편집값. 관계를 어긴 값은 다음 방송에서 기본값으로 돌아간다 */
+  /**
+   * 마지막으로 저장에 성공한 편집값. 처음에는 열 때 저장소에서 읽어 관계를 적용한 값이다.
+   * 관계를 어긴 채 저장될 수 있으므로 다음 방송 값은 nextBroadcastValues로 따로 계산한다.
+   */
   const [savedValues, setSavedValues] = useState<TuningValues>(values)
+  /** 다음 방송(새로고침 뒤)에 쓰일 값: 저장된 값에 관계를 적용한 것. 페이지를 불러올 때와 같은 계산이다 */
+  const nextBroadcastValues = useMemo(
+    () => enforceConstraints(defs, { values: savedValues, rejected: [] }, constraints).values,
+    [defs, savedValues, constraints],
+  )
   /** 숫자 입력 칸에 사용자가 치고 있는 글자 */
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
-  /** 항목별 숫자 입력 경고(범위 밖이라 저장하지 않음) */
+  /** 항목별 숫자 입력 경고. 빈 값, 유한하지 않은 값, 범위 밖 값은 저장하지 않고 이 경고를 남긴다 */
   const [warnings, setWarnings] = useState<Readonly<Record<string, string>>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
@@ -202,8 +210,10 @@ export function TuningPanel({
           {items.map((def) => {
             const value = values[def.key] ?? def.defaultValue
             const isChanged = value !== def.defaultValue
-            // 저장소의 값이 지금 방송 값과 다르면 다음 방송부터 바뀐다. 저장소가 없으면 저장되지 않으니 보이지 않는다
-            const isPending = !storageMissing && savedValues[def.key] !== applied[def.key]
+            // 다음 방송 값(저장값에 관계를 적용한 값)이 지금 방송 값과 다르면 다음 방송부터 바뀐다.
+            // 관계를 어겨 기본값으로 돌아갈 값은 여기서 기본값으로 계산되므로 관계 경고와 어긋나지 않는다.
+            // 저장소가 없으면 저장되지 않으니 보이지 않는다
+            const isPending = !storageMissing && nextBroadcastValues[def.key] !== applied[def.key]
             const warning = warnings[def.key]
             return (
               <div key={def.key} className="mt-2">

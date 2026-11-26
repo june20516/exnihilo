@@ -110,6 +110,10 @@ export function violatedConstraints(
   return constraints.filter((constraint) => !constraint.holds(values))
 }
 
+/** keys 계약을 어긴 관계 때문에 바뀐 값을 모두 되돌렸을 때의 설명. 되돌린 값이 그 관계에 걸렸는지는 알 수 없다 */
+export const KEYS_CONTRACT_DETAIL =
+  '관계 정의가 읽는 항목을 keys에 빠뜨려 원인을 알 수 없으므로 바뀐 값을 모두 기본값으로 되돌렸습니다'
+
 /**
  * 어긋난 관계에 걸린 바뀐 값을 기본값으로 되돌리고 rejected에 conflict로 남긴다.
  * 되돌린 값 때문에 다른 관계가 어긋날 수 있으므로 모두 지켜질 때까지 되풀이한다.
@@ -147,7 +151,7 @@ export function enforceConstraints(
     if (!revertedAny) {
       // 기본값은 모든 관계를 지키므로 바뀐 값을 모두 되돌리면 끝난다
       for (const def of defs) {
-        if (values[def.key] !== def.defaultValue) revert(def.key, violated[0].description)
+        if (values[def.key] !== def.defaultValue) revert(def.key, KEYS_CONTRACT_DETAIL)
       }
     }
     violated = violatedConstraints(values, constraints)

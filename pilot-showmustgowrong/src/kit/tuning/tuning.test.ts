@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   changedValues,
   enforceConstraints,
+  KEYS_CONTRACT_DETAIL,
   readOverrides,
   resolveTuning,
   validateTunables,
@@ -229,6 +230,7 @@ describe('enforceConstraints', () => {
     expect(enforced.rejected.map((item) => item.key)).toEqual(['B', 'C', 'A'])
   })
 
+  // timeout 1000ms: 끝나지 않는 회귀를 실패로 보고한다
   it('keys에 빠진 키에 기대는 관계가 어긋나도 끝나며, 바뀐 값을 모두 기본값으로 되돌린다', () => {
     // keys 계약을 어긴 관계: B에 기대지만 keys에는 A만 있다
     const leaky: TuningConstraint = {
@@ -238,10 +240,8 @@ describe('enforceConstraints', () => {
     }
     const enforced = enforceConstraints(orderedDefs, resolveTuning(orderedDefs, { B: 7 }), [leaky])
     expect(enforced.values).toEqual({ A: 2, B: 5 })
-    expect(enforced.rejected).toEqual([
-      { key: 'B', value: 7, reason: 'conflict', detail: 'B는 6보다 작아야 합니다' },
-    ])
-  })
+    expect(enforced.rejected).toEqual([{ key: 'B', value: 7, reason: 'conflict', detail: KEYS_CONTRACT_DETAIL }])
+  }, 1000)
 
   it('기본값끼리 어긋나는 관계는 오류다', () => {
     const resolved = resolveTuning(defs, undefined)

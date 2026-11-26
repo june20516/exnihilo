@@ -1,6 +1,7 @@
 export {
   changedValues,
   enforceConstraints,
+  KEYS_CONTRACT_DETAIL,
   readOverrides,
   resolveTuning,
   validateTunables,

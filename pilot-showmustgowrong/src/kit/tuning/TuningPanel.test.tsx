@@ -280,6 +280,22 @@ describe('TuningPanel', () => {
         '관계가 맞지 않아 다음 방송에서 기본값으로 돌아갑니다: 속도 × 10은 지루함 이하여야 합니다',
       )
     })
+
+    it('관계를 어긴 값을 저장해도 다음 방송 값(기본값)이 지금 방송과 같으면 다음 방송부터는 없다', () => {
+      const storage = fakeStorage()
+      renderWithConstraint(storage)
+      fireEvent.change(screen.getByLabelText('지루함 증가 슬라이더'), { target: { value: '5' } })
+      expect(storage.data.get(KEY)).toBe('{"boredom":5}')
+      expect(screen.getByRole('alert').textContent).toContain('기본값으로 돌아갑니다')
+      expect(screen.queryByText('다음 방송부터')).toBeNull()
+    })
+
+    it('관계를 지키는 값을 저장하면 다음 방송부터를 보인다', () => {
+      renderWithConstraint(fakeStorage())
+      fireEvent.change(screen.getByLabelText('지루함 증가 슬라이더'), { target: { value: '20' } })
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByText('다음 방송부터')).toBeTruthy()
+    })
   })
 
   it('setItem이 throw하면 오류 문구를 보인다', () => {
