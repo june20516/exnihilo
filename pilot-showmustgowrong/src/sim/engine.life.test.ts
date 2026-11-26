@@ -263,7 +263,7 @@ describe('생활 연결: 버릇 줄', () => {
     }
   })
 
-  it('기척은 정적을 깨지 않고 시청률·게이지를 바꾸지 않는다', async () => {
+  it('소리 나는 기척은 방송 정적을 메우지만, 출연자는 밋밋함에 계속 지루해지고 점수·게이지는 그대로다', async () => {
     const living = await open(setup())
     const plain = await open(
       setup({ performers: [REX, MO, PRIYA].map((def) => ({ ...def, mind: undefined })) }),
@@ -272,21 +272,43 @@ describe('생활 연결: 버릇 줄', () => {
     run(living, until)
     run(plain, until)
 
-    // 정적 1단계(실제 5초) 전에 기척이 났다. 재촉(L2)이 실제 4초 안에 버릇을 보장하므로 시드에 기대지 않는다
+    // 정적 1단계(실제 5초) 전에 소리 나는 기척이 났다. 재촉(L2)이 실제 4초 안에 버릇을 보장하고,
+    // fixture 버릇(코 파기·킥킥대기)은 모두 소리 나는 기척이라 시드에 기대지 않는다
     const silenceStep = seconds(5) - 1
     expect(stirsOf(living).some((event) => event.step < silenceStep)).toBe(true)
     expect(stirsOf(plain)).toEqual([])
-    // 그래도 정적 사건과 시청률, 게이지는 기척이 없는 방송과 같다
+    const firstSilence = (broadcast: Broadcast) =>
+      broadcast.events().find((event) => event.kind === 'silence')?.step ?? Number.POSITIVE_INFINITY
+    // 기척 없는 방송은 실제 5초에 정적 1단계, 기척 있는 방송은 그보다 늦다(버릇 소리가 정적을 메웠다)
+    expect(firstSilence(plain)).toBe(silenceStep)
+    expect(firstSilence(living)).toBeGreaterThan(silenceStep)
+    // 그래도 눈에 띄는 일은 없었으므로 지루함은 쌓인다(감정의 silence 상황 = 밋밋함)
+    const boredom = living.view().actors.find((actor) => actor.id === 'rex')?.emotions.find((e) => e.id === 'boredom')
+    expect(boredom?.value ?? 0).toBeGreaterThan(0)
+    // 기척 자체는 점수를 내지 않는다. 정적 손실이 줄어 시청자는 같거나 많다
+    expect(living.view().gauges).toEqual(plain.view().gauges)
+    expect(living.view().viewers).toBeGreaterThanOrEqual(plain.view().viewers)
+    expect(living.view().recentPhenomena).toEqual([])
+  })
+
+  it('소리 없는 기척(민망함)은 방송 정적을 메우지 않는다', async () => {
+    const silentStir: HabitDef = { ...NOSE_PICK, id: 'silentPick', stir: { kind: 'exposure', target: 'none' } }
+    const quietMind = mind({ habits: [silentStir] })
+    const quiet = await open(
+      setup({ performers: [REX, MO, PRIYA].map((def) => ({ ...def, mind: quietMind })) }),
+    )
+    const plain = await open(
+      setup({ performers: [REX, MO, PRIYA].map((def) => ({ ...def, mind: undefined })) }),
+    )
+    run(quiet, seconds(8))
+    run(plain, seconds(8))
+    expect(stirsOf(quiet).some((event) => event.kind === 'exposure')).toBe(true)
     const silences = (broadcast: Broadcast) =>
       broadcast
         .events()
         .filter((event) => event.kind === 'silence')
         .map(({ step, intensity }) => ({ step, intensity }))
-    expect(silences(living)).toEqual(silences(plain))
-    expect(silences(living)[0]).toEqual({ step: silenceStep, intensity: 1 })
-    expect(living.view().viewers).toBe(plain.view().viewers)
-    expect(living.view().gauges).toEqual(plain.view().gauges)
-    expect(living.view().recentPhenomena).toEqual([])
+    expect(silences(quiet)).toEqual(silences(plain))
   })
 
   it('응답 버릇 줄은 "<이름>의 <명사>에 <이름>이 …" 꼴이고 원인 연결이 이어진다', async () => {

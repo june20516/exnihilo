@@ -126,6 +126,9 @@ function isStrong(event: PhenomenonEvent): event is StrongEvent {
   return !isStir(event)
 }
 
+/** 방송 정적을 깨는 기척 종류. 소리 나는 것만(분노·민망함 기척은 소리가 아니다). 점수·게이지에는 여전히 들어가지 않는다 */
+const SILENCE_BREAKING_STIR_KINDS: ReadonlySet<PhenomenonEvent['kind']> = new Set(['noise', 'laughter'])
+
 /** 화면에 보이는 사고인가. gaze와 silence, 기척(강도 0)은 아니다. */
 function isPhenomenonShown(event: PhenomenonEvent): event is StrongEvent {
   return event.kind !== 'gaze' && event.kind !== 'silence' && isStrong(event)
@@ -176,7 +179,13 @@ export class Broadcast {
   private pendingEvents: PhenomenonEvent[] = []
   /** 이번 스텝에 생긴 이벤트. 광고로 멈춘 스텝은 재개 뒤에도 이어서 쌓는다. */
   private currentEvents: PhenomenonEvent[] = []
+  /** 방송이 조용한 스텝 수(정적 줄·시청률). 송출된 사고나 소리 나는 기척이 끊는다. */
   private silentSteps = 0
+  /**
+   * 눈에 띄는 일이 없는 스텝 수(출연자의 지루함). 송출된 사고만 끊는다.
+   * 버릇의 헛기침·킥킥거림은 방송의 정적은 메우지만 출연자를 덜 지루하게 하지는 않는다.
+   */
+  private lullSteps = 0
   /** 정적 단계별 임계 스텝(강도 오름차순). 쇼 배율에 따라 생성자에서 한 번 계산한다. */
   private readonly silenceThresholds: readonly { intensity: Intensity; steps: number }[]
   /** 관객석이 송출 화면에 연속으로 잡힌 스텝 수 */
@@ -548,6 +557,7 @@ export class Broadcast {
     }
     this.log.breakChains()
     this.silentSteps = 0
+    this.lullSteps = 0
     this.currentPhase = 'adBreak'
   }
 
@@ -931,7 +941,8 @@ export class Broadcast {
     if (!this.life.isTickStep(this.stepCount)) return
     const outputs = this.life.tick({
       step: this.stepCount,
-      silence: this.silenceLevel() > 0,
+      // 감정의 'silence' 상황은 방송 정적이 아니라 밋밋함(눈에 띄는 일 없음)이다
+      silence: this.lullSteps >= this.silenceThresholds[0].steps,
       members: this.lifeMembers(members),
       lastLineStep: this.lastNewLineStep,
     })
@@ -1017,8 +1028,17 @@ export class Broadcast {
     return Math.max(...multipliers)
   }
 
+  /** 송출된 소리 나는 기척(버릇의 헛기침·킥킥거림·흥얼거림 등). 방송에 소리가 났으니 데드에어가 아니다. */
+  private soundStirAired(): boolean {
+    return this.currentEvents.some(
+      (event) => isStir(event) && SILENCE_BREAKING_STIR_KINDS.has(event.kind) && this.isAired(event),
+    )
+  }
+
   private updateSilence(aired: StrongEvent[]): void {
-    this.silentSteps = aired.some(isPhenomenonShown) ? 0 : this.silentSteps + 1
+    const shown = aired.some(isPhenomenonShown)
+    this.lullSteps = shown ? 0 : this.lullSteps + 1
+    this.silentSteps = shown || this.soundStirAired() ? 0 : this.silentSteps + 1
     const reached = this.silenceThresholds.find(({ steps }) => this.silentSteps === steps)
     if (reached === undefined) return
     const { intensity } = reached

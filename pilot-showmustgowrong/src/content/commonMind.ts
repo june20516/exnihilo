@@ -6,8 +6,8 @@ import type {
   SensitivityDef,
 } from './types'
 
-/** 공용 정적 이유 이름표. 출연자가 정적 민감도의 양만 바꿀 때 그대로 쓴다. */
-export const SILENCE_BOREDOM_LABEL = { noun: '정적', clause: '긴 정적에 지친' } as const
+/** 공용 밋밋함 이유 이름표(감정의 silence 상황 = 눈에 띄는 일 없음. 버릇 소리는 방송 정적만 메운다). 출연자가 정적 민감도의 양만 바꿀 때 그대로 쓴다. */
+export const SILENCE_BOREDOM_LABEL = { noun: '밋밋한 진행', clause: '밋밋한 진행에 지친' } as const
 
 /** 모든 출연자가 갖는 공용 민감도. 출연자 mind는 이것을 펼친 뒤 withSensitivities로 덮어쓰거나 더한다. */
 export const COMMON_SENSITIVITIES: SensitivityDef[] = [

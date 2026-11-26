@@ -21,7 +21,7 @@ export const JUNE_MIND: MindDef = {
       situation: { kind: 'silence' },
       perShowMinute: 9,
       fadePerShowMinute: 20,
-      label: { noun: '정적', clause: '한참 조용한' },
+      label: { noun: '밋밋한 진행', clause: '한참 끼어들 틈만 보던' },
     },
     { emotion: 'anxiety', on: 'event', kind: 'noise', scope: 'perceived', amount: 12 },
     {

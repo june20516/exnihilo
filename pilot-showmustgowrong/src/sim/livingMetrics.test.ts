@@ -219,5 +219,6 @@ describe('결정론', () => {
     const second = await measureNoInput(3)
     expect(second).toEqual(first)
     expect(first.lineCount).toBeGreaterThan(0)
-  })
+    // 실제 180초 방송 두 판이라 혼자는 약 4초, 전체 suite 병렬 실행에서는 7초 넘게 걸린다
+  }, 30_000)
 })
