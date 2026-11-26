@@ -1073,7 +1073,8 @@ export class Broadcast {
       this.addLine({
         text: action.line,
         kind: 'incident',
-        depth: cause === null ? 1 : cause.depth + 1,
+        // 광고 전 원인이면 1부터 센다(Ruling 9)
+        depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
         eventId: null,
         position: emitter.position,
       })

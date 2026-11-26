@@ -548,6 +548,62 @@ describe('광고 경계와 줄 깊이(Ruling 9)', () => {
   })
 })
 
+describe('광고 경계와 줄 깊이(Ruling 9): 터짐', () => {
+  it('광고 전 사건이 원인인, 현상 없는 터짐 줄의 깊이는 1이다', async () => {
+    // 모는 자기를 겨눈 분노에 짜증이 쌓이고, 짜증 터짐은 현상을 내지 않는다
+    const angered: SensitivityDef = {
+      emotion: 'irritation',
+      on: 'event',
+      kind: 'anger',
+      scope: 'targetsSelf',
+      amount: 200,
+    }
+    const mo = performer('mo', '모', {
+      tags: ['guest'],
+      mind: mind({
+        sensitivities: [angered],
+        bursts: burstsOf({ small: QUIET_BURST, big: QUIET_BURST }),
+      }),
+    })
+    const broadcast = await open(setup({ performers: [REX, mo], bench: [performer('june', '준')] }))
+    const recorder = new LineRecorder()
+    const anger = runUntilEvent(
+      broadcast,
+      seconds(180),
+      (event) => event.kind === 'anger' && event.intensity === 1 && event.targetId === 'mo',
+      recorder,
+    )
+    expect(anger.depth).toBeGreaterThanOrEqual(1)
+    // 모가 인지하기 전에 재정비 없는 광고를 받는다(짜증과 터짐은 광고 뒤)
+    const adStep = broadcast.currentStep
+    broadcast.step([{ type: 'ad', effects: ['relief', 'setup'] }])
+    broadcast.resumeFromAd()
+    run(broadcast, seconds(20), recorder)
+
+    const burst = broadcast
+      .burstRecords()
+      .find((record) => record.step > adStep && record.actorId === 'mo')
+    expect(burst).toMatchObject({ emotion: 'irritation' })
+    if (burst === undefined) throw new Error('모의 터짐이 없습니다')
+    // 광고 뒤 터짐 전까지 모를 겨눈 새 분노가 없었다(터짐의 원인은 광고 전 분노다)
+    const newAnger = broadcast
+      .events()
+      .filter(
+        (event) =>
+          event.step > adStep &&
+          event.step < burst.step &&
+          event.kind === 'anger' &&
+          event.targetId === 'mo',
+      )
+    expect(newAnger).toEqual([])
+    const burstLine = recorder.lines.find(
+      (line) => line.step === burst.step && line.emotion === 'irritation',
+    )
+    expect(burstLine).toMatchObject({ kind: 'incident', eventId: null, depth: 1 })
+    expect(burstLine?.text).toMatch(/몸을 비튼다$/)
+  })
+})
+
 describe('이탈과 mind 없는 출연자', () => {
   it('이탈한 출연자를 겨눈 응답은 대상 없이 실행되고, 그 뒤 이탈자를 겨누는 사건과 줄이 없다', async () => {
     const lowRex: PerformerDef = { ...REX, tolerance: 'low' }
