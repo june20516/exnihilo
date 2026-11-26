@@ -79,6 +79,8 @@ export interface DirectiveDef {
   /** 이 지시를 하면 어떻게 되는지 한 줄(판단 카드에 보인다) */
   expect: string
   action: ActionDef
+  /** 지시받은 출연자 자신의 감정 변화 */
+  moodShifts?: MoodShift[]
 }
 
 export type Weight = 'light' | 'normal' | 'heavy'
@@ -101,6 +103,8 @@ export interface PerformerDef {
   misfire: 'overdo' | 'awkward' | 'never'
   onAirGaugePerSecond?: Partial<Record<GaugeKind, number>>
   hitViolenceMultiplier?: number
+  /** 없으면 감정·버릇·터짐이 없는 출연자다 */
+  mind?: MindDef
 }
 
 export interface StaffDirectiveDef {
@@ -178,4 +182,114 @@ export interface ShowDef {
   /** 이탈한 출연자가 걸어가는 바닥 위치 */
   exit: FloorPoint
   audienceZone: { minX: number; maxX: number; minZ: number; maxZ: number }
+}
+
+export const COMMON_EMOTIONS = ['irritation', 'excitement', 'anxiety', 'boredom'] as const
+export type CommonEmotionId = (typeof COMMON_EMOTIONS)[number]
+/** 공용 감정 id 또는 출연자 개인 감정 id */
+export type EmotionId = string
+
+export interface EmotionDef {
+  id: EmotionId
+  name: string
+  stageNames: [string, string]
+  /** 단계 진입 줄의 술어. 주어 다음에 붙는다. ['슬슬 짜증이 난다', '폭발 직전이다'] */
+  stageLines: [string, string]
+  /** 터짐 줄의 쌓임 문형. {reasons:을}·{reasons:에}·{reasons} 중 하나를 쓴다. 예: '{reasons:을} 참던' */
+  accumulate: string
+}
+
+export interface EmotionThresholds {
+  rise: [number, number]
+  fall: [number, number]
+  intense: number
+}
+
+export type Situation =
+  | { kind: 'offScreen' }
+  | { kind: 'onScreen' }
+  | { kind: 'silence' }
+  | { kind: 'nearTag'; tag: string; present: boolean }
+  | { kind: 'showTrait'; trait: string }
+
+/** 상황 이유를 로그에 적는 말. noun: 쌓임 줄의 명사('무시'), clause: 그 상황이 가장 클 때 주어 앞 관형절('한참 화면에 안 잡힌') */
+export interface ReasonLabel {
+  noun: string
+  clause: string
+}
+
+export type SensitivityDef =
+  | {
+      emotion: EmotionId
+      on: 'event'
+      kind: Exclude<PhenomenonKind, 'gaze' | 'silence'>
+      scope: 'perceived' | 'targetsSelf'
+      amount: number
+    }
+  | {
+      emotion: EmotionId
+      on: 'situation'
+      situation: Situation
+      perShowMinute: number
+      fadePerShowMinute?: number
+      label: ReasonLabel
+    }
+
+/** 터짐 행동. line·targetLine은 주어 뒤 술어, targetLine은 {target}·{target:을}·{target:와}·{target:에게} 토큰을 쓴다 */
+export interface BurstAction {
+  action: ActionDef
+  line: string
+  targetLine?: string
+  intenseLine?: string
+}
+
+export interface BurstDef {
+  small: BurstAction
+  big: BurstAction
+}
+
+export type HabitTarget = 'none' | 'nearestPerformer' | 'cause' | 'topContributor' | { tag: string }
+
+export type HabitCondition =
+  | { kind: 'onScreen' }
+  | { kind: 'offScreen' }
+  | { kind: 'nearTag'; tag: string; present: boolean }
+  | { kind: 'showTrait'; trait: string }
+  | { kind: 'stage'; emotion: EmotionId; atLeast: 1 | 2 }
+
+export interface HabitDef {
+  id: string
+  /** 주어 뒤 술어: '코를 판다' */
+  line: string
+  /** '{target:을} 보며 킥킥댄다' */
+  targetLine?: string
+  /** '코를 파던' */
+  recall: string
+  /** '코 파기' — 기척의 label, 쌓임·원인 받기 줄의 명사 */
+  noun: string
+  pose: Pose
+  move?: MoveDef
+  stir?: { kind: StirKind; target: HabitTarget }
+  weight: number
+  /** 가중치 × (1 + factor × 값/100) */
+  boost?: { emotion: EmotionId; factor: number }
+  /** 모두 만족해야 뽑힌다 */
+  when?: HabitCondition[]
+  /** 있으면 응답 버릇: 버릇 시계로는 뽑히지 않고, 나를 향한 이 종류 현상(기척 포함)을 받으면 chance로 응수한다 */
+  respondsTo?: { kinds: StirKind[]; chance: number }
+}
+
+export interface MoodShift {
+  emotion: EmotionId
+  amount: number
+}
+
+export interface MindDef {
+  /** 공용 4개 + 개인 0~2개. 공용은 emotions.ts의 COMMON_EMOTION_DEFS를 펼쳐 넣는다 */
+  emotions: EmotionDef[]
+  baseline?: Partial<Record<EmotionId, number>>
+  thresholds?: Partial<Record<EmotionId, EmotionThresholds>>
+  sensitivities: SensitivityDef[]
+  bursts: Record<EmotionId, BurstDef>
+  habits: HabitDef[]
 }

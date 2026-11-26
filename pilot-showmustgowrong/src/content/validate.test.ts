@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { COMMON_EMOTION_DEFS } from './emotions'
 import type {
   ActionDef,
+  BurstAction,
+  BurstDef,
+  EmotionDef,
   EquipmentDef,
+  HabitDef,
+  MindDef,
   PerformerDef,
   ReactionDef,
   ShowDef,
@@ -346,6 +352,234 @@ describe('validateShow', () => {
         ],
       }
       expect(validateShow(edge, performers, [makeStaff()], equipment)).toEqual([])
+    })
+  })
+
+  describe('감정·버릇(mind)', () => {
+    const burstAction: BurstAction = { action: idleAction, line: '소리를 지른다' }
+    const burst: BurstDef = { small: burstAction, big: burstAction }
+    const shy: EmotionDef = {
+      id: 'shyness',
+      name: '부끄러움',
+      stageNames: ['쑥스러움', '얼굴 빨개짐'],
+      stageLines: ['쑥스러워한다', '얼굴이 빨개진다'],
+      accumulate: '{reasons:에} 움츠린',
+    }
+    const habitClock: HabitDef = {
+      id: 'nose',
+      line: '코를 판다',
+      recall: '코를 파던',
+      noun: '코 파기',
+      pose: 'idle',
+      weight: 1,
+    }
+    const habitReply: HabitDef = {
+      id: 'laughBack',
+      line: '따라 웃는다',
+      targetLine: '{target:을} 보며 킥킥댄다',
+      recall: '킥킥대던',
+      noun: '킥킥',
+      pose: 'laugh',
+      weight: 1,
+      respondsTo: { kinds: ['laughter'], chance: 0.5 },
+    }
+
+    function makeMind(overrides: Partial<MindDef> = {}): MindDef {
+      const emotions = [...COMMON_EMOTION_DEFS, shy]
+      return {
+        emotions,
+        baseline: { irritation: 10 },
+        thresholds: { irritation: { rise: [40, 70], fall: [30, 50], intense: 90 } },
+        sensitivities: [
+          { emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 5 },
+          {
+            emotion: 'boredom',
+            on: 'situation',
+            situation: { kind: 'offScreen' },
+            perShowMinute: 2,
+            fadePerShowMinute: 1,
+            label: { noun: '무시', clause: '한참 화면에 안 잡힌' },
+          },
+        ],
+        bursts: Object.fromEntries(emotions.map((emotion) => [emotion.id, burst])),
+        habits: [habitClock, habitReply],
+        ...overrides,
+      }
+    }
+
+    const errorsFor = (mind: MindDef, extra: Partial<PerformerDef> = {}) =>
+      validateShow(
+        show,
+        [makePerformer('a', { mind, ...extra }), makePerformer('b')],
+        [makeStaff()],
+        equipment,
+      )
+
+    it('정상 mind(공용 4 + 개인 1, 버릇 2개)에는 오류가 없다', () => {
+      expect(errorsFor(makeMind())).toEqual([])
+    })
+
+    it('1. 공용 감정이 빠지거나 개인 감정이 3개이거나 id가 겹치면 오류', () => {
+      const withoutBoredom = makeMind({
+        emotions: [...COMMON_EMOTION_DEFS.filter((e) => e.id !== 'boredom'), shy],
+      })
+      expect(errorsFor(withoutBoredom).join('\n')).toContain('공용 감정 누락 오류: boredom (a)')
+
+      const personal = (id: string): EmotionDef => ({ ...shy, id })
+      const three = [...COMMON_EMOTION_DEFS, personal('p1'), personal('p2'), personal('p3')]
+      const tooMany = makeMind({
+        emotions: three,
+        bursts: Object.fromEntries(three.map((e) => [e.id, burst])),
+      })
+      expect(errorsFor(tooMany).join('\n')).toContain('개인 감정 개수 오류: 3 (a)')
+
+      const duplicated = makeMind({ emotions: [...COMMON_EMOTION_DEFS, shy, shy] })
+      expect(errorsFor(duplicated).join('\n')).toContain('중복 감정 오류: shyness (a)')
+    })
+
+    it('2. 터짐이 없는 감정과 없는 감정을 가리키는 참조는 오류', () => {
+      const noBurst = makeMind()
+      delete noBurst.bursts.shyness
+      expect(errorsFor(noBurst).join('\n')).toContain('터짐 누락 오류: shyness (a)')
+
+      const ghostBurst = makeMind({ bursts: { ...makeMind().bursts, ghost: burst } })
+      expect(errorsFor(ghostBurst).join('\n')).toContain('없는 감정 오류: bursts ghost (a)')
+
+      const ghostSensitivity = makeMind({
+        sensitivities: [{ emotion: 'ghost', on: 'event', kind: 'noise', scope: 'perceived', amount: 1 }],
+      })
+      expect(errorsFor(ghostSensitivity).join('\n')).toContain('없는 감정 오류: sensitivities ghost (a)')
+
+      expect(errorsFor(makeMind({ baseline: { ghost: 5 } })).join('\n')).toContain(
+        '없는 감정 오류: baseline ghost (a)',
+      )
+      expect(
+        errorsFor(makeMind({ thresholds: { ghost: { rise: [40, 70], fall: [30, 50], intense: 90 } } })).join('\n'),
+      ).toContain('없는 감정 오류: thresholds ghost (a)')
+      expect(
+        errorsFor(makeMind({ habits: [{ ...habitClock, boost: { emotion: 'ghost', factor: 1 } }] })).join('\n'),
+      ).toContain('없는 감정 오류: boost ghost (a)')
+      expect(
+        errorsFor(
+          makeMind({ habits: [{ ...habitClock, when: [{ kind: 'stage', emotion: 'ghost', atLeast: 1 }] }] }),
+        ).join('\n'),
+      ).toContain('없는 감정 오류: stage ghost (a)')
+    })
+
+    it('3. 문턱 순서와 범위가 틀리면 오류', () => {
+      const bad = (thresholds: MindDef['thresholds']) => errorsFor(makeMind({ thresholds })).join('\n')
+      const message = '문턱 오류:'
+      expect(bad({ irritation: { rise: [40, 70], fall: [0, 50], intense: 90 } })).toContain(message)
+      expect(bad({ irritation: { rise: [40, 70], fall: [40, 50], intense: 90 } })).toContain(message)
+      expect(bad({ irritation: { rise: [40, 101], fall: [30, 50], intense: 100 } })).toContain(message)
+      expect(bad({ irritation: { rise: [70, 70], fall: [30, 50], intense: 90 } })).toContain(message)
+      expect(bad({ irritation: { rise: [40, 70], fall: [50, 50], intense: 90 } })).toContain(message)
+      expect(bad({ irritation: { rise: [40, 70], fall: [30, 50], intense: 60 } })).toContain(message)
+      expect(bad({ irritation: { rise: [40, 70], fall: [30, 50], intense: 101 } })).toContain(message)
+      expect(bad({ irritation: { rise: [40, 70], fall: [30, 50], intense: 70 } })).toBe('')
+    })
+
+    it('4. 민감도 수치와 label이 틀리면 오류', () => {
+      const label = { noun: '무시', clause: '화면에 안 잡힌' }
+      const situation = { kind: 'offScreen' } as const
+      const sens = (extra: Record<string, unknown>) =>
+        errorsFor(
+          makeMind({
+            sensitivities: [
+              { emotion: 'boredom', on: 'situation', situation, perShowMinute: 1, label, ...extra },
+            ] as MindDef['sensitivities'],
+          }),
+        ).join('\n')
+      expect(
+        errorsFor(
+          makeMind({
+            sensitivities: [{ emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 0 }],
+          }),
+        ).join('\n'),
+      ).toContain('민감도 오류: amount 0 (a)')
+      expect(sens({ perShowMinute: 0 })).toContain('민감도 오류: perShowMinute 0 (a)')
+      expect(sens({ fadePerShowMinute: 0 })).toContain('민감도 오류: fadePerShowMinute 0 (a)')
+      expect(sens({ label: { noun: ' ', clause: '절' } })).toContain('민감도 오류: label (a)')
+      expect(sens({ label: { noun: '명사', clause: '' } })).toContain('민감도 오류: label (a)')
+    })
+
+    it('5. 버릇 규칙을 어기면 오류', () => {
+      const habits = (list: HabitDef[]) => errorsFor(makeMind({ habits: list })).join('\n')
+      expect(habits([])).toContain('버릇 개수 오류: 0 (a)')
+      expect(habits([{ ...habitClock, line: ' ' }])).toContain('빈 버릇 문구 오류: line nose (a)')
+      expect(habits([{ ...habitClock, recall: '' }])).toContain('빈 버릇 문구 오류: recall nose (a)')
+      expect(habits([{ ...habitClock, noun: '' }])).toContain('빈 버릇 문구 오류: noun nose (a)')
+      expect(habits([{ ...habitClock, weight: 0 }])).toContain('버릇 가중치 오류: 0 (nose, a)')
+      expect(habits([habitClock, { ...habitReply, respondsTo: { kinds: ['laughter'], chance: 0 } }])).toContain(
+        '응답 확률 오류: 0 (laughBack, a)',
+      )
+      expect(habits([habitClock, { ...habitReply, respondsTo: { kinds: ['laughter'], chance: 1.1 } }])).toContain(
+        '응답 확률 오류: 1.1 (laughBack, a)',
+      )
+      expect(habits([habitClock, { ...habitReply, respondsTo: { kinds: [], chance: 0.5 } }])).toContain(
+        '응답 종류 오류: laughBack (a)',
+      )
+      expect(
+        habits([{ ...habitClock, stir: { kind: 'noise', target: { tag: 'nope' } } }]),
+      ).toContain('알 수 없는 태그: nope (a)')
+      expect(
+        habits([{ ...habitClock, when: [{ kind: 'nearTag', tag: 'nope', present: true }] }]),
+      ).toContain('알 수 없는 태그: nope (a)')
+      expect(habits([habitClock, { ...habitClock }])).toContain('중복 버릇 id: nose (a)')
+      expect(habits([habitReply])).toContain('버릇 시계 버릇 누락 오류: (a)')
+      expect(
+        habits([{ ...habitClock, stir: { kind: 'noise', target: { tag: 'tag-b' } } }]),
+      ).toBe('')
+    })
+
+    it('6. 문형 토큰이 틀리면 오류', () => {
+      const withHabit = (overrides: Partial<HabitDef>) =>
+        errorsFor(makeMind({ habits: [habitClock, { ...habitReply, ...overrides }] })).join('\n')
+      expect(withHabit({ targetLine: '쳐다보며 킥킥댄다' })).toContain('문형 오류: targetLine에 {target 없음')
+      expect(withHabit({ targetLine: '{who}를 본다' })).toContain('문형 오류: 알 수 없는 토큰 {who}')
+      expect(withHabit({ targetLine: '{target:로} 본다' })).toContain('문형 오류: 알 수 없는 토큰 {target:로}')
+
+      const noReasons = makeMind({ emotions: [{ ...shy, accumulate: '참던' }, ...COMMON_EMOTION_DEFS] })
+      expect(errorsFor(noReasons).join('\n')).toContain('문형 오류: accumulate에 {reasons 없음')
+
+      const badBurst = makeMind()
+      badBurst.bursts.irritation = {
+        small: burstAction,
+        big: { ...burstAction, targetLine: '{target 를 때린다' },
+      }
+      expect(errorsFor(badBurst).join('\n')).toContain('문형 오류: 알 수 없는 토큰 {target 를 때린다')
+    })
+
+    it('7. 지시의 moodShifts는 amount가 0이 아니고 지시받는 출연자의 감정만 가리킨다', () => {
+      const directive = (moodShifts: { emotion: string; amount: number }[]) => ({
+        id: 'd1',
+        label: '지시',
+        expect: '예상',
+        action: idleAction,
+        moodShifts,
+      })
+      const errors = (moodShifts: { emotion: string; amount: number }[], mind?: MindDef) =>
+        errorsFor(mind ?? makeMind(), { directives: [directive(moodShifts)] }).join('\n')
+      expect(errors([{ emotion: 'shyness', amount: 5 }])).toBe('')
+      expect(errors([{ emotion: 'irritation', amount: 0 }])).toContain('감정 변화 오류: amount 0 (d1, a)')
+      expect(errors([{ emotion: 'ghost', amount: 5 }])).toContain('없는 감정 오류: moodShifts ghost (a)')
+
+      const noPersonal = makeMind({ emotions: [...COMMON_EMOTION_DEFS] })
+      delete noPersonal.bursts.shyness
+      expect(errors([{ emotion: 'shyness', amount: 5 }], noPersonal)).toContain(
+        '없는 감정 오류: moodShifts shyness (a)',
+      )
+
+      // mind 없는 출연자는 공용 4개 id로만 검사한다
+      const noMind = (moodShifts: { emotion: string; amount: number }[]) =>
+        validateShow(
+          show,
+          [makePerformer('a', { directives: [directive(moodShifts)] }), makePerformer('b')],
+          [makeStaff()],
+          equipment,
+        ).join('\n')
+      expect(noMind([{ emotion: 'boredom', amount: 5 }])).toBe('')
+      expect(noMind([{ emotion: 'shyness', amount: 5 }])).toContain('없는 감정 오류: moodShifts shyness (a)')
     })
   })
 })

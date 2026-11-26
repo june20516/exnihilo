@@ -1,8 +1,14 @@
 import type { FloorPoint } from '@/sim/vec'
 import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
+import { COMMON_EMOTIONS } from './types'
+import { TEMPLATE_TOKEN } from './templateTokens'
 import type {
   ActionDef,
+  EmotionThresholds,
   EquipmentDef,
+  HabitDef,
+  MindDef,
+  MoodShift,
   PerformerDef,
   ReactionDef,
   ShowDef,
@@ -35,6 +41,173 @@ function findDuplicates(ids: string[]): string[] {
 /** 바닥 평면(x 0~STUDIO_WIDTH, z 0~STUDIO_DEPTH) 안이면 true. 경계는 포함한다. */
 function isInsideStudio(point: FloorPoint): boolean {
   return point.x >= 0 && point.x <= STUDIO_WIDTH && point.z >= 0 && point.z <= STUDIO_DEPTH
+}
+
+const MAX_PERSONAL_EMOTIONS = 2
+const COMMON_EMOTION_IDS: readonly string[] = COMMON_EMOTIONS
+
+function isBlank(text: string): boolean {
+  return text.trim() === ''
+}
+
+function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean {
+  const pairsValid = [0, 1].every((i) => 0 < fall[i] && fall[i] < rise[i] && rise[i] <= 100)
+  return pairsValid && rise[0] < rise[1] && fall[0] < fall[1] && rise[1] <= intense && intense <= 100
+}
+
+/** 문형 문자열 안의 토큰 후보({로 시작해 }까지, 닫히지 않으면 끝까지) 중 TEMPLATE_TOKEN에 맞지 않는 것 */
+function findUnknownTokens(text: string): string[] {
+  const exactToken = new RegExp(`^${TEMPLATE_TOKEN.source}$`)
+  const candidates = text.match(/\{[^}]*(\}|$)/g) ?? []
+  return candidates.filter((candidate) => !exactToken.test(candidate))
+}
+
+/** 문형 오류를 모은다. required가 있으면 그 접두사(`{target`·`{reasons`)가 text에 반드시 있어야 한다. */
+function checkTemplate(text: string, field: string, required: '{target' | '{reasons' | null): string[] {
+  const errors: string[] = []
+  if (required !== null && !text.includes(required)) errors.push(`문형 오류: ${field}에 ${required} 없음`)
+  for (const token of findUnknownTokens(text)) errors.push(`문형 오류: 알 수 없는 토큰 ${token}`)
+  return errors
+}
+
+function checkEmotionSet(mind: MindDef, owner: string): string[] {
+  const errors: string[] = []
+  const ids = mind.emotions.map((emotion) => emotion.id)
+  for (const id of COMMON_EMOTIONS) {
+    if (!ids.includes(id)) errors.push(`공용 감정 누락 오류: ${id} (${owner})`)
+  }
+  const personalCount = ids.filter((id) => !COMMON_EMOTION_IDS.includes(id)).length
+  if (personalCount > MAX_PERSONAL_EMOTIONS) errors.push(`개인 감정 개수 오류: ${personalCount} (${owner})`)
+  for (const id of findDuplicates(ids)) errors.push(`중복 감정 오류: ${id} (${owner})`)
+  for (const emotion of mind.emotions) {
+    errors.push(...checkTemplate(emotion.accumulate, 'accumulate', '{reasons'))
+  }
+  return errors
+}
+
+function checkEmotionReferences(mind: MindDef, owner: string): string[] {
+  const errors: string[] = []
+  const known = new Set(mind.emotions.map((emotion) => emotion.id))
+  const checkRef = (where: string, id: string) => {
+    if (!known.has(id)) errors.push(`없는 감정 오류: ${where} ${id} (${owner})`)
+  }
+  for (const id of known) {
+    if (!(id in mind.bursts)) errors.push(`터짐 누락 오류: ${id} (${owner})`)
+  }
+  for (const id of Object.keys(mind.bursts)) checkRef('bursts', id)
+  for (const id of Object.keys(mind.baseline ?? {})) checkRef('baseline', id)
+  for (const id of Object.keys(mind.thresholds ?? {})) checkRef('thresholds', id)
+  for (const sensitivity of mind.sensitivities) checkRef('sensitivities', sensitivity.emotion)
+  for (const habit of mind.habits) {
+    if (habit.boost) checkRef('boost', habit.boost.emotion)
+    for (const condition of habit.when ?? []) {
+      if (condition.kind === 'stage') checkRef('stage', condition.emotion)
+    }
+  }
+  return errors
+}
+
+function checkThresholds(mind: MindDef, owner: string): string[] {
+  const errors: string[] = []
+  for (const [id, thresholds] of Object.entries(mind.thresholds ?? {})) {
+    if (thresholds && !isValidThresholds(thresholds)) errors.push(`문턱 오류: ${id} (${owner})`)
+  }
+  return errors
+}
+
+function checkSensitivities(mind: MindDef, owner: string): string[] {
+  const errors: string[] = []
+  for (const sensitivity of mind.sensitivities) {
+    if (sensitivity.on === 'event') {
+      if (sensitivity.amount === 0) errors.push(`민감도 오류: amount 0 (${owner})`)
+      continue
+    }
+    if (!(sensitivity.perShowMinute > 0)) {
+      errors.push(`민감도 오류: perShowMinute ${sensitivity.perShowMinute} (${owner})`)
+    }
+    const fade = sensitivity.fadePerShowMinute
+    if (fade !== undefined && !(fade > 0)) errors.push(`민감도 오류: fadePerShowMinute ${fade} (${owner})`)
+    if (isBlank(sensitivity.label.noun) || isBlank(sensitivity.label.clause)) {
+      errors.push(`민감도 오류: label (${owner})`)
+    }
+  }
+  return errors
+}
+
+function checkHabit(habit: HabitDef, knownTags: ReadonlySet<string>, owner: string): string[] {
+  const errors: string[] = []
+  for (const field of ['line', 'recall', 'noun'] as const) {
+    if (isBlank(habit[field])) errors.push(`빈 버릇 문구 오류: ${field} ${habit.id} (${owner})`)
+  }
+  if (!(habit.weight > 0)) errors.push(`버릇 가중치 오류: ${habit.weight} (${habit.id}, ${owner})`)
+  if (habit.respondsTo) {
+    const { chance, kinds } = habit.respondsTo
+    if (!(chance > 0 && chance <= 1)) errors.push(`응답 확률 오류: ${chance} (${habit.id}, ${owner})`)
+    if (kinds.length === 0) errors.push(`응답 종류 오류: ${habit.id} (${owner})`)
+  }
+  const stirTarget = habit.stir?.target
+  const tags: string[] = []
+  if (typeof stirTarget === 'object') tags.push(stirTarget.tag)
+  for (const condition of habit.when ?? []) {
+    if (condition.kind === 'nearTag') tags.push(condition.tag)
+  }
+  for (const tag of tags) {
+    if (!knownTags.has(tag)) errors.push(`알 수 없는 태그: ${tag} (${owner})`)
+  }
+  errors.push(...checkTemplate(habit.line, 'line', null), ...checkTemplate(habit.recall, 'recall', null))
+  if (habit.targetLine !== undefined) errors.push(...checkTemplate(habit.targetLine, 'targetLine', '{target'))
+  return errors
+}
+
+function checkHabits(mind: MindDef, knownTags: ReadonlySet<string>, owner: string): string[] {
+  const errors: string[] = []
+  if (mind.habits.length === 0) errors.push(`버릇 개수 오류: 0 (${owner})`)
+  for (const id of findDuplicates(mind.habits.map((habit) => habit.id))) {
+    errors.push(`중복 버릇 id: ${id} (${owner})`)
+  }
+  for (const habit of mind.habits) errors.push(...checkHabit(habit, knownTags, owner))
+  if (mind.habits.length > 0 && mind.habits.every((habit) => habit.respondsTo !== undefined)) {
+    errors.push(`버릇 시계 버릇 누락 오류: (${owner})`)
+  }
+  return errors
+}
+
+function checkBurstLines(mind: MindDef): string[] {
+  const errors: string[] = []
+  for (const { small, big } of Object.values(mind.bursts)) {
+    for (const burst of [small, big]) {
+      errors.push(...checkTemplate(burst.line, 'line', null))
+      if (burst.targetLine !== undefined) errors.push(...checkTemplate(burst.targetLine, 'targetLine', '{target'))
+      if (burst.intenseLine !== undefined) errors.push(...checkTemplate(burst.intenseLine, 'intenseLine', null))
+    }
+  }
+  return errors
+}
+
+function checkMind(mind: MindDef, knownTags: ReadonlySet<string>, owner: string): string[] {
+  return [
+    ...checkEmotionSet(mind, owner),
+    ...checkEmotionReferences(mind, owner),
+    ...checkThresholds(mind, owner),
+    ...checkSensitivities(mind, owner),
+    ...checkHabits(mind, knownTags, owner),
+    ...checkBurstLines(mind),
+  ]
+}
+
+/** 지시의 감정 변화. 지시받는 출연자의 감정만 가리킨다(mind가 없으면 공용 4개). */
+function checkMoodShifts(
+  moodShifts: MoodShift[],
+  directiveId: string,
+  emotionIds: ReadonlySet<string>,
+  owner: string,
+): string[] {
+  const errors: string[] = []
+  for (const shift of moodShifts) {
+    if (shift.amount === 0) errors.push(`감정 변화 오류: amount 0 (${directiveId}, ${owner})`)
+    if (!emotionIds.has(shift.emotion)) errors.push(`없는 감정 오류: moodShifts ${shift.emotion} (${owner})`)
+  }
+  return errors
 }
 
 /** 오류 메시지 목록을 돌려준다. 빈 배열이면 통과. performers는 무대와 대기 출연자를 합친 전체다. */
@@ -95,6 +268,11 @@ export function validateShow(
         errors.push(`빈 예상 결과: ${directive.id} (${performer.id})`)
       }
       for (const target of actionTargets(directive.action)) checkTarget(target, performer.id)
+    }
+    if (performer.mind) errors.push(...checkMind(performer.mind, knownTags, performer.id))
+    const emotionIds = new Set<string>(performer.mind?.emotions.map((e) => e.id) ?? COMMON_EMOTIONS)
+    for (const directive of performer.directives) {
+      errors.push(...checkMoodShifts(directive.moodShifts ?? [], directive.id, emotionIds, performer.id))
     }
   }
 
