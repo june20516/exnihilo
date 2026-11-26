@@ -41,7 +41,12 @@ export function validateTunables(defs: readonly TunableDef[]): string[] {
   for (const def of defs) {
     if (seen.has(def.key)) errors.push(`키가 중복됩니다: ${def.key}`)
     seen.add(def.key)
-    const numbers = { min: def.min, max: def.max, defaultValue: def.defaultValue, step: def.step }
+    const numbers = {
+      최솟값: def.min,
+      최댓값: def.max,
+      기본값: def.defaultValue,
+      간격: def.step,
+    }
     const nonFinite = Object.entries(numbers).filter(([, value]) => !Number.isFinite(value))
     for (const [name] of nonFinite) errors.push(`${name}은 유한한 수여야 합니다: ${def.key}`)
     // 유한하지 않은 값이 있으면 범위 비교가 무의미하므로 건너뛴다

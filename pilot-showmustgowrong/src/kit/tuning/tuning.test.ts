@@ -52,17 +52,16 @@ describe('validateTunables', () => {
     expect(errors[0]).toContain('A')
     expect(errors[0]).toContain('기본값')
   })
-  it('min, max, 기본값, step이 유한한 수가 아니면 오류', () => {
-    const cases: Partial<TunableDef>[] = [
-      { min: NaN },
-      { max: Infinity },
-      { defaultValue: NaN },
-      { step: Infinity },
+  it('최솟값, 최댓값, 기본값, 간격이 유한한 수가 아니면 해당 필드 오류', () => {
+    const cases: [Partial<TunableDef>, string][] = [
+      [{ key: 'MIN', min: NaN }, '최솟값'],
+      [{ key: 'MAX', max: Infinity }, '최댓값'],
+      [{ key: 'DEF', defaultValue: NaN }, '기본값'],
+      [{ key: 'STEP', step: Infinity }, '간격'],
     ]
-    for (const bad of cases) {
+    for (const [bad, fieldName] of cases) {
       const errors = validateTunables([def(bad)])
-      expect(errors.length).toBeGreaterThanOrEqual(1)
-      expect(errors.some((e) => e.includes('A') && e.includes('유한'))).toBe(true)
+      expect(errors).toEqual([`${fieldName}은 유한한 수여야 합니다: ${bad.key}`])
     }
   })
 })
