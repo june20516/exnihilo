@@ -34,7 +34,6 @@ import type {
   ActionDef,
   CameraDef,
   EmitDef,
-  EmotionId,
   EquipmentDef,
   GaugeKind,
   Intensity,
@@ -50,22 +49,10 @@ import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame, viewersTrendOf } from './broadcast'
 import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
-import {
-  describeEvent,
-  describeRootEvent,
-  entityName,
-  withObject,
-  withSubject,
-} from './describe'
+import { describeEvent, describeRootEvent, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
-import {
-  StudioLife,
-  type BurstRecord,
-  type HabitTargetResolved,
-  type LifeMember,
-  type LifeOutput,
-} from './life'
-import { burstLine, eventNoun, habitLine, stageLine } from './narration'
+import { StudioLife, type BurstRecord, type LifeMember } from './life'
+import { LifeActions, type ActionOptions, type ActionResult, type LineInput } from './lifeActions'
 import { EventLog, isStir, type Perceiver, type PhenomenonEvent } from './phenomena'
 import { PhysicsWorld, initPhysics, type Contact } from './physics'
 import {
@@ -79,7 +66,6 @@ import {
   type ChainLine,
   type EquipmentView,
   type InputRecord,
-  type LogKind,
   type LogLine,
   type Phase,
   type RecentPhenomenon,
@@ -129,21 +115,6 @@ const AUDIENCE_REACTIONS: ReactionDef[] = [
   },
 ]
 
-/** 로그 한 줄을 남길 때 넘기는 값 */
-interface LineInput {
-  text: string
-  kind: LogKind
-  depth: number
-  eventId: number | null
-  position: Vec3
-  emotion?: EmotionId | null
-}
-
-/** 현상을 내지 않고 행동만 할 때(버릇·터짐이 자기 줄을 따로 남긴다, L3) */
-interface ActionOptions {
-  silent?: boolean
-}
-
 function cloneInput(input: BroadcastInput): BroadcastInput {
   return input.type === 'ad' ? { type: 'ad', effects: [...input.effects] } : { ...input }
 }
@@ -180,6 +151,7 @@ export class Broadcast {
   private readonly director: Director
   /** 출연자의 감정과 버릇. 판정은 StudioLife가, 실행과 문장은 엔진이 맡는다. 난수는 따로 쓴다. */
   private readonly life: StudioLife
+  private readonly lifeActions: LifeActions
   private readonly log = new EventLog()
   private readonly cooldowns = new CooldownTable()
   private readonly cameras = new Map<string, CameraDef>()
@@ -210,6 +182,8 @@ export class Broadcast {
   /** 관객석이 송출 화면에 연속으로 잡힌 스텝 수 */
   private audienceOnAirSteps = 0
   private readonly lines: LogLine[] = []
+  /** 줄이 새로 생기거나 묶여 repeat가 오른 마지막 스텝. 재촉(L2)의 공백 기준이다(Ruling 8). */
+  private lastLineActivityStep = 0
   private deepestEvent: PhenomenonEvent | null = null
   private autoSlowmo: AutoSlowmo | null = null
   private readonly slowmoGauges = new Set<GaugeKind>()
@@ -237,6 +211,20 @@ export class Broadcast {
       audienceZone: setup.show.audienceZone,
       onAirCamera: () => this.onAirCamera(),
       onAirFramePoint: () => this.onAirFramePoint(),
+    })
+    this.lifeActions = new LifeActions({
+      cast: this.cast,
+      locator: this.locator,
+      log: this.log,
+      life: this.life,
+      names: this.names,
+      currentStep: () => this.stepCount,
+      emit: (partial) => this.emit(partial),
+      addLine: (line) => this.addLine(line),
+      move: (member, emitter, move, cause) => this.move(member, emitter, move, cause),
+      setMotionCause: (member, cause) => this.setMotionCause(member, cause),
+      executeAction: (member, action, cause, options) =>
+        this.executeAction(member, action, cause, options),
     })
 
     const [firstCamera] = setup.show.cameras
@@ -441,7 +429,8 @@ export class Broadcast {
     return {
       peakViewers: this.score.peakViewers,
       averageViewers: this.score.averageViewers(),
-      eventCount: this.log.since(0).length,
+      // 기척(강도 0)은 사건 수에 넣지 않는다.
+      eventCount: this.log.since(0).filter(isStrong).length,
       maxChainDepth: this.deepestEvent?.depth ?? 0,
       rootLine: this.rootLine(),
     }
@@ -934,9 +923,9 @@ export class Broadcast {
       step: this.stepCount,
       silence: this.silenceLevel() > 0,
       members: this.lifeMembers(members),
-      lastLineStep: this.lines.at(-1)?.step ?? 0,
+      lastLineStep: this.lastLineActivityStep,
     })
-    for (const output of outputs) this.executeLifeOutput(output)
+    for (const output of outputs) this.lifeActions.execute(output)
   }
 
   private perceiverOf(member: CastMember): Perceiver {
@@ -970,132 +959,6 @@ export class Broadcast {
       member.walkGoal !== null ||
       this.stepCount - member.poseStep < HABIT_REST_STEPS
     )
-  }
-
-  private executeLifeOutput(output: LifeOutput): void {
-    const member = this.cast.get(output.actorId)
-    // StudioLife는 활동 출연자에게만 출력하지만, 같은 틱 안의 변화에도 어긋나지 않게 확인한다.
-    if (member === undefined || member.walkedOut) return
-    switch (output.type) {
-      case 'stage':
-        this.addLine({
-          text: stageLine(
-            member.def.shortName,
-            this.life.recentHabit(member.def.id, this.stepCount),
-            output.emotion,
-            output.stage,
-          ),
-          kind: 'stage',
-          depth: 1,
-          eventId: null,
-          position: this.cast.position(member),
-          emotion: output.emotion.id,
-        })
-        return
-      case 'habit':
-        this.performHabit(member, output)
-        return
-      case 'burst':
-        this.performBurst(member, output)
-        return
-    }
-  }
-
-  /** 버릇: 포즈, 이동, 기척(강도 0)을 하고 버릇 줄 하나만 남긴다. 줄은 기척의 id를 가진다(L3). */
-  private performHabit(member: CastMember, output: Extract<LifeOutput, { type: 'habit' }>): void {
-    const { habit, cause } = output
-    member.pose = habit.pose
-    member.poseStep = this.stepCount
-    const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
-    if (habit.move !== undefined) this.move(member, emitter, habit.move, cause)
-    const target = this.habitTarget(output.target, emitter, cause)
-    const stir =
-      habit.stir === undefined
-        ? null
-        : this.emit({
-            kind: habit.stir.kind,
-            intensity: 0,
-            sourceId: member.def.id,
-            targetId: target.id,
-            ...emitter.position,
-            causeId: cause?.id ?? null,
-            label: habit.noun,
-          })
-    // 버릇으로 움직이다 부딪히면 그 충돌은 버릇에서 이어진다.
-    if (habit.move !== undefined) this.setMotionCause(member, stir ?? cause)
-    this.addLine({
-      text: habitLine(
-        member.def.shortName,
-        habit,
-        this.performerName(target.id, member.def.id),
-        this.receivedFrom(cause),
-      ),
-      kind: 'habit',
-      depth: stir?.depth ?? cause?.depth ?? 0,
-      eventId: stir?.id ?? null,
-      position: emitter.position,
-    })
-  }
-
-  /** 터짐: 행동을 묵음으로 실행하고 터짐 줄 하나만 남긴다. 줄은 첫 사건의 id를 가진다(L3). */
-  private performBurst(member: CastMember, output: Extract<LifeOutput, { type: 'burst' }>): void {
-    const { burst, cause, emotion } = output
-    const position = this.cast.position(member)
-    const { move } = burst.action
-    // 이동 대상은 행동 전 자리로 푼다(home 이동은 대상이 없다).
-    const moveTarget =
-      move === undefined || move.type === 'home'
-        ? NO_TARGET
-        : this.locator.resolveTarget(move.toward, { id: member.def.id, position }, cause)
-    const events = this.executeAction(member, burst.action, cause, { silent: true })
-    const [first] = events
-    const targetName =
-      this.performerName(first?.targetId ?? null, member.def.id) ??
-      this.performerName(moveTarget.id, member.def.id)
-    this.addLine({
-      text: burstLine(
-        member.def.shortName,
-        this.life.recentHabit(member.def.id, this.stepCount),
-        emotion,
-        burst,
-        targetName,
-        output.intense,
-        output.top,
-        (id) => entityName(id, this.names),
-      ),
-      kind: 'incident',
-      depth: first?.depth ?? (cause === null ? 1 : cause.depth + 1),
-      eventId: first?.id ?? null,
-      position,
-      emotion: emotion.id,
-    })
-  }
-
-  /** StudioLife가 푼 대상을 무대 위 대상으로. 이탈했거나 무대에 없는 출연자는 대상 없음이다. */
-  private habitTarget(
-    target: HabitTargetResolved,
-    emitter: Emitter,
-    cause: PhenomenonEvent | null,
-  ): Target {
-    if (target === null) return NO_TARGET
-    if (target.kind === 'actor') return this.locator.targetById(target.id)
-    return this.locator.resolveTarget(target.selector, emitter, cause)
-  }
-
-  /** 줄에 쓸 대상 출연자 이름. 출연자가 아니거나, 자기 자신이거나, 이탈했으면 null이다. */
-  private performerName(id: string | null, selfId: string): string | null {
-    if (id === null || id === selfId) return null
-    const member = this.cast.get(id)
-    if (member === undefined || member.walkedOut) return null
-    return member.def.shortName
-  }
-
-  /** 응답 버릇이 받은 현상(누구의 무엇). 원인이 없거나 출연자가 낸 것이 아니면 null이다. */
-  private receivedFrom(cause: PhenomenonEvent | null): { sourceName: string; noun: string } | null {
-    if (cause === null) return null
-    const source = this.cast.get(cause.sourceId)
-    if (source === undefined) return null
-    return { sourceName: source.def.shortName, noun: eventNoun(cause) }
   }
 
   // ── 송출, 정적, 슬로모션 ───────────────────────────────
@@ -1191,13 +1054,16 @@ export class Broadcast {
 
   // ── 행동 실행 ─────────────────────────────────────────
 
-  /** 행동을 실행하고 내뿜은 현상을 돌려준다. silent면 행동 줄과 현상 줄을 남기지 않는다(점수·연쇄는 그대로). */
+  /**
+   * 행동을 실행하고 내뿜은 현상과 이동 대상을 돌려준다.
+   * silent면 행동 줄과 현상 줄을 남기지 않는다(점수·연쇄는 그대로).
+   */
   private executeAction(
     member: CastMember,
     action: ActionDef,
     cause: PhenomenonEvent | null,
     options: ActionOptions = {},
-  ): PhenomenonEvent[] {
+  ): ActionResult {
     const silent = options.silent ?? false
     member.pose = action.pose
     member.poseStep = this.stepCount
@@ -1212,23 +1078,26 @@ export class Broadcast {
         position: emitter.position,
       })
     }
-    if (action.move !== undefined) this.move(member, emitter, action.move, cause)
-    return this.emitAll(emitter, action.emits, cause, silent)
+    const moveTarget =
+      action.move === undefined ? NO_TARGET : this.move(member, emitter, action.move, cause)
+    return { events: this.emitAll(emitter, action.emits, cause, silent), moveTarget }
   }
 
+  /** 이동하고 이동 대상을 돌려준다(home 이동은 대상 없음). */
   private move(
     member: CastMember,
     emitter: Emitter,
     move: MoveDef,
     cause: PhenomenonEvent | null,
-  ): void {
+  ): Target {
     const id = member.def.id
     if (move.type === 'home') {
       this.physics.teleport(id, member.home)
-      return
+      return NO_TARGET
     }
+    const resolved = this.locator.resolveTarget(move.toward, emitter, cause)
     // 대상까지의 바닥 방향 단위 벡터. 대상이 없거나 같은 자리면 수평으로 움직이지 않는다.
-    const target = this.locator.resolveTarget(move.toward, emitter, cause).position
+    const target = resolved.position
     if (move.type === 'walk') {
       member.walkGoal =
         target === null
@@ -1238,7 +1107,7 @@ export class Broadcast {
               speed: move.speed,
               untilStep: this.stepCount + WALK_MAX_STEPS,
             }
-      return
+      return resolved
     }
     const direction = target === null ? null : floorDirection(emitter.position, target)
     const horizontal = (sign: 1 | -1, speed: number): Vec3 => ({
@@ -1249,17 +1118,18 @@ export class Broadcast {
     switch (move.type) {
       case 'dash':
         if (direction !== null) this.physics.impulse(id, horizontal(1, move.speed))
-        return
+        break
       case 'leap':
         this.physics.impulse(id, {
           ...horizontal(1, move.speed),
           y: move.speed * LEAP_VERTICAL_RATIO,
         })
-        return
+        break
       case 'flee':
         if (direction !== null) this.physics.impulse(id, horizontal(-1, move.speed))
-        return
+        break
     }
+    return resolved
   }
 
   private emitAll(
@@ -1333,6 +1203,7 @@ export class Broadcast {
 
   /** 직전 줄과 text·kind가 같으면 새 줄 대신 직전 줄의 repeat를 올린다(step은 처음 것). */
   private addLine({ text, kind, depth, eventId, position, emotion = null }: LineInput): void {
+    this.lastLineActivityStep = this.stepCount
     const last = this.lines.at(-1)
     if (last !== undefined && last.text === text && last.kind === kind) {
       last.repeat += 1

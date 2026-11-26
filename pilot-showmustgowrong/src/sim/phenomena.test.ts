@@ -248,6 +248,17 @@ describe('EventLog 깊이와 뿌리', () => {
     expect(log.emit({ ...strong, intensity: 1, causeId: second.id }).depth).toBe(1)
   })
 
+  it('linkedCauseDepth는 이어지는 원인의 깊이이고, 원인이 없거나 광고로 끊겼으면 0이다', () => {
+    const log = new EventLog()
+    const root = log.emit(strong)
+    const second = log.emit({ ...strong, causeId: root.id })
+    expect(log.linkedCauseDepth(second.id)).toBe(2)
+    expect(log.linkedCauseDepth(null)).toBe(0)
+    expect(log.linkedCauseDepth(99)).toBe(0)
+    log.breakChains()
+    expect(log.linkedCauseDepth(second.id)).toBe(0)
+  })
+
   it('rootOf는 기척을 거쳐 원인 없는 사건까지 가고, 광고로 끊긴 연결은 넘지 않는다', () => {
     const log = new EventLog()
     const root = log.emit(strong)

@@ -92,6 +92,14 @@ export class EventLog {
     return event
   }
 
+  /**
+   * 지금 새 사건을 낸다면 이을 원인의 깊이. 원인이 없거나 광고로 끊겼으면 0이다.
+   * 현상을 내지 않는 줄(기척 없는 버릇, 사건 없는 터짐)도 emit과 같은 깊이 규칙을 따르게 한다.
+   */
+  linkedCauseDepth(causeId: number | null): number {
+    return this.linkedCause(causeId, this.nextId)?.depth ?? 0
+  }
+
   /** 이전 이벤트를 원인으로 한 emit은 depth를 1부터 다시 센다(광고용). causeId는 그대로 기록한다. */
   breakChains(): void {
     this.breakIds.push(this.nextId - 1)

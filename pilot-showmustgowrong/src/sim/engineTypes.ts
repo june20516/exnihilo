@@ -192,6 +192,7 @@ export interface ChainLine {
 export interface BroadcastSummary {
   peakViewers: number
   averageViewers: number
+  /** 강도 1 이상인 사건 수(기척 제외) */
   eventCount: number
   maxChainDepth: number
   /** 가장 깊은 연쇄(강도 1 이상)의 뿌리 사건이 남긴 로그 줄. 연쇄가 없으면 null */

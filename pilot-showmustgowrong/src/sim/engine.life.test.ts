@@ -243,6 +243,10 @@ describe('생활 연결: 버릇 줄', () => {
 
     const stirIds = new Set(stirsOf(broadcast).map((event) => event.id))
     expect(stirIds.size).toBeGreaterThan(0)
+    // 정산의 사건 수는 기척을 세지 않는다
+    expect(broadcast.summary().eventCount).toBe(
+      broadcast.events().filter((event) => !isStir(event)).length,
+    )
     const linesWithStir = recorder.lines.filter(
       (line) => line.eventId !== null && stirIds.has(line.eventId),
     )
@@ -374,6 +378,43 @@ describe('생활 연결: 단계와 터짐', () => {
 })
 
 describe('로그 묶기', () => {
+  it('같은 문장이라도 줄 종류가 다르면 묶지 않는다', async () => {
+    // 코너 반응의 행동 줄(incident)과 버릇 줄(habit)이 같은 문장으로 연달아 나온다
+    const pickNoseOnCue: ReactionDef = {
+      trigger: { kind: 'corner', tag: 'host' },
+      action: { pose: 'idle', emits: [], line: '렉스가 코를 판다' },
+    }
+    const rex = performer('rex', '렉스', {
+      tags: ['host'],
+      reactions: [pickNoseOnCue],
+      mind: mind({ sensitivities: [], habits: [NOSE_PICK] }),
+    })
+    const broadcast = await open(setup({ performers: [rex] }))
+    const recorder = new LineRecorder()
+    run(broadcast, seconds(5) - 2, recorder)
+
+    expect(recorder.lines.map(({ text, kind, repeat }) => ({ text, kind, repeat }))).toEqual([
+      { text: '렉스가 코를 판다', kind: 'incident', repeat: 1 },
+      { text: '렉스가 코를 판다', kind: 'habit', repeat: 1 },
+    ])
+  })
+
+  it('같은 줄이 묶이며 이어지는 동안은 공백으로 보지 않아 재촉하지 않는다(Ruling 8)', async () => {
+    // 관객 소음 줄이 3초마다 묶이므로, 버릇은 재촉(실제 4초 공백) 없이 버릇 시계(실제 10초 이상)로만 온다
+    const broadcast = await open(setup({ performers: [REX] }))
+    const inputs = new Map([[0, [{ type: 'switch', cameraId: 'audienceCam' } as BroadcastInput]]])
+    const recorder = new LineRecorder()
+    run(broadcast, seconds(25), recorder, inputs)
+
+    const [first, ...rest] = recorder.lines
+    expect(first).toMatchObject({ text: '관객 쪽에서 소리가 난다' })
+    expect(first.repeat).toBeGreaterThanOrEqual(3)
+    const firstStir = stirsOf(broadcast)[0]
+    expect(firstStir).toBeDefined()
+    expect(firstStir.step).toBeGreaterThanOrEqual(seconds(10))
+    expect(rest[0]).toMatchObject({ kind: 'habit', eventId: firstStir.id })
+  })
+
   it('같은 문장이 연달아 나오면 한 줄로 묶이고 repeat가 오른다', async () => {
     const broadcast = await open(
       setup({ performers: [performer('rex', '렉스'), performer('mo', '모')] }),
@@ -462,22 +503,75 @@ describe('광고와 생활', () => {
   })
 })
 
+describe('광고 경계와 줄 깊이(Ruling 9)', () => {
+  it('광고 전 사건에 광고 뒤 응답한 기척 없는 버릇 줄의 깊이는 0이다', async () => {
+    // 모는 자기를 겨눈 분노(렉스의 작은 터짐, 깊이 1 이상)에 기척 없이 토라진다
+    const sulk: HabitDef = {
+      id: 'sulk',
+      line: '토라진다',
+      recall: '토라졌던',
+      noun: '토라짐',
+      pose: 'idle',
+      weight: 1,
+      respondsTo: { kinds: ['anger'], chance: 1 },
+    }
+    const mo = performer('mo', '모', {
+      tags: ['guest'],
+      mind: mind({ habits: [NOSE_PICK, sulk] }),
+    })
+    const broadcast = await open(
+      setup({ performers: [REX, mo], bench: [performer('june', '준')] }),
+    )
+    const recorder = new LineRecorder()
+    const anger = runUntilEvent(
+      broadcast,
+      seconds(180),
+      (event) => event.kind === 'anger' && event.intensity === 1 && event.targetId === 'mo',
+      recorder,
+    )
+    expect(anger.depth).toBeGreaterThanOrEqual(1)
+    // 모가 인지하기 전에 재정비 없는 광고를 받는다(인지와 응답은 광고 뒤)
+    const adStep = broadcast.currentStep
+    broadcast.step([{ type: 'ad', effects: ['relief', 'setup'] }])
+    broadcast.resumeFromAd()
+    run(broadcast, seconds(2), recorder)
+
+    const sulkLine = recorder.lines.find(
+      (line) => line.step > adStep && line.text === '렉스의 화에 모가 토라진다',
+    )
+    expect(sulkLine).toMatchObject({ kind: 'habit', eventId: null, depth: 0 })
+    // 그 사이 광고 뒤의 분노가 모를 겨누지 않았다(응답의 원인은 광고 전 분노다)
+    const newAnger = broadcast
+      .events()
+      .filter((event) => event.step > adStep && event.kind === 'anger' && event.targetId === 'mo')
+    expect(newAnger.filter((event) => event.step < (sulkLine?.step ?? 0))).toEqual([])
+  })
+})
+
 describe('이탈과 mind 없는 출연자', () => {
-  it('이탈한 출연자를 향한 응답·터짐 대상은 없음으로 처리되고 오류가 없다', async () => {
+  it('이탈한 출연자를 겨눈 응답은 대상 없이 실행되고, 그 뒤 이탈자를 겨누는 사건과 줄이 없다', async () => {
     const lowRex: PerformerDef = { ...REX, tolerance: 'low' }
     const broadcast = await open(setup({ performers: [lowRex, MO, PRIYA] }))
     const recorder = new LineRecorder()
-    // 렉스가 누군가를 보며 킥킥댄 직후 이탈시켜, 응답할 대상이 사라지게 한다
+    // 렉스가 모를 보며 킥킥댄 직후 이탈시켜, 모가 응답할 대상(렉스)이 사라지게 한다
     runUntilEvent(
       broadcast,
       seconds(90),
-      (event) => event.sourceId === 'rex' && event.label === '킥킥거림' && event.targetId !== null,
+      (event) => event.sourceId === 'rex' && event.label === '킥킥거림' && event.targetId === 'mo',
       recorder,
     )
     const calm: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'calm' }
     const walkoutStep = broadcast.currentStep
     broadcast.step([calm, calm, calm])
     expect(() => run(broadcast, seconds(60), recorder)).not.toThrow()
+
+    // 모의 응답은 일어나지만 대상 없이 line 문장을 쓰고, 응답 기척도 대상이 없다
+    const response = recorder.lines.find(
+      (line) => line.step > walkoutStep && /^렉스의 킥킥거림에 모가 /.test(line.text),
+    )
+    expect(response).toMatchObject({ kind: 'habit', text: '렉스의 킥킥거림에 모가 눈을 흘긴다' })
+    const glare = broadcast.events().find((event) => event.id === response?.eventId)
+    expect(glare).toMatchObject({ sourceId: 'mo', label: '눈 흘김', targetId: null })
 
     const after = broadcast.events().filter((event) => event.step > walkoutStep)
     expect(after.some((event) => event.targetId === 'rex')).toBe(false)
