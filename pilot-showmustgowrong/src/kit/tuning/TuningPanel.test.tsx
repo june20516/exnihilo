@@ -47,11 +47,15 @@ function fakeStorage(initial?: string): FakeStorage {
   }
 }
 
-function renderPanel(storage: TuningStorage | null, rejected: RejectedOverride[] = []) {
+function renderPanel(
+  storage: TuningStorage | null,
+  rejected: RejectedOverride[] = [],
+  applied: Record<string, number> = APPLIED,
+) {
   return render(
     <TuningPanel
       defs={DEFS}
-      applied={APPLIED}
+      applied={applied}
       rejected={rejected}
       storage={storage}
       storageKey={KEY}
@@ -109,12 +113,72 @@ describe('TuningPanel', () => {
     expect(screen.getByText('다음 방송부터')).toBeTruthy()
   })
 
+  it('숫자 입력이 범위 안이면 저장하고 경고가 없다', () => {
+    const storage = fakeStorage()
+    renderPanel(storage)
+    fireEvent.change(screen.getByLabelText('지루함 증가 숫자'), { target: { value: '25' } })
+    expect(storage.setItem).toHaveBeenCalledWith(KEY, JSON.stringify({ boredom: 25 }))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('applied와 저장값이 다르면 열 때 저장값(다음 방송 값)이 편집값이다', () => {
+    const storage = fakeStorage()
+    const first = renderPanel(storage, [], { speed: 2, boredom: 10 })
+    expect((screen.getByLabelText('진행 속도 숫자') as HTMLInputElement).value).toBe('1')
+    expect(screen.getByText('다음 방송부터')).toBeTruthy()
+
+    // 기본값으로 되돌린 뒤 닫고 다시 열어도 1과 다음 방송부터가 유지된다
+    fireEvent.click(screen.getByRole('button', { name: '진행 속도 기본값' }))
+    first.unmount()
+    renderPanel(storage, [], { speed: 2, boredom: 10 })
+    expect((screen.getByLabelText('진행 속도 숫자') as HTMLInputElement).value).toBe('1')
+    expect(screen.getByText('다음 방송부터')).toBeTruthy()
+  })
+
+  it('저장소가 없으면 열 때부터 오류 문구를 보이고 다음 방송부터는 보이지 않는다', () => {
+    renderPanel(null, [], { speed: 2, boredom: 10 })
+    expect(screen.getByRole('alert').textContent).toContain('저장소를 쓸 수 없어')
+    fireEvent.change(screen.getByLabelText('지루함 증가 슬라이더'), { target: { value: '20' } })
+    expect(screen.getByRole('alert').textContent).toContain('저장소를 쓸 수 없어')
+    expect(screen.queryByText('다음 방송부터')).toBeNull()
+    expect(screen.getByText('바뀜')).toBeTruthy()
+  })
+
+  it('저장 오류와 복사 오류는 서로 지우지 않는다', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('거부됨'))
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const storage = fakeStorage()
+    storage.setItem = vi.fn(() => {
+      throw new Error('용량 초과')
+    })
+    renderPanel(storage)
+    fireEvent.change(screen.getByLabelText('진행 속도 슬라이더'), { target: { value: '2' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '바뀐 값 복사' }))
+    })
+    const texts = screen.getAllByRole('alert').map((node) => node.textContent)
+    expect(texts.some((text) => text?.includes('용량 초과'))).toBe(true)
+    expect(texts.some((text) => text?.includes('거부됨'))).toBe(true)
+  })
+
+  it('Esc를 누르면 닫는다', () => {
+    const onClose = vi.fn()
+    render(
+      <TuningPanel defs={DEFS} applied={APPLIED} rejected={[]} storage={null} storageKey={KEY} onClose={onClose} />,
+    )
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('숫자 입력이 범위 밖이면 저장하지 않고 경고를 보인다', () => {
     const storage = fakeStorage()
     renderPanel(storage)
     fireEvent.change(screen.getByLabelText('진행 속도 숫자'), { target: { value: '99' } })
     expect(storage.setItem).not.toHaveBeenCalled()
     expect(screen.getByText(/0.5 ~ 3 범위/)).toBeTruthy()
+    const input = screen.getByLabelText('진행 속도 숫자')
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.getAttribute('aria-describedby')).toBe('speed-warning')
   })
 
   it('rejected가 있으면 개수와 키·이유를 보인다', () => {
@@ -176,13 +240,29 @@ describe('useTuningHotkey', () => {
     expect(result.current[0]).toBe(false)
   })
 
-  it('입력창에 포커스가 있으면 무시한다', () => {
+  it.each([
+    ['input', () => document.createElement('input')],
+    ['textarea', () => document.createElement('textarea')],
+    [
+      'contentEditable',
+      () => {
+        const div = document.createElement('div')
+        div.setAttribute('contenteditable', 'true')
+        return div
+      },
+    ],
+  ])('%s에 포커스가 있으면 무시한다', (_name, create) => {
     const { result } = renderHook(() => useTuningHotkey())
-    const input = document.createElement('input')
-    document.body.appendChild(input)
-    input.focus()
-    act(() => void fireEvent.keyDown(input, { key: '`' }))
+    const element = create()
+    document.body.appendChild(element)
+    act(() => void fireEvent.keyDown(element, { key: '`' }))
     expect(result.current[0]).toBe(false)
-    input.remove()
+    element.remove()
+  })
+
+  it.each(['ctrlKey', 'metaKey', 'altKey'])('%s와 함께 누른 백틱은 무시한다', (modifier) => {
+    const { result } = renderHook(() => useTuningHotkey())
+    act(() => void fireEvent.keyDown(window, { key: '`', [modifier]: true }))
+    expect(result.current[0]).toBe(false)
   })
 })

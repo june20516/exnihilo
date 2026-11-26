@@ -28,19 +28,14 @@ const REJECT_REASON_TEXT: Record<RejectedOverride['reason'], string> = {
   notObject: '저장 형식이 잘못됨',
 }
 
-/** 처음 열 때의 편집값: applied 위에 저장된 바뀐 값을 덮는다 */
+/** 처음 열 때의 편집값: 기본값 위에 저장된 값을 덮은 것, 즉 다음 방송에 쓰일 값 */
 function initialValues(
   defs: readonly TunableDef[],
-  applied: TuningValues,
   storage: TuningStorage | null,
   storageKey: string,
 ): TuningValues {
   const { overrides } = readOverrides(storage, storageKey)
-  const saved = resolveTuning(defs, overrides).values
-  const changedKeys = Object.keys(changedValues(defs, saved))
-  const values: Record<string, number> = { ...applied }
-  for (const key of changedKeys) values[key] = saved[key]
-  return values
+  return resolveTuning(defs, overrides).values
 }
 
 function groupDefs(defs: readonly TunableDef[]): [group: string, items: TunableDef[]][] {
@@ -58,17 +53,20 @@ export function TuningPanel({
   onClose,
 }: TuningPanelProps): ReactElement {
   const [values, setValues] = useState<TuningValues>(() =>
-    initialValues(defs, applied, storage, storageKey),
+    initialValues(defs, storage, storageKey),
   )
   /** 숫자 입력 칸에 사용자가 치고 있는 글자 */
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
   const [warnings, setWarnings] = useState<Readonly<Record<string, string>>>({})
-  const [errorText, setErrorText] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [copyError, setCopyError] = useState<string | null>(null)
+  /** 저장소가 없으면 저장되지 않으므로, 열 때부터 계속 알린다 */
+  const storageMissing = storage === null
 
   function commit(next: TuningValues): void {
     setValues(next)
     if (storage === null) return
-    setErrorText(writeOverrides(storage, storageKey, changedValues(defs, next)))
+    setSaveError(writeOverrides(storage, storageKey, changedValues(defs, next)))
   }
 
   function clearInputState(keys: readonly string[]): void {
@@ -103,10 +101,10 @@ export function TuningPanel({
   async function copyChanged(): Promise<void> {
     try {
       await navigator.clipboard.writeText(JSON.stringify(changedValues(defs, values), null, 2))
-      setErrorText(null)
+      setCopyError(null)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      setErrorText(`복사하지 못했습니다: ${reason}`)
+      setCopyError(`복사하지 못했습니다: ${reason}`)
     }
   }
 
@@ -117,6 +115,9 @@ export function TuningPanel({
     <div
       role="dialog"
       aria-label="수치 조정"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
       className="fixed top-2 right-2 z-50 max-h-[calc(100vh-1rem)] w-80 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 p-3 text-sm text-slate-200 shadow-xl"
     >
       <div className="mb-2 flex items-center justify-between">
@@ -129,10 +130,17 @@ export function TuningPanel({
         바뀐 값은 새로고침 뒤 새 방송부터 반영됩니다.
       </p>
 
-      {errorText !== null && (
-        <p role="alert" className="mb-2 rounded bg-red-950 p-2 text-xs text-red-300">
-          {errorText}
-        </p>
+      {[
+        storageMissing ? '저장소를 쓸 수 없어 바꾼 값이 저장되지 않습니다.' : null,
+        saveError,
+        copyError,
+      ].map(
+        (text) =>
+          text !== null && (
+            <p key={text} role="alert" className="mb-2 rounded bg-red-950 p-2 text-xs text-red-300">
+              {text}
+            </p>
+          ),
       )}
 
       {rejected.length > 0 && (
@@ -163,7 +171,8 @@ export function TuningPanel({
           {items.map((def) => {
             const value = values[def.key] ?? def.defaultValue
             const isChanged = value !== def.defaultValue
-            const isPending = value !== applied[def.key]
+            // 저장되지 않으면 다음 방송 값이 아니다
+            const isPending = !storageMissing && value !== applied[def.key]
             const warning = warnings[def.key]
             return (
               <div key={def.key} className="mt-2">
@@ -193,6 +202,8 @@ export function TuningPanel({
                   <input
                     type="number"
                     aria-label={`${def.label} 숫자`}
+                    aria-invalid={warning !== undefined}
+                    aria-describedby={warning !== undefined ? `${def.key}-warning` : undefined}
                     min={def.min}
                     max={def.max}
                     step={def.step}
@@ -202,7 +213,11 @@ export function TuningPanel({
                   />
                   <span className="text-xs text-slate-400">{def.unit}</span>
                 </div>
-                {warning !== undefined && <p className="mt-1 text-xs text-red-300">{warning}</p>}
+                {warning !== undefined && (
+                  <p id={`${def.key}-warning`} role="alert" className="mt-1 text-xs text-red-300">
+                    {warning}
+                  </p>
+                )}
                 <button
                   type="button"
                   className={`${buttonClass} mt-1`}
