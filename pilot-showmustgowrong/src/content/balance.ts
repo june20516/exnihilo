@@ -223,3 +223,43 @@ export const SMALL_BURST_KEEP = 0.6
 export const RELIEF_AMOUNT = -40
 /** 후련함이 0으로 줄어드는 데 걸리는 극 중 초. 600초 = 토크쇼 실제 60초 */
 export const RELIEF_SHOW_SECONDS = 600
+
+// 스튜디오 생활(living spec 1.1, 3.3: 터짐, 버릇, 응답, 재촉)
+/** 터짐 확률을 판정하는 주기(몸 초). 감정 틱이 이 간격으로 돈다. */
+export const LIFE_TICK_BODY_SECONDS = 0.5
+/** 1단계 이상에서 작은 터짐 사이의 평균 극 중 초. 토크쇼(배율 10)에서 실제 12초에 한 번. */
+export const SMALL_BURST_MTB_SHOW_SECONDS = 120
+/** 같은 감정의 작은 터짐 뒤 다시 터지지 않는 극 중 초(실제 12초). */
+export const SMALL_BURST_COOLDOWN_SHOW_SECONDS = 120
+/** 2단계 진입 뒤 큰 터짐이 없는 유예(몸 초). living spec 1.1의 "2단계 진입 3초 안에는 터지지 않는다". */
+export const BIG_BURST_GRACE_BODY_SECONDS = 3
+/**
+ * 유예 뒤 큰 터짐까지의 평균 목표(몸 초). 틱 확률 p = 1 - e^(-0.5/8) ≈ 0.061이라
+ * 평균 대기 0.5/p ≈ 8.25초이고, living spec 1.1의 "유예 뒤 평균 8초 이상"을 만족한다.
+ */
+export const BIG_BURST_MTB_BODY_SECONDS = 8
+/** 같은 감정·같은 단계 진입 줄이 다시 나오지 않는 극 중 초(실제 12초). 문턱 근처 깜빡임을 줄 하나로 줄인다. */
+export const STAGE_LINE_COOLDOWN_SHOW_SECONDS = 120
+/** 이웃을 근처로 보는 반경(m). 이웃 home spot 간격(2.5~3m)만 근처다. */
+export const NEAR_RADIUS = 3.5
+/** 버릇 간격(극 중 초). 토크쇼(배율 10)의 실제 10~20초이며 living spec 1.1 목표 그대로다. */
+export const HABIT_INTERVAL_SHOW_SECONDS = { min: 100, max: 200 }
+/** 지루함 100일 때 버릇 간격이 줄어드는 비율. 간격 x (1 - 0.4 x 지루함/100)이라 실제 6~12초가 된다. */
+export const HABIT_BOREDOM_SHORTEN = 0.4
+/** 같은 버릇이 다시 뽑히지 않는 극 중 초(실제 30초). */
+export const HABIT_COOLDOWN_SHOW_SECONDS = 300
+/** 이동·넘어짐 같은 행동 뒤 버릇과 터짐을 미루는 몸 초(L5). 엔진이 쓴다. */
+export const HABIT_REST_AFTER_ACTION_BODY_SECONDS = 2
+/** 응답 버릇을 한 뒤 다시 응답하지 않는 극 중 초(실제 6초). 주고받기가 끝나게 한다. */
+export const RESPONSE_COOLDOWN_SHOW_SECONDS = 60
+/**
+ * 로그에 줄이 이만큼(극 중 초) 없으면 재촉한다(L2). 토크쇼 실제 4초이고,
+ * 틱 0.5초를 더해도 공백이 living spec 1.1의 실제 5초를 넘지 않는다.
+ */
+export const LOG_NUDGE_SHOW_SECONDS = 40
+/** 최근 버릇 회상(living spec 5.2-2)이 붙는 범위(극 중 초, 실제 12초). */
+export const RECALL_SHOW_SECONDS = 120
+/** 터짐 출력과 감정 보기에 담는 이유의 최대 개수 */
+export const LIFE_TOP_REASON_COUNT = 3
+/** 감정·버릇 난수를 기존 난수와 분리하는 salt('life'의 ASCII). */
+export const LIFE_RNG_SALT = 0x6c696665

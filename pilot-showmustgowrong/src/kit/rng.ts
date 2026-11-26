@@ -34,3 +34,11 @@ export function shuffle<T>(rng: RngState, items: readonly T[]): [T[], RngState] 
   }
   return [result, current]
 }
+
+/** seed에서 salt마다 서로 다른 독립 난수 흐름의 seed를 만든다. 같은 입력이면 같은 값이다. */
+export function forkSeed(seed: number, salt: number): number {
+  let hash = (seed >>> 0) ^ Math.imul((salt >>> 0) + 0x9e3779b9, 0x85ebca6b)
+  hash = Math.imul(hash ^ (hash >>> 16), 0x85ebca6b)
+  hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2ae35)
+  return (hash ^ (hash >>> 16)) >>> 0
+}
