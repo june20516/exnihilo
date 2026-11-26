@@ -87,6 +87,12 @@ describe('measureBroadcast', () => {
     expect(metrics.silenceLineRatio).toBe(0.5)
   })
 
+  it('묶인 줄의 공백은 처음 스텝부터 잰다(뒤 반복이 공백을 메우지 않는다)', () => {
+    // 1초에 처음 찍히고 이후 몇 번 묶였더라도 줄의 step은 1초다. 다음 줄(7초)까지 6초 공백으로 본다
+    const lines = [line(seconds(1), 'habit', 4), line(seconds(7))]
+    expect(measureBroadcast(lines, [], summary(0), false, seconds(8)).maxGapRealSeconds).toBe(6)
+  })
+
   it('정적 줄 비율은 silence 줄 수 / 전체 줄 수다', () => {
     const lines = [line(0, 'silence'), line(1), line(2, 'incident'), line(3, 'stage'), line(4, 'staff')]
     expect(measureBroadcast(lines, [], summary(0), false, 5).silenceLineRatio).toBe(0.2)

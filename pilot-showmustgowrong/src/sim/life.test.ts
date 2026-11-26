@@ -351,17 +351,28 @@ describe('터짐', () => {
   })
 
   it('터짐의 cause는 가장 큰 이유가 사건이면 그 사건, 상황이면 null이다', () => {
-    const event = makeEvent()
-    // 사건 이유는 실제 18초 뒤 사라지므로 큰 터짐이 그 안에 나는 시드를 쓴다(시드 9는 Task 10 수치에서 늦게 터진다)
-    const eventLife = stage2Life(1, 85, {
+    // 사건 이유는 실제 18초 뒤 사라지므로, 틱마다 새 소음을 인지시켜 큰 터짐 판정 내내 사건 이유가 살아 있게 한다
+    const eventLife = stage2Life(9, 85, {
       sensitivities: [
         { emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 5 },
       ],
     })
-    eventLife.perceive([event], [perceiver('a')], 0)
-    const byEvent = firstBig(eventLife)
-    expect(byEvent.output.cause).toEqual(event)
-    expect(byEvent.output.top[0].source).toEqual({ type: 'event', event })
+    const perceived: PhenomenonEvent[] = []
+    let byEvent: BurstOutput | undefined
+    for (let step = 0; step <= REAL_SECONDS_STEPS(900) && !byEvent; step += TICK_STEPS) {
+      const event = makeEvent({ id: perceived.length + 1, step })
+      perceived.push(event)
+      eventLife.perceive([event], [perceiver('a')], step)
+      const outputs = eventLife.tick({ step, silence: false, members: [member('a')], lastLineStep: step })
+      byEvent = outputs.find(
+        (output): output is BurstOutput => output.type === 'burst' && output.size === 'big',
+      )
+    }
+    if (!byEvent) throw new Error('큰 터짐이 나오지 않았습니다')
+    const topSource = byEvent.top[0].source
+    if (topSource.type !== 'event') throw new Error(`가장 큰 이유가 사건이 아닙니다: ${topSource.type}`)
+    expect(byEvent.cause).toEqual(topSource.event)
+    expect(perceived).toContainEqual(topSource.event)
 
     const situationLife = stage2Life(9, 85, {
       sensitivities: [
