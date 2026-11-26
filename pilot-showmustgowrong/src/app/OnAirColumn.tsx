@@ -120,6 +120,7 @@ export function OnAirColumn({
               data-on-air={isOnAir}
               aria-label={`${cameraName(show.cameras, camera)}${isOnAir ? ' 송출 중' : '로 전환'}`}
               aria-current={isOnAir}
+              aria-disabled={isOnAir}
               onClick={isOnAir ? undefined : () => onSwitch(camera.id)}
               onPointerDown={aimHandler(camera)}
               className={`flex min-w-0 flex-1 flex-col gap-1 rounded-lg border-2 bg-slate-900 p-0.5 text-left ${

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
 import { Broadcast, type BroadcastView } from '@/sim/engine'
@@ -12,16 +12,18 @@ const CAMERA_IDS = TALK_SHOW.cameras.map((camera) => camera.id)
 
 describe('OnAirColumn 카메라 칸', () => {
   let baseView: BroadcastView
+  let getContextSpy: { mockRestore(): void }
 
   beforeAll(async () => {
     // 캔버스 2D 컨텍스트가 없는 jsdom에서도 그리기를 건너뛰게 한다.
-    HTMLCanvasElement.prototype.getContext = vi.fn(() => null) as never
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed: 1 })
     baseView = broadcast.view()
     broadcast.dispose()
   })
 
   afterEach(cleanup)
+  afterAll(() => getContextSpy.mockRestore())
 
   function renderColumn(
     onAirCameraId: string,
@@ -62,6 +64,11 @@ describe('OnAirColumn 카메라 칸', () => {
     const onSwitch = vi.fn()
     renderColumn('close', { onSwitch })
     expect(slotOrder().map((slot) => slot.dataset.onAir)).toEqual(['false', 'true', 'false'])
+    expect(slotOrder().map((slot) => slot.getAttribute('aria-disabled'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ])
     fireEvent.click(screen.getByTestId('switcher-slot-close'))
     expect(onSwitch).not.toHaveBeenCalled()
     fireEvent.click(screen.getByTestId('switcher-slot-audienceCam'))
