@@ -3,7 +3,7 @@ import {
   FATIGUE_MISFIRE_PER_POINT,
   MISFIRE_CAP,
   MISFIRE_MAX_INTENSITY,
-  OVERDO_SPEED_MULTIPLIER,
+  OVERDO_MULTIPLIER,
   STAFF_FATIGUE_MISFIRE_PER_POINT,
   TOLERANCE_COUNT,
 } from '@/content/balance'
@@ -11,6 +11,7 @@ import type {
   ActionDef,
   EmitDef,
   Intensity,
+  MoodShift,
   PerformerDef,
   StaffDef,
   StaffDirectiveDef,
@@ -18,7 +19,7 @@ import type {
 import { nextFloat, type RngState } from '@/kit/rng'
 
 export type DirectiveOutcome =
-  | { kind: 'executed'; action: ActionDef; misfired: boolean }
+  | { kind: 'executed'; action: ActionDef; misfired: boolean; moodShifts: MoodShift[] }
   | { kind: 'walkout' }
 
 export type AdEffect = 'relief' | 'reset' | 'setup'
@@ -60,9 +61,15 @@ function misfireAction(action: ActionDef, misfire: 'overdo' | 'awkward'): Action
   }
   return {
     ...action,
-    ...(action.move && { move: { ...action.move, speed: action.move.speed * OVERDO_SPEED_MULTIPLIER } }),
+    ...(action.move && { move: { ...action.move, speed: action.move.speed * OVERDO_MULTIPLIER } }),
     emits: shiftEmits(action.emits, 1),
   }
+}
+
+/** overdo면 양이 커지고 awkward면 부호가 반대다. 엇나감 판정을 그대로 따르므로 난수를 쓰지 않는다. */
+function misfireMoodShifts(shifts: readonly MoodShift[], misfire: 'overdo' | 'awkward'): MoodShift[] {
+  const factor = misfire === 'overdo' ? OVERDO_MULTIPLIER : -1
+  return shifts.map((shift) => ({ ...shift, amount: shift.amount * factor }))
 }
 
 /** PD 개입의 상태(내성, 피로, 광고)와 판정. 지시 결과의 실행은 엔진이 맡는다. */
@@ -141,15 +148,19 @@ export class Director {
       this.walkedOut.add(performerId)
       return [{ kind: 'walkout' }, rng]
     }
+    const moodShifts = (directive.moodShifts ?? []).map((shift) => ({ ...shift }))
     if (performer.misfire === 'never') {
-      return [{ kind: 'executed', action: directive.action, misfired: false }, rng]
+      return [{ kind: 'executed', action: directive.action, misfired: false, moodShifts }, rng]
     }
 
     const chance = misfireChance(fatigueBefore, FATIGUE_MISFIRE_PER_POINT)
     const [misfired, next] = rollMisfire(chance, rng)
-    if (!misfired) return [{ kind: 'executed', action: directive.action, misfired: false }, next]
+    if (!misfired) {
+      return [{ kind: 'executed', action: directive.action, misfired: false, moodShifts }, next]
+    }
     const action = misfireAction(directive.action, performer.misfire)
-    return [{ kind: 'executed', action, misfired: true }, next]
+    const shifts = misfireMoodShifts(moodShifts, performer.misfire)
+    return [{ kind: 'executed', action, misfired: true, moodShifts: shifts }, next]
   }
 
   directStaff(

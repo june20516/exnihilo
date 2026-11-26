@@ -659,6 +659,91 @@ describe('이탈과 mind 없는 출연자', () => {
   })
 })
 
+describe('지시의 감정 변화', () => {
+  const VENT: DirectiveDef = {
+    id: 'vent',
+    label: '참아',
+    expect: '짜증이 쌓인다',
+    action: { pose: 'idle', emits: [] },
+    moodShifts: [{ emotion: 'irritation', amount: 40 }],
+  }
+  const ventLine = (name: string) => new RegExp(`^PD의 '참아'에 ${name}[이가] `)
+  const irritationOf = (broadcast: Broadcast, actorId: string) =>
+    broadcast
+      .view()
+      .actors.find((actor) => actor.id === actorId)
+      ?.emotions?.find((emotion) => emotion.id === 'irritation')
+  const withVent = (id: string, name: string, bursts: BurstDef) =>
+    performer(id, name, {
+      tags: [id === 'rex' ? 'host' : 'guest'],
+      directives: [VENT],
+      mind: mind({ sensitivities: [], bursts: burstsOf(bursts) }),
+    })
+
+  it('지시 뒤 그 출연자 감정에 지시 이유가 생기고 topReasons의 출처가 지시다', async () => {
+    const broadcast = await open(setup({ performers: [withVent('rex', '렉스', { small: QUIET_BURST, big: QUIET_BURST }), MO] }))
+    run(broadcast, 5)
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'vent' }])
+
+    const rex = irritationOf(broadcast, 'rex')
+    expect(rex?.reasons[0]).toMatchObject({
+      emotion: 'irritation',
+      source: { type: 'directive', label: '참아' },
+    })
+    expect(rex?.reasons[0].amount).toBeGreaterThan(0)
+    // 지시받지 않은 출연자에게는 이유가 없다(L8)
+    expect(irritationOf(broadcast, 'mo')?.reasons).toEqual([])
+  })
+
+  it('이탈 지시는 실행되지 않아 감정 변화를 더하지 않고, 이탈 전 두 번의 지시만 이유가 된다', async () => {
+    const low = { ...withVent('rex', '렉스', { small: QUIET_BURST, big: QUIET_BURST }), tolerance: 'low' as const }
+    const broadcast = await open(setup({ performers: [low, MO] }))
+    const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
+    broadcast.step([direct])
+    broadcast.step([direct])
+    const reasons = irritationOf(broadcast, 'rex')?.reasons ?? []
+    expect(reasons.filter((reason) => reason.source.type === 'directive')).toHaveLength(2)
+    // 세 번째 지시는 이탈이라 출연자가 무대를 떠난다(이유를 더할 대상도 없다)
+    broadcast.step([direct])
+    expect(broadcast.view().actors.find((actor) => actor.id === 'rex')?.walkedOut).toBe(true)
+    expect(irritationOf(broadcast, 'rex')).toBeUndefined()
+  })
+
+  it('지시 이유가 가장 큰 터짐 줄은 "PD의 \'<지시>\'에 <이름>이 …" 꼴이고 깊이 1이다', async () => {
+    const broadcast = await open(
+      setup({ performers: [withVent('rex', '렉스', { small: QUIET_BURST, big: QUIET_BURST }), MO] }),
+    )
+    const recorder = new LineRecorder()
+    const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
+    // 지시를 거듭해 짜증을 터짐 문턱 위로 올린다
+    for (let i = 0; i < 6; i++) run(broadcast, 3, recorder, new Map([[broadcast.currentStep, [direct]]]))
+    run(broadcast, seconds(20), recorder)
+
+    const burstLine = recorder.lines.find(
+      (line) => line.emotion === 'irritation' && ventLine('렉스').test(line.text),
+    )
+    expect(burstLine).toBeDefined()
+    expect(burstLine).toMatchObject({ kind: 'incident', eventId: null, depth: 1 })
+  })
+
+  it('감정 변화 지시와 엇나감이 섞인 방송을 replay하면 같은 결과다', async () => {
+    const rex = {
+      ...withVent('rex', '렉스', { small: SMALL_BURST, big: BIG_BURST }),
+      misfire: 'overdo' as const,
+    }
+    const broadcastSetup = setup({ performers: [rex, MO] })
+    const broadcast = await open(broadcastSetup)
+    const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
+    const inputs = new Map<number, BroadcastInput[]>(
+      [100, 400, 700, 1000, 1300, 1600, 1900].map((step) => [step, [direct]]),
+    )
+    const steps = 3000
+    run(broadcast, steps, undefined, inputs)
+    const replayed = await replay(broadcastSetup, broadcast.inputLog(), steps)
+    expect(replayed).toEqual(broadcast.view())
+  })
+})
+
 describe('결정론', () => {
   it('mind가 섞인 방송을 입력 기록으로 replay하면 view가 같다', async () => {
     const broadcastSetup = setup({ bench: [performer('june', '준', { mind: mind() })] })

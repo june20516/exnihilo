@@ -167,8 +167,8 @@ export const STAFF_RECOVERY: StaffRecovery = { holdSeconds: 1.5, returnSeconds: 
 export const MISFIRE_CAP = 0.6
 /** 엇나감으로 올라갈 수 있는 emit 강도 상한 */
 export const MISFIRE_MAX_INTENSITY = 3
-/** overdo 엇나감이 move 속도에 곱하는 배율 */
-export const OVERDO_SPEED_MULTIPLIER = 1.5
+/** overdo 엇나감이 move 속도와 지시의 감정 변화 양에 곱하는 배율 */
+export const OVERDO_MULTIPLIER = 1.5
 export const INTERVENTION_SPEED = 0.2
 /** 개입 선택 시간(실제 초). 대상 카드를 읽고 고를 시간이다(spec 8.2). */
 export const INTERVENTION_REAL_SECONDS = 10

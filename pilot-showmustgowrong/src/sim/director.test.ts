@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { FATIGUE_MISFIRE_PER_POINT, STAFF_FATIGUE_MISFIRE_PER_POINT } from '@/content/balance'
-import type { ActionDef, PerformerDef, StaffDef } from '@/content/types'
+import {
+  FATIGUE_MISFIRE_PER_POINT,
+  OVERDO_MULTIPLIER,
+  STAFF_FATIGUE_MISFIRE_PER_POINT,
+} from '@/content/balance'
+import type { ActionDef, MoodShift, PerformerDef, StaffDef } from '@/content/types'
 import { createRng, type RngState } from '@/kit/rng'
 import { Director, type DirectiveOutcome } from './director'
 
@@ -13,6 +17,11 @@ const SHOUT: ActionDef = {
     { kind: 'laughter', intensity: 'causePlusOne', target: 'cause' },
   ],
 }
+
+const VENT_SHIFTS: MoodShift[] = [
+  { emotion: 'irritation', amount: -4 },
+  { emotion: 'excitement', amount: 2 },
+]
 
 function performer(
   id: string,
@@ -30,7 +39,10 @@ function performer(
     weight: 'normal',
     tags: [],
     reactions: [],
-    directives: [{ id: 'shout', label: '소리쳐', expect: '분노 2', action: SHOUT }],
+    directives: [
+      { id: 'shout', label: '소리쳐', expect: '분노 2', action: SHOUT },
+      { id: 'vent', label: '털어놔', expect: '짜증 -4', action: SHOUT, moodShifts: VENT_SHIFTS },
+    ],
     misfire,
   }
 }
@@ -97,7 +109,7 @@ describe('Director 출연자 지시', () => {
     // seed 7 첫 난수 0.01은 확률이 있었다면 엇나갔을 값이다
     const rng = createRng(7)
     const [outcome, after] = director.directPerformer('over', 'shout', rng)
-    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT })
+    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT, moodShifts: [] })
     expect(after).toEqual(rng)
   })
 
@@ -108,6 +120,49 @@ describe('Director 출연자 지시', () => {
     const [outcome, afterSecond] = director.directPerformer('over', 'shout', afterFirst)
     expect(outcome).toMatchObject({ kind: 'executed', misfired: true })
     expect(afterSecond.cursor).toBe(afterFirst.cursor + 1)
+  })
+
+  /** 이전 지시 priorCount번(shout) 뒤 vent 지시를 내린다. 같은 시드면 엇나감 판정도 같다. */
+  function ventAfter(id: string, priorCount: number, seed: number) {
+    const director = makeDirector()
+    const prior = direct(director, id, priorCount, createRng(seed))
+    return director.directPerformer(id, 'vent', prior.rng)
+  }
+
+  it('감정 변화는 엇나가지 않으면 그대로, overdo면 1.5배, awkward면 부호가 반대다', () => {
+    const [plain] = ventAfter('over', 1, 1)
+    expect(plain).toMatchObject({ kind: 'executed', misfired: false, moodShifts: VENT_SHIFTS })
+
+    const [overdone] = ventAfter('over', 5, MISFIRE_SEED)
+    expect(overdone).toMatchObject({ kind: 'executed', misfired: true })
+    expect(overdone.kind === 'executed' && overdone.moodShifts).toEqual([
+      { emotion: 'irritation', amount: -4 * OVERDO_MULTIPLIER },
+      { emotion: 'excitement', amount: 2 * OVERDO_MULTIPLIER },
+    ])
+
+    const [awkward] = ventAfter('awk', 5, MISFIRE_SEED)
+    expect(awkward).toMatchObject({ kind: 'executed', misfired: true })
+    expect(awkward.kind === 'executed' && awkward.moodShifts).toEqual([
+      { emotion: 'irritation', amount: 4 },
+      { emotion: 'excitement', amount: -2 },
+    ])
+  })
+
+  it('감정 변화가 없는 지시의 moodShifts는 빈 배열이다', () => {
+    const [outcome] = makeDirector().directPerformer('over', 'shout', createRng(1))
+    expect(outcome).toMatchObject({ kind: 'executed', moodShifts: [] })
+  })
+
+  it('감정 변화가 있어도 엇나감 난수 소비 횟수는 같다', () => {
+    for (const [id, prior] of [['over', 1], ['over', 5], ['never', 3]] as const) {
+      const director = makeDirector()
+      const start = direct(director, id, prior, createRng(MISFIRE_SEED)).rng
+      const same = makeDirector()
+      direct(same, id, prior, createRng(MISFIRE_SEED))
+      const [, withShifts] = director.directPerformer(id, 'vent', start)
+      const [, without] = same.directPerformer(id, 'shout', start)
+      expect(withShifts.cursor).toBe(without.cursor)
+    }
   })
 
   it('이미 이탈한 출연자에게 지시하면 오류를 던진다', () => {
@@ -133,6 +188,7 @@ describe('Director 출연자 지시', () => {
     expect(outcome).toEqual({
       kind: 'executed',
       misfired: true,
+      moodShifts: [],
       action: {
         pose: 'angry',
         move: { type: 'dash', toward: 'nearestPerformer', speed: 6 },
@@ -148,7 +204,7 @@ describe('Director 출연자 지시', () => {
   it('엇나가지 않는 시드에서는 원본 action을 그대로 돌려준다', () => {
     const director = makeDirector()
     const { outcome } = direct(director, 'over', 6, createRng(CLEAN_SEED))
-    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT })
+    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT, moodShifts: [] })
   })
 
   it('awkward가 엇나가면 강도 -1이고 0이 되는 emit은 제거된다', () => {
@@ -176,7 +232,7 @@ describe('Director 출연자 지시', () => {
     direct(director, 'awk', 5, createRng(MISFIRE_SEED))
     const rng = createRng(MISFIRE_SEED)
     const [outcome, after] = director.directPerformer('never', 'shout', rng)
-    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT })
+    expect(outcome).toEqual({ kind: 'executed', misfired: false, action: SHOUT, moodShifts: [] })
     expect(after).toEqual(rng)
   })
 
