@@ -30,11 +30,12 @@ export interface ActionResult {
 }
 
 /** LifeActions가 엔진에서 빌려 쓰는 것. 물리·점수·난수는 엔진이 맡고 여기서는 부르기만 한다 */
+// 실제로 부르는 메서드만 받는다. 테스트가 확률(터짐 판정) 없이 출력을 직접 넣어 줄 규칙을 확인할 수 있다.
 export interface LifeActionDeps {
-  cast: Cast
-  locator: StageLocator
-  log: EventLog
-  life: StudioLife
+  cast: Pick<Cast, 'get' | 'position'>
+  locator: Pick<StageLocator, 'targetById' | 'resolveTarget'>
+  log: Pick<EventLog, 'linkedCauseDepth'>
+  life: Pick<StudioLife, 'recentHabit'>
   /** 출연자·스태프·장비·카메라의 로그 이름 */
   names: Record<string, string>
   currentStep: () => number
