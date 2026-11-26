@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   changedValues,
   enforceConstraints,
+  hasPendingValues,
   KEYS_CONTRACT_DETAIL,
   readOverrides,
   resolveTuning,
+  storedBroadcastValues,
   validateTunables,
   violatedConstraints,
   writeOverrides,
@@ -246,5 +248,31 @@ describe('enforceConstraints', () => {
   it('기본값끼리 어긋나는 관계는 오류다', () => {
     const resolved = resolveTuning(defs, undefined)
     expect(() => enforceConstraints(defs, resolved, [A_BELOW_B])).toThrow('A는 B보다 작아야 합니다')
+  })
+})
+
+describe('storedBroadcastValues', () => {
+  it('저장값을 덮고 관계를 어긴 값은 기본값으로 되돌린다', () => {
+    const storage = makeStorage({ getItem: () => '{"A":8,"B":9}' })
+    expect(storedBroadcastValues(orderedDefs, storage, 'k', [A_BELOW_B])).toEqual({ A: 8, B: 9 })
+    const conflicting = makeStorage({ getItem: () => '{"A":8}' })
+    expect(storedBroadcastValues(orderedDefs, conflicting, 'k', [A_BELOW_B])).toEqual({ A: 2, B: 5 })
+  })
+  it('저장소가 없거나 깨졌으면 기본값', () => {
+    expect(storedBroadcastValues(orderedDefs, null, 'k', [A_BELOW_B])).toEqual({ A: 2, B: 5 })
+    const broken = makeStorage({ getItem: () => '{oops' })
+    expect(storedBroadcastValues(orderedDefs, broken, 'k', [A_BELOW_B])).toEqual({ A: 2, B: 5 })
+  })
+})
+
+describe('hasPendingValues', () => {
+  it('한 항목이라도 다르면 참, 모두 같으면 거짓', () => {
+    expect(hasPendingValues(orderedDefs, { A: 2, B: 5 }, { A: 2, B: 5 })).toBe(false)
+    expect(hasPendingValues(orderedDefs, { A: 3, B: 5 }, { A: 2, B: 5 })).toBe(true)
+  })
+  it('저장된 값이 관계에 걸려 지금 방송 값(기본값)으로 돌아가면 다시 불러올 필요가 없다', () => {
+    const conflicting = makeStorage({ getItem: () => '{"A":8}' })
+    const next = storedBroadcastValues(orderedDefs, conflicting, 'k', [A_BELOW_B])
+    expect(hasPendingValues(orderedDefs, next, { A: 2, B: 5 })).toBe(false)
   })
 })

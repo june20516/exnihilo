@@ -205,3 +205,26 @@ export function writeOverrides(
     return `조정값을 저장하지 못했습니다: ${errorMessage(error)}`
   }
 }
+
+/**
+ * 저장소의 값으로 다음 방송에 쓰일 값: 기본값 위에 저장값을 덮고 관계를 어긴 값을 되돌린 것.
+ * 페이지를 불러올 때(TUNING)와 같은 계산이므로 다시 불러오면 이 값이 지금 방송 값이 된다.
+ */
+export function storedBroadcastValues(
+  defs: readonly TunableDef[],
+  storage: TuningStorage | null,
+  storageKey: string,
+  constraints: readonly TuningConstraint[],
+): TuningValues {
+  const { overrides } = readOverrides(storage, storageKey)
+  return enforceConstraints(defs, resolveTuning(defs, overrides), constraints).values
+}
+
+/** 다음 방송 값이 지금 방송 값과 한 항목이라도 다른지. 다르면 페이지를 다시 불러와야 반영된다 */
+export function hasPendingValues(
+  defs: readonly TunableDef[],
+  next: TuningValues,
+  applied: TuningValues,
+): boolean {
+  return defs.some((def) => next[def.key] !== applied[def.key])
+}

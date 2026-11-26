@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   changedValues,
   enforceConstraints,
-  readOverrides,
-  resolveTuning,
+  storedBroadcastValues,
   violatedConstraints,
   writeOverrides,
   type RejectedOverride,
@@ -15,7 +14,7 @@ import {
 
 export interface TuningPanelProps {
   defs: readonly TunableDef[]
-  /** 지금 방송(페이지를 불러올 때)에 쓰인 값 */
+  /** 지금 방송(페이지를 불러올 때)에 쓰인 값. 다시 하기는 다음 방송 값이 이것과 다르면 페이지를 다시 불러온다 */
   applied: TuningValues
   /** 페이지를 불러올 때 버려진 저장값 */
   rejected: readonly RejectedOverride[]
@@ -43,17 +42,6 @@ function rejectText(item: RejectedOverride): string {
   return item.detail === undefined ? `${item.key}: ${reason}` : `${item.key}: ${reason} (${item.detail})`
 }
 
-/** 처음 열 때의 편집값: 기본값 위에 저장된 값을 덮고 관계를 어긴 값은 되돌린 것, 즉 다음 방송에 쓰일 값 */
-function initialValues(
-  defs: readonly TunableDef[],
-  storage: TuningStorage | null,
-  storageKey: string,
-  constraints: readonly TuningConstraint[],
-): TuningValues {
-  const { overrides } = readOverrides(storage, storageKey)
-  return enforceConstraints(defs, resolveTuning(defs, overrides), constraints).values
-}
-
 function groupDefs(defs: readonly TunableDef[]): [group: string, items: TunableDef[]][] {
   const groups = new Map<string, TunableDef[]>()
   for (const def of defs) groups.set(def.group, [...(groups.get(def.group) ?? []), def])
@@ -70,15 +58,16 @@ export function TuningPanel({
   constraints = NO_CONSTRAINTS,
   onClose,
 }: TuningPanelProps): ReactElement {
+  // 처음 열 때의 편집값은 저장된 값으로 계산한 다음 방송 값이다
   const [values, setValues] = useState<TuningValues>(() =>
-    initialValues(defs, storage, storageKey, constraints),
+    storedBroadcastValues(defs, storage, storageKey, constraints),
   )
   /**
    * 마지막으로 저장에 성공한 편집값. 처음에는 열 때 저장소에서 읽어 관계를 적용한 값이다.
    * 관계를 어긴 채 저장될 수 있으므로 다음 방송 값은 nextBroadcastValues로 따로 계산한다.
    */
   const [savedValues, setSavedValues] = useState<TuningValues>(values)
-  /** 다음 방송(새로고침 뒤)에 쓰일 값: 저장된 값에 관계를 적용한 것. 페이지를 불러올 때와 같은 계산이다 */
+  /** 다음 방송(다시 하기 또는 새로고침 뒤)에 쓰일 값: 저장된 값에 관계를 적용한 것. 페이지를 불러올 때와 같은 계산이다 */
   const nextBroadcastValues = useMemo(
     () => enforceConstraints(defs, { values: savedValues, rejected: [] }, constraints).values,
     [defs, savedValues, constraints],
@@ -92,13 +81,16 @@ export function TuningPanel({
   /** 저장소가 없는지. 없으면 바꾼 값이 저장되지 않으므로 열 때부터 계속 알린다 */
   const storageMissing = storage === null
 
-  // 패널이 열려 있는 동안만 window에서 Esc를 받는다(포커스가 패널 밖이어도 닫힌다)
+  // 패널이 열려 있는 동안만 window에서 Esc를 받는다(포커스가 패널 밖이어도 닫힌다).
+  // 캡처 단계에서 받아 전파를 멈추므로, 패널이 닫은 Esc는 게임 단축키(개입·광고 패널 닫기)로 넘어가지 않는다
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      onClose()
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [onClose])
 
   function commit(next: TuningValues): void {
@@ -164,7 +156,7 @@ export function TuningPanel({
         </button>
       </div>
       <p className="mb-2 text-xs text-slate-400">
-        바뀐 값은 새로고침 뒤 새 방송부터 반영됩니다.
+        바뀐 값은 다음 방송(다시 하기 또는 새로고침)부터 반영됩니다.
       </p>
 
       {[

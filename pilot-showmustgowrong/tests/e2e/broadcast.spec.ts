@@ -392,3 +392,50 @@ test('패널에서 바꾼 값은 다음 방송부터 표시되고 새로고침 �
   await expect(dialog.getByText('바뀜')).toHaveCount(1)
   await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
 })
+
+/** 페이지에 표식을 둔다. 다시 불러오면 사라지므로 다시 하기가 페이지를 다시 불러왔는지 가린다 */
+async function markPage(page: Page): Promise<void> {
+  await page.evaluate(() => Reflect.set(window, '__beforeRestart', true))
+}
+
+async function pageWasKept(page: Page): Promise<boolean> {
+  return page.evaluate(() => Reflect.get(window, '__beforeRestart') === true)
+}
+
+async function restartFromResult(page: Page): Promise<void> {
+  // 방송 길이 실제 10초라 결과 화면은 실제 약 10초 뒤에 뜬다
+  await page.getByTestId('restart-button').click({ timeout: 20_000 })
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+}
+
+test('조정값이 같으면 다시 하기가 페이지를 유지하고, 바꿨으면 다시 불러와 바뀐 값으로 시작한다', async ({ page }) => {
+  test.setTimeout(60_000)
+  await openBroadcast(page)
+  // 방송을 실제 10초로 줄여 결과 화면까지 빨리 간다. storeTuning은 새로고침마다 덮어쓰므로 쓰지 않는다
+  await page.evaluate(
+    ([key]) => window.localStorage.setItem(key, JSON.stringify({ BROADCAST_REAL_SECONDS: 10 })),
+    [TUNING_STORAGE_KEY] as const,
+  )
+  await page.reload()
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+
+  // 바꾼 값이 없으면 같은 페이지에서 새 방송을 시작한다
+  await markPage(page)
+  await restartFromResult(page)
+  expect(await pageWasKept(page)).toBe(true)
+
+  // 방송 중 값을 바꾸면 다음 방송부터가 보이고, 다시 하기가 페이지를 다시 불러온다
+  await page.keyboard.press('`')
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await dialog.getByLabel(MTB_INPUT).fill('120')
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await restartFromResult(page)
+  expect(await pageWasKept(page)).toBe(false)
+  expect(new URL(page.url()).searchParams.get('seed')).toBe('1')
+
+  await page.keyboard.press('`')
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('120')
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
+})

@@ -77,7 +77,7 @@ describe('TuningPanel', () => {
     expect(screen.getByText('지루함')).toBeTruthy()
     expect(screen.getByText('진행 속도')).toBeTruthy()
     expect(screen.getByText('지루함 증가')).toBeTruthy()
-    expect(screen.getByText(/새로고침 뒤 새 방송부터 반영됩니다/)).toBeTruthy()
+    expect(screen.getByText(/다음 방송\(다시 하기 또는 새로고침\)부터 반영됩니다/)).toBeTruthy()
   })
 
   it('슬라이더를 바꾸면 바뀐 값만 저장하고 다음 방송부터를 보인다', () => {
@@ -222,6 +222,23 @@ describe('TuningPanel', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('패널이 처리한 Esc는 먼저 붙은 게임 단축키 리스너로 넘어가지 않는다', () => {
+    const gameShortcut = vi.fn()
+    window.addEventListener('keydown', gameShortcut)
+    const onClose = vi.fn()
+    render(
+      <TuningPanel defs={DEFS} applied={APPLIED} rejected={[]} storage={null} storageKey={KEY} onClose={onClose} />,
+    )
+    // 실제 키 입력처럼 포커스된 요소(body)에서 window까지 전파된다
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(gameShortcut).not.toHaveBeenCalled()
+    // Esc가 아닌 키는 막지 않는다
+    fireEvent.keyDown(document.body, { key: '1' })
+    expect(gameShortcut).toHaveBeenCalledTimes(1)
+    window.removeEventListener('keydown', gameShortcut)
+  })
+
   it('숫자 입력이 범위 밖이면 저장하지 않고 경고를 보인다', () => {
     const storage = fakeStorage()
     renderPanel(storage)
@@ -356,6 +373,27 @@ describe('useTuningHotkey', () => {
     expect(result.current[0]).toBe(true)
     act(() => void fireEvent.keyDown(window, { key: '`' }))
     expect(result.current[0]).toBe(false)
+  })
+
+  it('한글 자판처럼 key가 ₩여도 같은 자리(Backquote) 키면 연다', () => {
+    const { result } = renderHook(() => useTuningHotkey())
+    act(() => void fireEvent.keyDown(window, { key: '₩', code: 'Backquote' }))
+    expect(result.current[0]).toBe(true)
+  })
+
+  it.each(['ctrlKey', 'metaKey', 'altKey'])('%s와 함께 누른 Backquote 자리 키는 무시한다', (modifier) => {
+    const { result } = renderHook(() => useTuningHotkey())
+    act(() => void fireEvent.keyDown(window, { key: '₩', code: 'Backquote', [modifier]: true }))
+    expect(result.current[0]).toBe(false)
+  })
+
+  it('입력 칸에서 누른 Backquote 자리 키는 무시한다', () => {
+    const { result } = renderHook(() => useTuningHotkey())
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    act(() => void fireEvent.keyDown(input, { key: '₩', code: 'Backquote' }))
+    expect(result.current[0]).toBe(false)
+    input.remove()
   })
 
   it.each([
