@@ -46,7 +46,7 @@ export function validateShow(
 ): string[] {
   const errors: string[] = []
 
-  if (!(show.showMinutes > 0)) errors.push(`극 중 길이 오류: ${show.showMinutes}분`)
+  if (!(Number.isFinite(show.showMinutes) && show.showMinutes > 0)) errors.push(`극 중 길이 오류: ${show.showMinutes}분`)
   const { hour, minute } = show.startTime
   const validHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
   const validMinute = Number.isInteger(minute) && minute >= 0 && minute <= 59

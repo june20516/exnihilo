@@ -110,6 +110,7 @@ describe('validateShow', () => {
         equipment,
       ).join('\n')
     expect(errorsOf({ showMinutes: 0 })).toContain('극 중 길이 오류: 0분')
+    expect(errorsOf({ showMinutes: Infinity })).toContain('극 중 길이 오류: Infinity분')
     expect(errorsOf({ startTime: { hour: 24, minute: 0 } })).toContain('시작 시각 오류: 24:00')
     expect(errorsOf({ startTime: { hour: 21, minute: 60 } })).toContain('시작 시각 오류: 21:60')
     expect(errorsOf({ traits: ['talk', ''] })).toContain('빈 속성 태그')

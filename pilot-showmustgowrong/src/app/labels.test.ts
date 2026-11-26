@@ -10,6 +10,11 @@ describe('극 중 시각 표기', () => {
     expect(formatShowClock(BROADCAST_STEPS, TALK_SHOW)).toBe('21:30')
   })
 
+  it('분 경계 직전(스텝 359)은 21:00, 경계(스텝 360)는 21:01이다', () => {
+    expect(formatShowClock(359, TALK_SHOW)).toBe('21:00')
+    expect(formatShowClock(360, TALK_SHOW)).toBe('21:01')
+  })
+
   it('방송 종료 시각을 쓴다', () => {
     expect(formatShowEnd(TALK_SHOW)).toBe('21:30')
   })

@@ -162,6 +162,8 @@ export class Broadcast {
   /** 이번 스텝에 생긴 이벤트. 광고로 멈춘 스텝은 재개 뒤에도 이어서 쌓는다. */
   private currentEvents: PhenomenonEvent[] = []
   private silentSteps = 0
+  /** 정적 단계별 임계 스텝(강도 오름차순). 쇼 배율에 따라 생성자에서 한 번 계산한다. */
+  private readonly silenceThresholds: readonly { intensity: Intensity; steps: number }[]
   /** 관객석이 송출 화면에 연속으로 잡힌 스텝 수 */
   private audienceOnAirSteps = 0
   private readonly lines: LogLine[] = []
@@ -175,6 +177,10 @@ export class Broadcast {
   private constructor(setup: BroadcastSetup, physics: PhysicsWorld) {
     this.setup = setup
     this.physics = physics
+    this.silenceThresholds = INTENSITIES.map((intensity) => ({
+      intensity,
+      steps: showSecondsToSteps(SILENCE_SHOW_SECONDS[intensity], setup.show),
+    }))
     this.rng = createRng(setup.seed)
     this.score = new BroadcastScore(setup.show)
     this.director = new Director([...setup.performers, ...setup.bench], setup.staff)
@@ -880,11 +886,9 @@ export class Broadcast {
 
   private updateSilence(aired: PhenomenonEvent[]): void {
     this.silentSteps = aired.some(isPhenomenonShown) ? 0 : this.silentSteps + 1
-    const { show } = this.setup
-    const intensity = INTENSITIES.find(
-      (candidate) => this.silentSteps === showSecondsToSteps(SILENCE_SHOW_SECONDS[candidate], show),
-    )
-    if (intensity === undefined) return
+    const reached = this.silenceThresholds.find(({ steps }) => this.silentSteps === steps)
+    if (reached === undefined) return
+    const { intensity } = reached
     this.emit({
       kind: 'silence',
       intensity,
@@ -899,9 +903,8 @@ export class Broadcast {
 
   private silenceLevel(): 0 | Intensity {
     let level: 0 | Intensity = 0
-    const { show } = this.setup
-    for (const intensity of INTENSITIES) {
-      if (this.silentSteps >= showSecondsToSteps(SILENCE_SHOW_SECONDS[intensity], show)) level = intensity
+    for (const { intensity, steps } of this.silenceThresholds) {
+      if (this.silentSteps >= steps) level = intensity
     }
     return level
   }
