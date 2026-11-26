@@ -809,6 +809,28 @@ describe('광고', () => {
     expect(() => broadcast.step([again])).toThrow('남은 광고')
   })
 
+  it('광고 앞 사고에 놀란 스태프 줄은 광고 경계를 넘지 않아 깊이 1이다(Ruling 9)', async () => {
+    const startled: StaffDef = {
+      ...CAMERA_OPERATOR,
+      reactions: [reaction({ kind: 'exposure', min: 1, scope: 'perceived' }, { pose: 'panic', emits: [] })],
+    }
+    const panicLine = (broadcast: Broadcast) =>
+      broadcast.view().log.find((line) => line.text === '카메라 감독이 놀라 카메라를 휘둘렀다')
+
+    // 대조: 광고가 없으면 원인(깊이 1) 다음 깊이 2다
+    const direct = await open(adSetup({ staff: [startled] }))
+    direct.step([flash])
+    direct.step([])
+    expect(panicLine(direct)).toMatchObject({ depth: 2 })
+
+    const broadcast = await open(adSetup({ staff: [startled] }))
+    broadcast.step([flash])
+    broadcast.step([{ type: 'ad', effects: ['relief', 'setup'] }])
+    broadcast.resumeFromAd()
+    broadcast.step([])
+    expect(panicLine(broadcast)).toMatchObject({ depth: 1 })
+  })
+
   it('대기 출연자가 없으면 setup 효과는 throw한다(Ruling 21)', async () => {
     const broadcast = await open(adSetup({ bench: [] }))
     expect(broadcast.view().benchLeft).toBe(0)
@@ -841,6 +863,39 @@ describe('광고', () => {
     broadcast.resumeFromAd()
     run(broadcast, 5)
     expect(laughs(broadcast)).toEqual([])
+  })
+})
+
+describe('로그 묶기 조건', () => {
+  it('문장과 줄 종류가 같아도 깊이가 다르면 묶지 않는다', async () => {
+    // 렉스가 스스로 민망한 모습을 드러내고(깊이 1), 모가 그 원인(렉스)을 겨눠 같은 문장의 사건을 낸다(깊이 2)
+    const exposeSelf = directive('expose', {
+      pose: 'idle',
+      emits: [{ kind: 'exposure', intensity: 1, target: 'self' }],
+    })
+    const exposer = performer({ id: 'rex', shortName: '렉스', tags: ['host'], directives: [exposeSelf] })
+    const echo = performer({
+      id: 'mo',
+      shortName: '모',
+      tags: ['guest'],
+      reactions: [
+        reaction(
+          { kind: 'exposure', min: 1, scope: 'perceived' },
+          { pose: 'idle', emits: [{ kind: 'exposure', intensity: 1, target: 'cause' }] },
+        ),
+      ],
+    })
+    const broadcast = await open(
+      quietSetup({ show: { ...SHOW, rating: 'TV-MA' }, performers: [exposer, echo] }),
+    )
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'expose' }])
+    broadcast.step([])
+
+    const lines = broadcast.view().log.filter((line) => line.text === '렉스가 민망한 모습을 드러냈다!')
+    expect(lines.map(({ depth, repeat }) => ({ depth, repeat }))).toEqual([
+      { depth: 1, repeat: 1 },
+      { depth: 2, repeat: 1 },
+    ])
   })
 })
 

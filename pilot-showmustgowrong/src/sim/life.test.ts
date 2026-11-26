@@ -5,7 +5,7 @@ import {
   DEFAULT_THRESHOLDS,
   HABIT_COOLDOWN_SHOW_SECONDS,
   LIFE_TICK_BODY_SECONDS,
-  LOG_NUDGE_SHOW_SECONDS,
+  LOG_NUDGE_BODY_SECONDS,
   RECALL_SHOW_SECONDS,
   RESPONSE_COOLDOWN_SHOW_SECONDS,
   SMALL_BURST_COOLDOWN_SHOW_SECONDS,
@@ -22,6 +22,7 @@ import type {
   HabitDef,
   MindDef,
   PerformerDef,
+  ShowDef,
 } from '@/content/types'
 import {
   StudioLife,
@@ -255,7 +256,7 @@ describe('체감 목표', () => {
 })
 
 it('재촉: 줄이 없으면 실제 4초(+틱) 안에 누군가 버릇을 한다', () => {
-  const nudgeSteps = showSecondsToSteps(LOG_NUDGE_SHOW_SECONDS, TALK_SHOW)
+  const nudgeSteps = REAL_SECONDS_STEPS(LOG_NUDGE_BODY_SECONDS)
   expect(nudgeSteps).toBe(REAL_SECONDS_STEPS(4))
   for (const seed of SEEDS.slice(0, 20)) {
     const ids = ['a', 'b', 'c', 'd']
@@ -265,6 +266,21 @@ it('재촉: 줄이 없으면 실제 4초(+틱) 안에 누군가 버릇을 한다
     )
     const first = run(life, ids, 0, REAL_SECONDS_STEPS(20))[0]
     expect(first.output.type).toBe('habit')
+    expect(first.step).toBeLessThanOrEqual(nudgeSteps + TICK_STEPS)
+  }
+})
+
+it('재촉 기준은 몸 초라 쇼 배율이 달라도 실제 4초(+틱)다(Ruling 16)', () => {
+  // 극 중 길이를 1/4로 줄인 쇼(배율 2.5)는 버릇 간격이 실제 40초 이상이라 첫 버릇은 재촉으로만 온다
+  const slowShow: ShowDef = { ...TALK_SHOW, showMinutes: TALK_SHOW.showMinutes / 4 }
+  const nudgeSteps = REAL_SECONDS_STEPS(LOG_NUDGE_BODY_SECONDS)
+  for (const seed of SEEDS.slice(0, 10)) {
+    const ids = ['a', 'b']
+    const life = new StudioLife(slowShow, seed)
+    for (const id of ids) life.join(performer(id, mindDef({ habits: [habit('h1'), habit('h2')] })), 0)
+    const first = run(life, ids, 0, REAL_SECONDS_STEPS(20))[0]
+    expect(first.output.type).toBe('habit')
+    expect(first.step).toBeGreaterThanOrEqual(nudgeSteps)
     expect(first.step).toBeLessThanOrEqual(nudgeSteps + TICK_STEPS)
   }
 })
@@ -775,6 +791,31 @@ describe('mood와 emotions', () => {
     expect(views[0]).toMatchObject({ value: 60, stage: 1, rise: [50, 80] })
     expect(views[0].reasons[0].source).toEqual({ type: 'directive', label: 'irritation' })
   })
+
+  it('emotions의 사건 이유는 엔진 내부 이벤트 객체가 아니라 사본을 담는다', () => {
+    const life = makeLife(1, [
+      performer(
+        'a',
+        mindDef({
+          habits: [habit('h1')],
+          sensitivities: [{ emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 30 }],
+        }),
+      ),
+    ])
+    const noise: PhenomenonEvent = {
+      id: 1, kind: 'noise', intensity: 2, sourceId: 'b', targetId: null,
+      x: 0, y: 0, z: 0, step: 0, causeId: null, depth: 1,
+    }
+    life.perceive([noise], [{ id: 'a', x: 0, y: 0, z: 0, inDarkness: false }], 0)
+    const source = life.emotions('a').find((view) => view.id === 'irritation')?.reasons[0]?.source
+    expect(source?.type).toBe('event')
+    if (source?.type !== 'event') throw new Error('사건 이유가 없습니다')
+    expect(source.event).toEqual(noise)
+    expect(source.event).not.toBe(noise)
+    source.event.depth = 99
+    const again = life.emotions('a').find((view) => view.id === 'irritation')?.reasons[0]?.source
+    expect(again?.type === 'event' ? again.event.depth : null).toBe(1)
+  })
 })
 
 it('recentHabit은 회상 범위 안의 마지막 버릇만 돌려준다', () => {
@@ -854,7 +895,7 @@ describe('재촉 대상', () => {
   const members = () => ids.map((id) => member(id, { resting: id === 'a' }))
 
   it('resting이거나 후보가 없는 출연자는 제외하고 버릇 시각이 가장 이른 출연자가 뽑힌다', () => {
-    const nudgeSteps = showSecondsToSteps(LOG_NUDGE_SHOW_SECONDS, TALK_SHOW)
+    const nudgeSteps = REAL_SECONDS_STEPS(LOG_NUDGE_BODY_SECONDS)
     let compared = 0
     for (const seed of SEEDS.slice(0, 30)) {
       // 같은 시드의 시계만 돌려 버릇 시각이 가장 이른 출연자를 알아낸다

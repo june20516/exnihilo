@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { STEP_SECONDS } from '@/content/balance'
+import { LIFE_TICK_BODY_SECONDS, LOG_NUDGE_BODY_SECONDS, STEP_SECONDS } from '@/content/balance'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { TALK_SHOW } from '@/content/talkShow'
 import type {
@@ -400,8 +400,9 @@ describe('로그 묶기', () => {
     ])
   })
 
-  it('같은 줄이 묶이며 이어지는 동안은 공백으로 보지 않아 재촉하지 않는다(Ruling 8)', async () => {
-    // 관객 소음 줄이 3초마다 묶이므로, 버릇은 재촉(실제 4초 공백) 없이 버릇 시계(실제 10초 이상)로만 온다
+  it('같은 줄이 묶이는 동안에도 첫 줄로부터 재촉 시간이 지나면 재촉한다(Ruling 14, Ruling 8 대체)', async () => {
+    // 관객 소음 줄이 3초마다 묶인다. 묶여 repeat만 오른 것은 새 줄이 아니므로(spec 5.2-4 "묶인 줄은 1줄"),
+    // 버릇 시계(실제 10초 이상)보다 먼저 첫 소음 줄로부터 재촉 시간(+틱) 뒤에 버릇이 온다
     const broadcast = await open(setup({ performers: [REX] }))
     const inputs = new Map([[0, [{ type: 'switch', cameraId: 'audienceCam' } as BroadcastInput]]])
     const recorder = new LineRecorder()
@@ -409,10 +410,14 @@ describe('로그 묶기', () => {
 
     const [first, ...rest] = recorder.lines
     expect(first).toMatchObject({ text: '관객 쪽에서 소리가 난다' })
-    expect(first.repeat).toBeGreaterThanOrEqual(3)
+    expect(first.repeat).toBeGreaterThanOrEqual(2)
     const firstStir = stirsOf(broadcast)[0]
     expect(firstStir).toBeDefined()
-    expect(firstStir.step).toBeGreaterThanOrEqual(seconds(10))
+    expect(firstStir.step).toBeGreaterThanOrEqual(first.step + seconds(LOG_NUDGE_BODY_SECONDS))
+    expect(firstStir.step).toBeLessThanOrEqual(
+      first.step + seconds(LOG_NUDGE_BODY_SECONDS + LIFE_TICK_BODY_SECONDS),
+    )
+    expect(firstStir.step).toBeLessThan(seconds(10))
     expect(rest[0]).toMatchObject({ kind: 'habit', eventId: firstStir.id })
   })
 
@@ -765,6 +770,31 @@ describe('결정론', () => {
     expect(replayed).toEqual(broadcast.view())
   })
 
+  it('재정비 없는 광고(relief·setup)와 이탈이 섞인 방송을 replay하면 view가 같다', async () => {
+    const lowRex: PerformerDef = { ...REX, tolerance: 'low' }
+    const broadcastSetup = setup({
+      performers: [lowRex, MO, PRIYA],
+      bench: [performer('june', '준', { tags: ['guest'], mind: mind() })],
+    })
+    const broadcast = await open(broadcastSetup)
+    const calm: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'calm' }
+    const inputs = new Map<number, BroadcastInput[]>([
+      [30, [{ type: 'switch', cameraId: 'close' }]],
+      [900, [{ type: 'ad', effects: ['relief', 'setup'] }]],
+      // 광고 앞 사건에 대한 반응·감정이 남은 채로 렉스를 이탈시킨다
+      [1500, [calm, calm, calm]],
+    ])
+    const steps = 3600
+    run(broadcast, steps, undefined, inputs)
+    const view = broadcast.view()
+    expect(view.benchLeft).toBe(0)
+    expect(view.actors.find((actor) => actor.id === 'rex')?.walkedOut).toBe(true)
+    expect(view.actors.some((actor) => actor.id === 'june')).toBe(true)
+
+    const replayed = await replay(broadcastSetup, broadcast.inputLog(), steps)
+    expect(replayed).toEqual(view)
+  })
+
   it('mind가 있어도 mind 없는 출연자의 반사 반응 난수 소비는 그대로다', async () => {
     // 렉스: mind 없음, 관객 소음에 확률 반응. 모: mind 있음/없음(현상을 내는 터짐이 없다)
     const flinch: ReactionDef = {
@@ -853,7 +883,7 @@ describe('정산 뿌리 줄', () => {
     expect(root).toMatchObject({ sourceId: 'rex', intensity: 0, label: '킥킥거림' })
   })
 
-  it('뿌리 기척의 버릇 줄이 앞 줄에 묶여 줄이 없으면 rootLine은 그 기척의 이름 명사다', async () => {
+  it('뿌리 기척의 버릇 줄이 앞 줄에 묶여 줄이 없으면 rootLine은 "<출처>의 <기척 명사>"다', async () => {
     // 렉스의 두 버릇은 문장이 같다. 화면 밖일 때만 하는 '낄낄'이 '킥킥' 바로 뒤에 오면 한 줄로 묶이고,
     // 모를 겨눈 '낄낄' 기척이 모의 흥분 터짐 → 렉스의 소리로 이어져 가장 깊은 연쇄의 뿌리가 된다.
     const giggleAlone: HabitDef = { ...GIGGLE, stir: { kind: 'laughter', target: 'none' } }
@@ -924,7 +954,7 @@ describe('정산 뿌리 줄', () => {
 
     const summary = broadcast.summary()
     expect(summary.maxChainDepth).toBeGreaterThanOrEqual(2)
-    expect(summary.rootLine).toEqual({ step: snicker.step, text: describeRootEvent(snicker, {}) })
-    expect(summary.rootLine?.text).toBe('낄낄거림')
+    expect(summary.rootLine).toEqual({ step: snicker.step, text: describeRootEvent(snicker, { rex: '렉스' }) })
+    expect(summary.rootLine?.text).toBe('렉스의 낄낄거림')
   })
 })

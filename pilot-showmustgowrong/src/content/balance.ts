@@ -272,10 +272,10 @@ export const HABIT_REST_AFTER_ACTION_BODY_SECONDS = 2
 /** 응답 버릇을 한 뒤 다시 응답하지 않는 극 중 초(실제 6초). 주고받기가 끝나게 한다. */
 export const RESPONSE_COOLDOWN_SHOW_SECONDS = 60
 /**
- * 로그에 줄이 이만큼(극 중 초) 없으면 재촉한다(L2). 토크쇼 실제 4초이고,
- * 틱 0.5초를 더해도 공백이 living spec 1.1의 실제 5초를 넘지 않는다.
+ * 로그에 새 줄이 이만큼(몸 초) 없으면 재촉한다(L2). living spec 1.1의 로그 밀도 하한(공백 실제 5초 이하)은
+ * 실제 초이므로 쇼 배율과 관계없이 평상시 실제 4초가 되게 몸 초로 둔다(Ruling 16). 틱 0.5초를 더해도 4.5초다.
  */
-export const LOG_NUDGE_SHOW_SECONDS = 40
+export const LOG_NUDGE_BODY_SECONDS = 4
 /** 최근 버릇 회상(living spec 5.2-2)이 붙는 범위(극 중 초, 실제 12초). */
 export const RECALL_SHOW_SECONDS = 120
 /** 터짐 출력과 감정 보기에 담는 이유의 최대 개수 */

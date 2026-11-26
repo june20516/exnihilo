@@ -94,6 +94,11 @@ describe('fillTemplate', () => {
     expect(fillTemplate('{target:을} 본다', { target: '준' })).toBe('준을 본다')
     expect(fillTemplate('{target:와} 논다', { target: '준' })).toBe('준과 논다')
   })
+  it('끝의 따옴표·괄호 같은 기호는 건너뛰고 마지막 한글 글자로 조사를 고른다', () => {
+    expect(fillTemplate('{reasons:을} 참던', { reasons: "PD의 '반박하세요'" })).toBe("PD의 '반박하세요'를 참던")
+    expect(fillTemplate('{reasons:을} 참던', { reasons: "PD의 '진정'" })).toBe("PD의 '진정'을 참던")
+    expect(fillTemplate('{target:와} 논다', { target: '준(대기)' })).toBe('준(대기)와 논다')
+  })
   it('한글이 아닌 끝 글자는 조사를 괄호로 병기한다', () => {
     expect(fillTemplate('{target:을} 본다', { target: 'Rex' })).toBe('Rex을(를) 본다')
     expect(fillTemplate('{target:와} 논다', { target: 'Rex' })).toBe('Rex과(와) 논다')
@@ -128,9 +133,6 @@ describe('reasonNoun', () => {
   })
   it('label이 없으면 종류 명사를 쓴다', () => {
     expect(reasonNoun(eventReason('priya', undefined, 'noise'), nameOf)).toBe('프리야의 소란')
-  })
-  it('sourceId가 없으면 종류 명사만 쓴다', () => {
-    expect(reasonNoun(eventReason('', undefined, 'noise'), nameOf)).toBe('소란')
   })
   it('상황 이유는 label.noun이다', () => {
     expect(reasonNoun(situationReason, nameOf)).toBe('무시')
@@ -222,6 +224,33 @@ describe('burstLine', () => {
     const top = [eventReason('priya', '킥킥거림'), situationReason]
     expect(burstLine('오카포', null, ANNOYANCE, RAGE, null, true, top, nameOf)).toBe(
       '프리야의 킥킥거림과 무시를 참던 오카포가 폭발한다',
+    )
+  })
+  it('같은 출처 사건이 두 번 쌓여도 쌓임 줄에는 이름이 한 번만 나온다', () => {
+    const twice = [eventReason('priya', undefined), eventReason('priya', undefined)]
+    expect(burstLine('오카포', null, ANNOYANCE, DASH, null, false, twice, nameOf)).toBe(
+      '프리야의 웃음을 참던 오카포가 카메라로 돌진한다',
+    )
+    // 중복을 뺀 뒤 앞의 2개를 쓴다
+    expect(burstLine('오카포', null, ANNOYANCE, DASH, null, false, [...twice, situationReason], nameOf)).toBe(
+      '프리야의 웃음과 무시를 참던 오카포가 카메라로 돌진한다',
+    )
+  })
+  it('따옴표로 끝나는 지시 이유에도 받침에 맞는 조사가 붙는다', () => {
+    const top = [eventReason('priya', '킥킥거림'), directiveReason]
+    expect(burstLine('오카포', null, ANNOYANCE, DASH, null, false, top, nameOf)).toBe(
+      "프리야의 킥킥거림과 PD의 '반박하세요'를 참던 오카포가 카메라로 돌진한다",
+    )
+  })
+  it('intenseLine의 {target} 토큰은 대상으로 채우고, 대상이 없으면 일반 술어 규칙으로 돌아간다', () => {
+    const rageAt: BurstAction = { ...RAGE, intenseLine: '{target:에게} 폭발한다' }
+    expect(burstLine('오카포', null, ANNOYANCE, rageAt, '렉스', true, [], nameOf)).toBe('오카포가 렉스에게 폭발한다')
+    expect(burstLine('오카포', null, ANNOYANCE, rageAt, null, true, [], nameOf)).toBe('오카포가 버럭 화를 낸다')
+    expect(burstLine('오카포', null, ANNOYANCE, { ...rageAt, targetLine: undefined }, null, true, [], nameOf)).toBe(
+      '오카포가 버럭 화를 낸다',
+    )
+    expect(burstLine('오카포', null, ANNOYANCE, rageAt, '렉스', false, [], nameOf)).toBe(
+      '오카포가 렉스에게 버럭 화를 낸다',
     )
   })
   it('relief가 섞인 top은 throw한다', () => {

@@ -198,17 +198,28 @@ describe('BroadcastScore 시청자', () => {
 })
 
 describe('기척(강도 0)', () => {
-  it('기척은 점수 0이고 게이지를 올리지 않는다', () => {
+  it('기척은 점수 0이고 시청자를 움직이지 않는다', () => {
     const score = new BroadcastScore(show())
     const viewersBefore = score.viewers
-    const gaugesBefore = { ...score.gauges }
     expect(score.scoreEvent(event({ kind: 'laughter', intensity: 0 }), 1, 1)).toBe(0)
     expect(score.scoreEvent(event({ kind: 'noise', intensity: 0 }), 3, 1)).toBe(0)
     expect(score.viewers).toBe(viewersBefore)
-    expect({ ...score.gauges }).toEqual(gaugesBefore)
     // 대조: 같은 사건이 강도 1이면 점수와 시청자가 움직인다
     expect(score.scoreEvent(event({ kind: 'laughter', intensity: 1 }), 1, 1)).toBeGreaterThan(0)
     expect(score.viewers).not.toBe(viewersBefore)
+  })
+
+  it('게이지 규칙이 있는 종류(exposure, anger)도 기척이면 게이지를 올리지 않는다', () => {
+    const score = new BroadcastScore(show())
+    const gaugesBefore = { ...score.gauges }
+    expect(score.scoreEvent(event({ kind: 'exposure', intensity: 0 }), 1, 1)).toBe(0)
+    expect(score.scoreEvent(event({ kind: 'anger', intensity: 0 }), 1, 1)).toBe(0)
+    expect({ ...score.gauges }).toEqual(gaugesBefore)
+    // 대조: 같은 종류의 강도 1은 게이지를 올린다
+    score.scoreEvent(event({ kind: 'exposure', intensity: 1 }), 1, 1)
+    score.scoreEvent(event({ kind: 'anger', intensity: 1 }), 1, 1)
+    expect(score.gauges.sexual).toBeGreaterThan(gaugesBefore.sexual)
+    expect(score.gauges.violence).toBeGreaterThan(gaugesBefore.violence)
   })
 })
 

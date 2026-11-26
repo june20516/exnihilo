@@ -69,8 +69,7 @@ export function reasonNoun(reason: Reason, nameOf: (id: string) => string): stri
   switch (source.type) {
     case 'event': {
       const { event } = source
-      const noun = eventNoun(event)
-      return event.sourceId === '' ? noun : `${nameOf(event.sourceId)}의 ${noun}`
+      return `${nameOf(event.sourceId)}의 ${eventNoun(event)}`
     }
     case 'situation':
       return source.label.noun
@@ -93,6 +92,23 @@ function predicate(action: { line: string; targetLine?: string }, targetName: st
     return fillTemplate(action.targetLine, { target: targetName })
   }
   return action.line
+}
+
+function hasTemplateToken(template: string): boolean {
+  return new RegExp(TEMPLATE_TOKEN.source).test(template)
+}
+
+/**
+ * 터짐 술어. intense이고 intenseLine이 있으면 intenseLine을 쓰고 {target} 계열 토큰을 대상으로 채운다.
+ * intenseLine에 토큰이 있는데 대상이 없으면 일반 술어 규칙(targetLine 또는 line)으로 돌아간다.
+ */
+function burstPredicate(burst: BurstAction, targetName: string | null, intense: boolean): string {
+  const { intenseLine } = burst
+  if (intense && intenseLine !== undefined) {
+    if (!hasTemplateToken(intenseLine)) return intenseLine
+    if (targetName !== null) return fillTemplate(intenseLine, { target: targetName })
+  }
+  return predicate(burst, targetName)
 }
 
 export function habitLine(
@@ -120,9 +136,21 @@ export function burstLine(
   top: readonly Reason[],
   nameOf: (id: string) => string,
 ): string {
-  const action =
-    intense && burst.intenseLine !== undefined ? burst.intenseLine : predicate(burst, targetName)
+  const action = burstPredicate(burst, targetName, intense)
   return `${burstSubject(name, recall, emotion, top, nameOf)} ${action}`
+}
+
+/**
+ * 앞에서부터 이유의 명사를 겹치지 않게 모은다. 같은 출처·같은 종류의 사건은 Mind가 이유를
+ * 따로 쌓으므로(반복 배율) 명사가 같은 이유가 여럿일 수 있다. relief는 reasonNoun이 throw한다.
+ */
+function distinctReasonNouns(top: readonly Reason[], nameOf: (id: string) => string): string[] {
+  const nouns: string[] = []
+  for (const reason of top) {
+    const noun = reasonNoun(reason, nameOf)
+    if (!nouns.includes(noun)) nouns.push(noun)
+  }
+  return nouns
 }
 
 function burstSubject(
@@ -142,7 +170,7 @@ function burstSubject(
     case 'relief':
       throw new Error('relief 이유는 터짐 주어를 만들 수 없습니다')
     case 'event': {
-      const nouns = top.slice(0, MAX_ACCUMULATED_REASONS).map((reason) => reasonNoun(reason, nameOf))
+      const nouns = distinctReasonNouns(top, nameOf).slice(0, MAX_ACCUMULATED_REASONS)
       const joined =
         nouns.length === 2 ? `${withPartner(nouns[0])} ${nouns[1]}` : nouns[0]
       return `${fillTemplate(emotion.accumulate, { reasons: joined })} ${withSubject(name)}`

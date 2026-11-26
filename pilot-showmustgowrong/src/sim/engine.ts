@@ -182,8 +182,11 @@ export class Broadcast {
   /** 관객석이 송출 화면에 연속으로 잡힌 스텝 수 */
   private audienceOnAirSteps = 0
   private readonly lines: LogLine[] = []
-  /** 줄이 새로 생기거나 묶여 repeat가 오른 마지막 스텝. 재촉(L2)의 공백 기준이다(Ruling 8). */
-  private lastLineActivityStep = 0
+  /**
+   * 마지막으로 줄이 새로 생긴 스텝. 묶여 repeat만 오른 것은 치지 않는다. 재촉(L2)의 공백 기준이며
+   * living spec 5.2-4의 "묶인 줄은 1줄"과 livingMetrics의 공백 측정에 맞춘다(Ruling 14, Ruling 8 대체).
+   */
+  private lastNewLineStep = 0
   private deepestEvent: PhenomenonEvent | null = null
   private autoSlowmo: AutoSlowmo | null = null
   private readonly slowmoGauges = new Set<GaugeKind>()
@@ -856,7 +859,8 @@ export class Broadcast {
     this.addLine({
       text: `${withSubject(member.shortName)} 놀라 카메라를 휘둘렀다`,
       kind: 'staff',
-      depth: (cause?.depth ?? 0) + 1,
+      // 광고로 끊긴 원인은 잇지 않는다(Ruling 9)
+      depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
       eventId: null,
       position: camera.position,
     })
@@ -929,7 +933,7 @@ export class Broadcast {
       step: this.stepCount,
       silence: this.silenceLevel() > 0,
       members: this.lifeMembers(members),
-      lastLineStep: this.lastLineActivityStep,
+      lastLineStep: this.lastNewLineStep,
     })
     for (const output of outputs) this.lifeActions.execute(output)
   }
@@ -1208,15 +1212,21 @@ export class Broadcast {
     return event
   }
 
-  /** 직전 줄과 text·kind가 같으면 새 줄 대신 직전 줄의 repeat를 올린다(step은 처음 것). */
+  /** 직전 줄과 text·kind·depth·emotion이 모두 같으면 새 줄 대신 직전 줄의 repeat를 올린다(step은 처음 것). */
   private addLine({ text, kind, depth, eventId, position, emotion = null }: LineInput): void {
-    this.lastLineActivityStep = this.stepCount
     const last = this.lines.at(-1)
-    if (last !== undefined && last.text === text && last.kind === kind) {
+    const sameAsLast =
+      last !== undefined &&
+      last.text === text &&
+      last.kind === kind &&
+      last.depth === depth &&
+      last.emotion === emotion
+    if (sameAsLast) {
       last.repeat += 1
       if (eventId !== null) last.lastEventId = eventId
       return
     }
+    this.lastNewLineStep = this.stepCount
     this.lines.push({
       index: this.lines.length,
       step: this.stepCount,

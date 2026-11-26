@@ -5,7 +5,9 @@ import { STANDING_Y } from '@/sim/cast'
 import { Broadcast } from '@/sim/engine'
 import { initPhysics, PhysicsWorld } from '@/sim/physics'
 import { type FloorPoint, floorDistance, yawBetween } from '@/sim/vec'
-import { fillTemplate } from '@/sim/narration'
+import type { Reason } from '@/sim/emotion'
+import { burstLine, habitLine, stageLine } from '@/sim/narration'
+import type { PhenomenonEvent } from '@/sim/phenomena'
 import { COMMON_EMOTIONS } from './types'
 import { COMMON_HABITS } from './commonMind'
 import { LINEUP } from './lineup'
@@ -250,27 +252,61 @@ describe('라인업 감정·버릇·반사 반응 옮기기', () => {
     for (const habit of COMMON_HABITS) expect(habit.weight, habit.id).toBe(1)
   })
 
-  it('버릇 문장을 narration으로 만들면 빈 토큰이 남지 않는다', () => {
-    // 자리마다 허용된 값만 넘겨, 잘못된 자리의 토큰이 있으면 fillTemplate이 throw한다.
-    const fillTarget = (template: string) => fillTemplate(template, { target: '대상' })
-    const fillReasons = (template: string) => fillTemplate(template, { reasons: '이유' })
+  it('버릇·단계·터짐 문장을 narration으로 만들면 대상이 있든 없든 빈 토큰이 남지 않는다', () => {
+    // 문형을 다시 구현하지 않고 엔진이 쓰는 narration 함수를 그대로 부른다.
+    // 자리에 맞지 않는 토큰이 있으면 fillTemplate이 throw한다.
+    const nameOf = (id: string) => id
+    const stir: PhenomenonEvent = {
+      id: 1,
+      kind: 'laughter',
+      intensity: 0,
+      sourceId: '프리야',
+      targetId: null,
+      x: 0,
+      y: 0,
+      z: 0,
+      step: 0,
+      causeId: null,
+      depth: 0,
+      label: '킥킥거림',
+    }
+    const targets = ['렉스', '준', null] as const
+    const received = [null, { sourceName: '프리야', noun: '킥킥거림' }] as const
     for (const performer of allPerformers) {
-      const { habits, bursts } = mindOf(performer.id)
+      const { habits, bursts, emotions } = mindOf(performer.id)
+      const lines: { owner: string; text: string }[] = []
+      const recalls = [null, ...habits]
       for (const habit of habits) {
-        const lines = [habit.line, habit.recall, habit.noun]
-        if (habit.targetLine !== undefined) lines.push(fillTarget(habit.targetLine))
-        for (const line of lines) expect(line, `${performer.id}.${habit.id}`).not.toContain('{')
-      }
-      for (const [emotionId, burst] of Object.entries(bursts)) {
-        for (const action of [burst.small, burst.big]) {
-          const lines = [action.line]
-          if (action.targetLine !== undefined) lines.push(fillTarget(action.targetLine))
-          if (action.intenseLine !== undefined) lines.push(fillTarget(action.intenseLine))
-          for (const line of lines) expect(line, `${performer.id}.${emotionId}`).not.toContain('{')
+        for (const target of targets) {
+          for (const cause of received) {
+            lines.push({ owner: habit.id, text: habitLine(performer.shortName, habit, target, cause) })
+          }
         }
       }
-      for (const emotion of mindOf(performer.id).emotions) {
-        expect(fillReasons(emotion.accumulate), `${performer.id}.${emotion.id}`).not.toContain('{')
+      for (const emotion of emotions) {
+        const topSets: Reason[][] = [
+          [],
+          [{ emotion: emotion.id, amount: 10, source: { type: 'event', event: stir } }],
+          [{ emotion: emotion.id, amount: 10, source: { type: 'directive', label: '진정하세요' } }],
+        ]
+        for (const recall of recalls) {
+          for (const stage of [1, 2] as const) {
+            lines.push({ owner: emotion.id, text: stageLine(performer.shortName, recall, emotion, stage) })
+          }
+        }
+        for (const burst of [bursts[emotion.id].small, bursts[emotion.id].big]) {
+          for (const target of targets) {
+            for (const intense of [false, true]) {
+              for (const top of topSets) {
+                const text = burstLine(performer.shortName, null, emotion, burst, target, intense, top, nameOf)
+                lines.push({ owner: emotion.id, text })
+              }
+            }
+          }
+        }
+      }
+      for (const { owner, text } of lines) {
+        expect(text, `${performer.id}.${owner}`).not.toMatch(/[{}]/)
       }
     }
   })

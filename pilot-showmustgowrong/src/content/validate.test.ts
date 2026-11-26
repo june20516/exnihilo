@@ -592,6 +592,43 @@ describe('validateShow', () => {
       )
     })
 
+    it('6-3. 단계 이름·단계 술어·상황 label·버릇 noun은 토큰 없이 비어 있지 않아야 한다', () => {
+      const emotion = (overrides: Partial<EmotionDef>) =>
+        errorsFor(makeMind({ emotions: [...COMMON_EMOTION_DEFS, { ...shy, ...overrides }] })).join('\n')
+      expect(emotion({ stageNames: ['{target}', '얼굴 빨개짐'] })).toContain(
+        '문형 오류: shyness.stageNames[0]의 허용되지 않는 토큰 {target} (a)',
+      )
+      expect(emotion({ stageNames: ['쑥스러움', ' '] })).toContain('빈 감정 문구 오류: shyness.stageNames[1] (a)')
+      expect(emotion({ stageLines: ['{target:을} 피한다', '얼굴이 빨개진다'] })).toContain(
+        '문형 오류: shyness.stageLines[0]의 허용되지 않는 토큰 {target:을} (a)',
+      )
+      expect(emotion({ stageLines: ['쑥스러워한다', ''] })).toContain('빈 감정 문구 오류: shyness.stageLines[1] (a)')
+
+      const label = (overrides: { noun?: string; clause?: string }) =>
+        errorsFor(
+          makeMind({
+            sensitivities: [
+              {
+                emotion: 'boredom',
+                on: 'situation',
+                situation: { kind: 'offScreen' },
+                perShowMinute: 1,
+                label: { noun: '무시', clause: '화면에 안 잡힌', ...overrides },
+              },
+            ],
+          }),
+        ).join('\n')
+      expect(label({ noun: '{reasons}' })).toContain('문형 오류: label.noun의 허용되지 않는 토큰 {reasons} (a)')
+      expect(label({ clause: '{target:에게} 무시당한' })).toContain(
+        '문형 오류: label.clause의 허용되지 않는 토큰 {target:에게} (a)',
+      )
+
+      const habits = (habit: HabitDef) => errorsFor(makeMind({ habits: [habit] })).join('\n')
+      expect(habits({ ...habitClock, noun: '{target}의 코 파기' })).toContain(
+        '문형 오류: noun의 허용되지 않는 토큰 {target} (a)',
+      )
+    })
+
     it('7. 지시의 moodShifts는 amount가 0이 아니고 지시받는 출연자의 감정만 가리킨다', () => {
       const directive = (moodShifts: { emotion: string; amount: number }[]) => ({
         id: 'd1',

@@ -1,6 +1,8 @@
 /**
  * 무입력 방송의 살아 있는 스튜디오 지표와 게이트(living spec 7.1, L6).
- * sim에는 실제 시간이 들어오지 않고 무입력 방송에는 슬로모션이 없으므로 몸 초 = 실제 초다.
+ * sim에는 실제 시간이 들어오지 않으므로 몸 초를 실제 초로 읽는다. living spec 0.3의 "실제 초"는
+ * 평상시(1배) 기준이고 몸 시간도 평상시 1배이므로 둘은 같다. 무입력이어도 게이지 80%나 강도 3이면
+ * 자동 슬로모션이 걸리지만, 그 구간도 평상시 기준으로 잰다.
  */
 import { STEP_SECONDS } from '@/content/balance'
 import type { BroadcastSummary, LogLine } from './engineTypes'

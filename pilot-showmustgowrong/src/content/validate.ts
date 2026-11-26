@@ -4,6 +4,7 @@ import { TEMPLATE_TOKEN } from './templateTokens'
 import {
   COMMON_EMOTIONS,
   type ActionDef,
+  type EmotionDef,
   type EmotionThresholds,
   type EquipmentDef,
   type HabitDef,
@@ -113,6 +114,24 @@ function checkEmotionSet(mind: MindDef, owner: string): string[] {
   for (const id of findDuplicates(ids)) errors.push(`중복 감정 오류: ${id} (${owner})`)
   for (const emotion of mind.emotions) {
     errors.push(...checkTemplate(emotion.accumulate, 'accumulate', 'accumulate', owner))
+    errors.push(...checkEmotionLabels(emotion, owner))
+  }
+  return errors
+}
+
+/** 단계 이름과 단계 진입 술어는 토큰 없이(plain) 비어 있지 않아야 한다. */
+function checkEmotionLabels(emotion: EmotionDef, owner: string): string[] {
+  const errors: string[] = []
+  const fields = [
+    ['stageNames', emotion.stageNames],
+    ['stageLines', emotion.stageLines],
+  ] as const
+  for (const [name, texts] of fields) {
+    texts.forEach((text, index) => {
+      const field = `${emotion.id}.${name}[${index}]`
+      if (isBlank(text)) errors.push(`빈 감정 문구 오류: ${field} (${owner})`)
+      errors.push(...checkTemplate(text, field, 'plain', owner))
+    })
   }
   return errors
 }
@@ -162,6 +181,10 @@ function checkSensitivities(mind: MindDef, owner: string): string[] {
     if (isBlank(sensitivity.label.noun) || isBlank(sensitivity.label.clause)) {
       errors.push(`민감도 오류: label (${owner})`)
     }
+    errors.push(
+      ...checkTemplate(sensitivity.label.noun, 'label.noun', 'plain', owner),
+      ...checkTemplate(sensitivity.label.clause, 'label.clause', 'plain', owner),
+    )
   }
   return errors
 }
@@ -189,6 +212,7 @@ function checkHabit(habit: HabitDef, knownTags: ReadonlySet<string>, owner: stri
   errors.push(
     ...checkTemplate(habit.line, 'line', 'plain', owner),
     ...checkTemplate(habit.recall, 'recall', 'plain', owner),
+    ...checkTemplate(habit.noun, 'noun', 'plain', owner),
   )
   if (habit.targetLine !== undefined) {
     errors.push(...checkTemplate(habit.targetLine, 'targetLine', 'target', owner, true))

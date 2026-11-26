@@ -13,12 +13,21 @@ const BUILT_IN_NAMES: Record<string, string> = {
 
 /** 로그에 쓰는 이름. shortNames(출연자·스태프 shortName, 장비 name, 카메라 label), 고정 환경 이름, id 순으로 찾는다. */
 export function entityName(id: string, shortNames: Record<string, string>): string {
-  return shortNames[id] ?? BUILT_IN_NAMES[id] ?? id
+  return knownEntityName(id, shortNames) ?? id
 }
 
-/** 끝 글자의 받침 유무. 한글이 아니면 null. */
+/** shortNames나 고정 환경 이름에 있는 이름. 어디에도 없으면 null이다(entityName처럼 id로 대신하지 않는다). */
+export function knownEntityName(id: string, shortNames: Record<string, string>): string | null {
+  return shortNames[id] ?? BUILT_IN_NAMES[id] ?? null
+}
+
+/** 받침 판정에서 건너뛰는 끝 기호(닫는 따옴표·괄호, 문장 부호). "PD의 '반박하세요'"는 '요'로 판단한다. */
+const TRAILING_SYMBOLS = /['"’”)\]}」』〉》!?.…~]+$/
+
+/** 끝 글자(끝 기호를 뺀)의 받침 유무. 한글이 아니면 null. */
 function hasFinalConsonant(word: string): boolean | null {
-  const code = word.charCodeAt(word.length - 1)
+  const stem = word.replace(TRAILING_SYMBOLS, '')
+  const code = stem.charCodeAt(stem.length - 1)
   if (Number.isNaN(code) || code < HANGUL_FIRST || code > HANGUL_LAST) return null
   return (code - HANGUL_FIRST) % FINAL_CONSONANT_COUNT !== 0
 }
@@ -52,16 +61,18 @@ const STIR_NOUNS: Record<StirKind, string> = {
 }
 
 /**
- * 정산의 뿌리 줄 문구. 강도 1 이상은 describeEvent 문장이고,
- * 기척은 문장이 없으므로 label(없으면 종류 명사)을 쓴다. 어느 경우에도 throw하지 않는다.
+ * 정산의 뿌리 줄 문구. 강도 1 이상은 describeEvent 문장이다. 기척은 문장이 없으므로
+ * "<출처 이름>의 <label 또는 종류 명사>"를 쓰고, 출처 이름을 shortNames에서 찾지 못하면 명사만 쓴다.
+ * 어느 경우에도 throw하지 않는다.
  */
 export function describeRootEvent(
   event: PhenomenonEvent,
   shortNames: Record<string, string>,
 ): string {
   if (event.intensity !== 0) return describeEvent(event, shortNames)
-  if (event.label !== undefined) return event.label
-  return canBeStir(event.kind) ? STIR_NOUNS[event.kind] : '기척'
+  const noun = event.label ?? (canBeStir(event.kind) ? STIR_NOUNS[event.kind] : '기척')
+  const sourceName = knownEntityName(event.sourceId, shortNames)
+  return sourceName === null ? noun : `${sourceName}의 ${noun}`
 }
 
 /** 사고 로그 한 줄. 이름은 shortNames(출연자·스태프 shortName, 장비 name, 카메라 label)에서 찾는다. */

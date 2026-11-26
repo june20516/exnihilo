@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeEvent, describeRootEvent, withSubject } from './describe'
+import { describeEvent, describeRootEvent, withObject, withPartner, withSubject } from './describe'
 import type { PhenomenonEvent } from './phenomena'
 
 const NAMES: Record<string, string> = {
@@ -91,6 +91,14 @@ describe('withSubject', () => {
     expect(withSubject('준')).toBe('준이')
     expect(withSubject('R2')).toBe('R2이(가)')
   })
+
+  it('끝의 따옴표·괄호는 건너뛰고 마지막 한글 글자로 받침을 판단한다', () => {
+    expect(withObject("PD의 '반박하세요'")).toBe("PD의 '반박하세요'를")
+    expect(withObject("PD의 '진정'")).toBe("PD의 '진정'을")
+    expect(withPartner('"모"')).toBe('"모"와')
+    expect(withSubject('준)')).toBe('준)이')
+    expect(withSubject("'R2'")).toBe("'R2'이(가)")
+  })
 })
 
 describe('기척(강도 0)의 문구', () => {
@@ -98,9 +106,19 @@ describe('기척(강도 0)의 문구', () => {
     expect(() => describeEvent(event({ kind: 'laughter', intensity: 0 }), NAMES)).toThrow()
   })
 
-  it('describeRootEvent는 기척이면 label을, 없으면 종류 명사를, 강도 1 이상이면 describeEvent 문장을 쓴다', () => {
-    expect(describeRootEvent(event({ kind: 'laughter', intensity: 0, label: '킥킥거림' }), NAMES)).toBe('킥킥거림')
-    expect(describeRootEvent(event({ kind: 'noise', intensity: 0 }), NAMES)).toBe('기척 소리')
+  it('describeRootEvent는 기척이면 "<출처>의 <label 또는 종류 명사>"를, 강도 1 이상이면 describeEvent 문장을 쓴다', () => {
+    expect(describeRootEvent(event({ kind: 'laughter', intensity: 0, label: '킥킥거림' }), NAMES)).toBe(
+      '렉스의 킥킥거림',
+    )
+    expect(describeRootEvent(event({ kind: 'noise', intensity: 0 }), NAMES)).toBe('렉스의 기척 소리')
+    expect(describeRootEvent(event({ kind: 'noise', intensity: 0, sourceId: 'audience' }), NAMES)).toBe(
+      '관객의 기척 소리',
+    )
     expect(describeRootEvent(event({ kind: 'laughter', intensity: 2 }), NAMES)).toBe('렉스가 웃음을 터뜨린다')
+  })
+
+  it('describeRootEvent는 출처 이름을 알 수 없으면 명사만 쓴다', () => {
+    expect(describeRootEvent(event({ kind: 'laughter', intensity: 0, label: '킥킥거림' }), {})).toBe('킥킥거림')
+    expect(describeRootEvent(event({ kind: 'anger', intensity: 0, sourceId: 'ghost' }), NAMES)).toBe('짜증 기척')
   })
 })

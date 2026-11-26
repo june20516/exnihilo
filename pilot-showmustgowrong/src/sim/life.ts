@@ -9,7 +9,7 @@ import {
   LIFE_RNG_SALT,
   LIFE_TICK_BODY_SECONDS,
   LIFE_TOP_REASON_COUNT,
-  LOG_NUDGE_SHOW_SECONDS,
+  LOG_NUDGE_BODY_SECONDS,
   RECALL_SHOW_SECONDS,
   RESPONSE_COOLDOWN_SHOW_SECONDS,
   SMALL_BURST_COOLDOWN_SHOW_SECONDS,
@@ -59,7 +59,7 @@ export interface LifeContext {
   step: number
   silence: boolean
   members: readonly LifeMember[]
-  /** 로그에 마지막으로 줄이 찍힌 스텝(재촉 판정용) */
+  /** 로그에 마지막으로 줄이 새로 생긴 스텝(재촉 판정용). 묶여 repeat만 오른 것은 치지 않는다(Ruling 14) */
   lastLineStep: number
 }
 
@@ -140,6 +140,13 @@ function bodySecondsToSteps(bodySeconds: number): number {
   return Math.max(1, Math.round(bodySeconds / STEP_SECONDS))
 }
 
+/** 감정 보기로 내보내는 이유. 사건 이유는 엔진 내부 이벤트 객체 대신 얕은 사본을 담는다 */
+function reasonForView(reason: Reason): Reason {
+  const { source } = reason
+  if (source.type !== 'event') return reason
+  return { ...reason, source: { type: 'event', event: { ...source.event } } }
+}
+
 /** 같은 출력이라도 원본 콘텐츠를 바꾸지 않도록 emit 강도를 올린 사본을 만든다 */
 function intenseAction(action: ActionDef): ActionDef {
   return {
@@ -167,7 +174,7 @@ export class StudioLife {
   private readonly stageLineCooldownSteps: number
   private readonly habitCooldownSteps: number
   private readonly responseCooldownSteps: number
-  private readonly nudgeSteps: number
+  private readonly nudgeSteps = bodySecondsToSteps(LOG_NUDGE_BODY_SECONDS)
   private readonly recallSteps: number
 
   constructor(show: ShowDef, seed: number) {
@@ -179,7 +186,6 @@ export class StudioLife {
     this.stageLineCooldownSteps = showSecondsToSteps(STAGE_LINE_COOLDOWN_SHOW_SECONDS, show)
     this.habitCooldownSteps = showSecondsToSteps(HABIT_COOLDOWN_SHOW_SECONDS, show)
     this.responseCooldownSteps = showSecondsToSteps(RESPONSE_COOLDOWN_SHOW_SECONDS, show)
-    this.nudgeSteps = showSecondsToSteps(LOG_NUDGE_SHOW_SECONDS, show)
     this.recallSteps = showSecondsToSteps(RECALL_SHOW_SECONDS, show)
   }
 
@@ -301,7 +307,7 @@ export class StudioLife {
       value: actor.mind.value(emotion.id),
       stage: actor.mind.stage(emotion.id),
       rise: [...actor.mind.thresholds(emotion.id).rise],
-      reasons: actor.mind.topReasons(emotion.id, LIFE_TOP_REASON_COUNT),
+      reasons: actor.mind.topReasons(emotion.id, LIFE_TOP_REASON_COUNT).map(reasonForView),
     }))
   }
 
