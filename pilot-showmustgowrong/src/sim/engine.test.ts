@@ -48,6 +48,9 @@ const SHOW: ShowDef = {
   id: 'test',
   name: '테스트 쇼',
   rating: 'TV-14',
+  showMinutes: 30,
+  startTime: { hour: 21, minute: 0 },
+  traits: [],
   corners: [
     { label: '오프닝', startTag: 'host' },
     { label: '토크', startTag: 'guest' },
@@ -495,6 +498,14 @@ describe('정적', () => {
       }),
     ])
     expect(broadcast.view().log.at(-1)?.text).toBe('방송에 정적이 흐른다…')
+  })
+
+  it('극 중 60분 쇼(배율 20)에서는 150스텝 뒤 silence 강도 1이 생긴다', async () => {
+    const broadcast = await open(quietSetup({ show: { ...SHOW, showMinutes: 60 } }))
+    run(broadcast, 149)
+    expect(silences(broadcast)).toEqual([])
+    run(broadcast, 1)
+    expect(silences(broadcast).map((event) => event.intensity)).toEqual([1])
   })
 
   it('정적이 이어지면 10초, 15초에 강도 2, 3이 나오고 시청자가 줄어든다', async () => {

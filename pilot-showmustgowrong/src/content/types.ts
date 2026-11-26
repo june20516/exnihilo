@@ -159,6 +159,12 @@ export interface ShowDef {
   id: string
   name: string
   rating: 'TV-PG' | 'TV-14' | 'TV-MA'
+  /** 극 중 방송 길이(분). 실제 방송 길이(BROADCAST_REAL_SECONDS)와의 비가 쇼 배율이다. */
+  showMinutes: number
+  /** 극 중 방송 시작 시각 */
+  startTime: { hour: number; minute: number }
+  /** 쇼 속성 태그(쇼 속성에 따라 버릇·터짐 문장이 갈린다) */
+  traits: string[]
   corners: [CornerDef, CornerDef, CornerDef]
   cameras: CameraDef[]
   homeSpots: FloorPoint[]

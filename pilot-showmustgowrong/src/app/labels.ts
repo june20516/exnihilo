@@ -1,12 +1,14 @@
-import { BROADCAST_STEPS, STEP_SECONDS } from '@/content/balance'
+import { BROADCAST_STEPS } from '@/content/balance'
 import type {
   CameraDef,
   GaugeKind,
   Intensity,
   PhenomenonKind,
+  ShowDef,
   Weight,
 } from '@/content/types'
 import type { AdEffect } from '@/sim/director'
+import { showClockMinutes } from '@/sim/showClock'
 
 export const GAUGE_LABELS: Record<GaugeKind, string> = {
   sexual: '선정성',
@@ -63,19 +65,18 @@ export function formatViewers(thousands: number): string {
   return `${Math.round(thousands * 1000).toLocaleString('ko-KR')}명`
 }
 
-/** 스텝 번호를 "1:05"처럼 방송 경과 시각으로 쓴다. */
-export function formatStepTime(step: number): string {
-  return formatSeconds(step * STEP_SECONDS)
+/** 스텝의 극 중 시각을 "21:07"처럼 쓴다(분 내림, 시는 24로 나눈 나머지). */
+export function formatShowClock(step: number, show: ShowDef): string {
+  return formatClockMinutes(Math.floor(showClockMinutes(step, show)))
 }
 
-/** 남은 방송 시간 "2:41" */
-export function formatRemaining(step: number): string {
-  return formatSeconds(Math.max(0, BROADCAST_STEPS - step) * STEP_SECONDS)
+/** 방송 종료 극 중 시각 "21:30" */
+export function formatShowEnd(show: ShowDef): string {
+  return formatShowClock(BROADCAST_STEPS, show)
 }
 
-function formatSeconds(totalSeconds: number): string {
-  const whole = Math.floor(totalSeconds)
-  const minutes = Math.floor(whole / 60)
-  const seconds = whole % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
+function formatClockMinutes(totalMinutes: number): string {
+  const hour = Math.floor(totalMinutes / 60) % 24
+  const minute = totalMinutes % 60
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }

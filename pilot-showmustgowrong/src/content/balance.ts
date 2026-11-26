@@ -10,8 +10,11 @@ import type {
 
 // 시간
 export const STEP_SECONDS = 1 / 60
-export const BROADCAST_STEPS = 10800
-export const CORNER_STEPS = 3600
+/** 실제 방송 길이(실제 초). 극 중 길이와 무관하게 한 회는 실제 3분이다. */
+export const BROADCAST_REAL_SECONDS = 180
+export const BROADCAST_STEPS = Math.round(BROADCAST_REAL_SECONDS / STEP_SECONDS)
+/** 코너는 극 중 방송 길이를 3등분한다(L1). 극 중 길이에 비례하므로 코너 길이를 극 중 시간으로 둔 것과 같다. */
+export const CORNER_STEPS = BROADCAST_STEPS / 3
 export const MAX_STEPS_PER_FRAME = 4
 /**
  * 화면 루프가 한 프레임에 쓰는 실제 시간 상한(초). 탭을 백그라운드에 뒀다 돌아와도
@@ -106,7 +109,11 @@ export const VIEWERS_START = 500
 export const VIEWERS_PER_POINT = 4
 /** 침묵 단계별 초당 시청자 이탈 비율 */
 export const SILENCE_LOSS_PER_SECOND: Record<Intensity, number> = { 1: 0.005, 2: 0.01, 3: 0.02 }
-export const SILENCE_SECONDS: Record<Intensity, number> = { 1: 5, 2: 10, 3: 15 }
+/**
+ * 정적 단계별 극 중 시간(극 중 초). 토크쇼(배율 10)의 실제 5/10/15초이며,
+ * living spec 1.1의 "5초 넘게 아무 일도 없으면 정적"이라는 체감 목표에서 나왔다.
+ */
+export const SILENCE_SHOW_SECONDS: Record<Intensity, number> = { 1: 50, 2: 100, 3: 150 }
 
 /**
  * 현상이 올리는 게이지 규칙. 증가량 = (perIntensity ?? 0) * 강도 + (flat ?? 0).

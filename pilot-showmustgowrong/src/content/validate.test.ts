@@ -47,6 +47,9 @@ const show: ShowDef = {
   id: 'show1',
   name: '테스트 쇼',
   rating: 'TV-14',
+  showMinutes: 30,
+  startTime: { hour: 21, minute: 0 },
+  traits: [],
   corners: [
     { label: '코너1', startTag: 'tag-a' },
     { label: '코너2', startTag: 'tag-b' },
@@ -96,6 +99,21 @@ describe('validateShow', () => {
 
   it('유효한 픽스처에는 빈 배열을 돌려준다', () => {
     expect(validateShow(show, performers, [makeStaff()], equipment)).toEqual([])
+  })
+
+  it('극 중 길이가 0 이하이거나 시작 시각이 범위 밖이면 오류', () => {
+    const errorsOf = (overrides: Partial<ShowDef>) =>
+      validateShow(
+        { ...show, ...overrides },
+        [makePerformer('a'), makePerformer('b')],
+        [makeStaff()],
+        equipment,
+      ).join('\n')
+    expect(errorsOf({ showMinutes: 0 })).toContain('극 중 길이 오류: 0분')
+    expect(errorsOf({ startTime: { hour: 24, minute: 0 } })).toContain('시작 시각 오류: 24:00')
+    expect(errorsOf({ startTime: { hour: 21, minute: 60 } })).toContain('시작 시각 오류: 21:60')
+    expect(errorsOf({ traits: ['talk', ''] })).toContain('빈 속성 태그')
+    expect(errorsOf({})).toBe('')
   })
 
   it('어떤 출연자 태그에도 없는 대상 태그를 보고한다', () => {

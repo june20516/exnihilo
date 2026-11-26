@@ -1,7 +1,7 @@
 import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
 import { GAUGE_KINDS, type GaugeKind, type ShowDef } from '@/content/types'
 import type { BroadcastView, LogLine } from '@/sim/engine'
-import { GAUGE_LABELS, formatRemaining, formatStepTime, formatViewers } from './labels'
+import { GAUGE_LABELS, formatShowClock, formatShowEnd, formatViewers } from './labels'
 
 /** 사고 로그에 보여 주는 최근 줄 수 */
 const LOG_LINES_SHOWN = 14
@@ -61,13 +61,14 @@ export function TopBand({ view, show, alertGauge }: TopBandProps) {
         </div>
         <div className="h-10 w-px bg-slate-700" />
         <div className="flex flex-col leading-none">
-          <span className="text-[11px] text-slate-400">남은 시간</span>
+          <span className="text-[11px] text-slate-400">방송 시각</span>
           <span
             data-testid="broadcast-time"
             className="flex items-center gap-1.5 text-3xl font-black tabular-nums text-amber-300"
           >
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
-            {formatRemaining(view.step)}
+            {formatShowClock(view.step, show)}
+            <span className="text-base font-bold text-slate-400">/ {formatShowEnd(show)}</span>
           </span>
         </div>
       </section>
@@ -134,10 +135,11 @@ interface EventLogProps {
   log: readonly LogLine[]
   /** 자동 슬로모션 계기 이벤트. 그 줄을 강조한다. */
   highlightedEventId: number | null
+  show: ShowDef
 }
 
 /** 평소 왼쪽 열의 작고 흐린 사고 로그(spec 8.2 5단계). 연쇄 깊이만큼 들여쓴다. */
-export function EventLog({ log, highlightedEventId }: EventLogProps) {
+export function EventLog({ log, highlightedEventId, show }: EventLogProps) {
   const recent = log.slice(-LOG_LINES_SHOWN)
   return (
     <section
@@ -157,8 +159,8 @@ export function EventLog({ log, highlightedEventId }: EventLogProps) {
                 : ''
             }`}
           >
-            <span className="w-8 shrink-0 tabular-nums text-slate-500">
-              {formatStepTime(line.step)}
+            <span className="w-10 shrink-0 tabular-nums text-slate-500">
+              {formatShowClock(line.step, show)}
             </span>
             <span
               className="min-w-0 truncate"

@@ -46,6 +46,15 @@ export function validateShow(
 ): string[] {
   const errors: string[] = []
 
+  if (!(show.showMinutes > 0)) errors.push(`극 중 길이 오류: ${show.showMinutes}분`)
+  const { hour, minute } = show.startTime
+  const validHour = Number.isInteger(hour) && hour >= 0 && hour <= 23
+  const validMinute = Number.isInteger(minute) && minute >= 0 && minute <= 59
+  if (!validHour || !validMinute) {
+    errors.push(`시작 시각 오류: ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
+  }
+  if (show.traits.some((trait) => trait.trim() === '')) errors.push('빈 속성 태그')
+
   const idGroups: [string, string[]][] = [
     ['출연자', performers.map((p) => p.id)],
     ['스태프', staff.map((s) => s.id)],

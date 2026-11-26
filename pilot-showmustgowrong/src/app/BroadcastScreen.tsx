@@ -358,7 +358,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     return <ErrorScreen kind={loop.error.kind} message={loop.error.message} />
   }
   if (rendererError !== null) return <ErrorScreen kind="create" message={rendererError} />
-  if (loop.result !== null) return <ResultScreen result={loop.result} onRestart={onRestart} />
+  if (loop.result !== null) return <ResultScreen result={loop.result} show={show} onRestart={onRestart} />
 
   return (
     <BroadcastStage
@@ -440,7 +440,7 @@ export function BroadcastStage({
               />
             ) : (
               <>
-                <EventLog log={view.log} highlightedEventId={highlightedEventId} />
+                <EventLog log={view.log} highlightedEventId={highlightedEventId} show={show} />
                 <p className="text-[11px] text-slate-500">
                   누적 피로 {view.fatigue} · 시드 {setup.seed}
                 </p>

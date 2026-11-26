@@ -13,7 +13,7 @@ import {
   PHENOMENON_DISPLAY_SECONDS,
   POSE_HOLD_SECONDS,
   RATING_LIMITS,
-  SILENCE_SECONDS,
+  SILENCE_SHOW_SECONDS,
   STEP_SECONDS,
   STUDIO_DEPTH,
   STUDIO_HEIGHT,
@@ -72,6 +72,7 @@ import { updateGaze } from './gaze'
 import { dropGoneActorInputs, validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
 import { TENSION_WINDOW_STEPS, tensionOf, viewersTrendOf } from './tension'
+import { showSecondsToSteps } from './showClock'
 import { StageLocator, type Emitter } from './targeting'
 import { type FloorPoint, floorDistance, type Vec3, yawBetween } from './vec'
 
@@ -879,8 +880,9 @@ export class Broadcast {
 
   private updateSilence(aired: PhenomenonEvent[]): void {
     this.silentSteps = aired.some(isPhenomenonShown) ? 0 : this.silentSteps + 1
+    const { show } = this.setup
     const intensity = INTENSITIES.find(
-      (candidate) => this.silentSteps === secondsToSteps(SILENCE_SECONDS[candidate]),
+      (candidate) => this.silentSteps === showSecondsToSteps(SILENCE_SHOW_SECONDS[candidate], show),
     )
     if (intensity === undefined) return
     this.emit({
@@ -897,8 +899,9 @@ export class Broadcast {
 
   private silenceLevel(): 0 | Intensity {
     let level: 0 | Intensity = 0
+    const { show } = this.setup
     for (const intensity of INTENSITIES) {
-      if (this.silentSteps >= secondsToSteps(SILENCE_SECONDS[intensity])) level = intensity
+      if (this.silentSteps >= showSecondsToSteps(SILENCE_SHOW_SECONDS[intensity], show)) level = intensity
     }
     return level
   }

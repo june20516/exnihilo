@@ -1,8 +1,10 @@
-import { GAUGE_LABELS, formatStepTime, formatViewers } from './labels'
+import type { ShowDef } from '@/content/types'
+import { GAUGE_LABELS, formatShowClock, formatViewers } from './labels'
 import type { BroadcastResult } from './useBroadcastLoop'
 
 interface ResultScreenProps {
   result: BroadcastResult
+  show: ShowDef
   onRestart(): void
 }
 
@@ -13,7 +15,7 @@ export const CHAIN_INDENT_MAX_LEVEL = 8
 /** 이보다 긴 연쇄는 앞부분만 보이고 나머지를 "… 외 N단계"로 줄인다. */
 export const CHAIN_LINES_SHOWN = 10
 
-export function ResultScreen({ result, onRestart }: ResultScreenProps) {
+export function ResultScreen({ result, show, onRestart }: ResultScreenProps) {
   const { summary, longestChain, haltedBy, interventionsIssued } = result
   const shownChain = longestChain.slice(0, CHAIN_LINES_SHOWN)
   const hiddenCount = longestChain.length - shownChain.length
@@ -44,7 +46,7 @@ export function ResultScreen({ result, onRestart }: ResultScreenProps) {
               {shownChain.map((line, index) => (
                 <li key={`${line.step}:${index}`} className="flex">
                   <span className="w-12 shrink-0 text-sm tabular-nums text-neutral-500">
-                    {formatStepTime(line.step)}
+                    {formatShowClock(line.step, show)}
                   </span>
                   <span
                     className="min-w-0 truncate"

@@ -10,6 +10,9 @@ export const TALK_SHOW: ShowDef = {
   id: 'talkShow',
   name: '한밤의 토크쇼',
   rating: 'TV-14',
+  showMinutes: 30,
+  startTime: { hour: 21, minute: 0 },
+  traits: ['talk', 'studioAudience'],
   corners: [
     { label: '오프닝', startTag: 'host' },
     { label: '게스트 토크', startTag: 'guest' },
