@@ -161,12 +161,24 @@ describe('TuningPanel', () => {
     expect(texts.some((text) => text?.includes('거부됨'))).toBe(true)
   })
 
+  it('저장이 실패하면 그 항목은 다음 방송부터가 아니다', () => {
+    const storage = fakeStorage()
+    storage.setItem = vi.fn(() => {
+      throw new Error('용량 초과')
+    })
+    renderPanel(storage)
+    fireEvent.change(screen.getByLabelText('진행 속도 슬라이더'), { target: { value: '2' } })
+    expect(screen.getByText('바뀜')).toBeTruthy()
+    expect(screen.queryByText('다음 방송부터')).toBeNull()
+  })
+
   it('Esc를 누르면 닫는다', () => {
     const onClose = vi.fn()
     render(
       <TuningPanel defs={DEFS} applied={APPLIED} rejected={[]} storage={null} storageKey={KEY} onClose={onClose} />,
     )
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(document.activeElement).toBe(document.body)
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

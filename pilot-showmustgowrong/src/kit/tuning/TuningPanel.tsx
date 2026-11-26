@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import {
   changedValues,
   readOverrides,
@@ -56,6 +56,8 @@ export function TuningPanel({
     initialValues(defs, storage, storageKey),
   )
   /** 숫자 입력 칸에 사용자가 치고 있는 글자 */
+  /** 마지막으로 저장에 성공한 값. 다음 방송에 실제로 쓰일 값이다 */
+  const [savedValues, setSavedValues] = useState<TuningValues>(values)
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
   const [warnings, setWarnings] = useState<Readonly<Record<string, string>>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -63,10 +65,21 @@ export function TuningPanel({
   /** 저장소가 없으면 저장되지 않으므로, 열 때부터 계속 알린다 */
   const storageMissing = storage === null
 
+  // 패널이 열려 있는 동안만 window에서 Esc를 받는다(포커스가 패널 밖이어도 닫힌다)
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   function commit(next: TuningValues): void {
     setValues(next)
     if (storage === null) return
-    setSaveError(writeOverrides(storage, storageKey, changedValues(defs, next)))
+    const error = writeOverrides(storage, storageKey, changedValues(defs, next))
+    setSaveError(error)
+    if (error === null) setSavedValues(next)
   }
 
   function clearInputState(keys: readonly string[]): void {
@@ -115,9 +128,6 @@ export function TuningPanel({
     <div
       role="dialog"
       aria-label="수치 조정"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose()
-      }}
       className="fixed top-2 right-2 z-50 max-h-[calc(100vh-1rem)] w-80 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 p-3 text-sm text-slate-200 shadow-xl"
     >
       <div className="mb-2 flex items-center justify-between">
@@ -172,7 +182,7 @@ export function TuningPanel({
             const value = values[def.key] ?? def.defaultValue
             const isChanged = value !== def.defaultValue
             // 저장되지 않으면 다음 방송 값이 아니다
-            const isPending = !storageMissing && value !== applied[def.key]
+            const isPending = !storageMissing && savedValues[def.key] !== applied[def.key]
             const warning = warnings[def.key]
             return (
               <div key={def.key} className="mt-2">
