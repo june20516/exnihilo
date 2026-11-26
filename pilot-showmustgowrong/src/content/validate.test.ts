@@ -71,6 +71,7 @@ const show: ShowDef = {
       fovDegrees: 60,
       range: 12,
       shotIntensity: 1,
+      tracking: true,
     },
   ],
   homeSpots: [
@@ -80,6 +81,7 @@ const show: ShowDef = {
   benchSpot: { x: 1, z: 6 },
   exit: { x: 16, z: 4 },
   audienceZone: { minX: 0, maxX: 16, minZ: 8, maxZ: 10 },
+  autoCut: { rotation: ['cam1'], incidentCamera: 'cam1', fallbackCamera: 'cam1' },
 }
 
 const equipment: EquipmentDef[] = [
@@ -286,6 +288,21 @@ describe('validateShow', () => {
   it('장비 중복 id를 보고한다', () => {
     const errors = validateShow(show, performers, [makeStaff()], [equipment[0], equipment[0]])
     expect(errors.join('\n')).toContain('중복 id: 장비 light1')
+  })
+
+  it('자동 컷의 없는 카메라와 추적이 아닌 사고 카메라를 보고한다', () => {
+    const fixed = { ...show.cameras[0], id: 'cam2', tracking: false }
+    const bad = {
+      ...show,
+      cameras: [show.cameras[0], fixed],
+      autoCut: { rotation: ['cam1', 'nope'], incidentCamera: 'cam2', fallbackCamera: 'gone' },
+    }
+    const errors = validateShow(bad, performers, [makeStaff()], equipment)
+    expect(errors).toContain('자동 컷 오류: rotation에 없는 카메라 nope')
+    expect(errors).toContain('자동 컷 오류: fallbackCamera에 없는 카메라 gone')
+    expect(errors).toContain('자동 컷 오류: incidentCamera cam2가 추적 카메라가 아님')
+    const empty = { ...show, autoCut: { ...show.autoCut, rotation: [] } }
+    expect(validateShow(empty, performers, [makeStaff()], equipment)).toContain('자동 컷 오류: rotation이 비어 있음')
   })
 
   it('카메라 중복 id를 보고한다', () => {

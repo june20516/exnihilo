@@ -49,6 +49,10 @@ export const LIGHT_DARKNESS_INTENSITY: Intensity = 2
 export const MOTION_CAUSE_SECONDS = tuned('MOTION_CAUSE_SECONDS')
 /** 출연자 지시가 그 출연자의 마지막 연루 사고를 이어받는 몸 초. 0이면 이어받지 않는다 */
 export const TAKEOVER_BODY_SECONDS = tuned('TAKEOVER_BODY_SECONDS')
+/** 자동 PD가 평소 한 컷을 잡는 몸 초 */
+export const AUTO_SHOT_BODY_SECONDS = tuned('AUTO_SHOT_BODY_SECONDS')
+/** 자동 PD가 다른 출연자의 사고로 컷을 옮기기 전에 지금 컷을 잡는 최소 몸 초 */
+export const AUTO_MIN_HOLD_BODY_SECONDS = tuned('AUTO_MIN_HOLD_BODY_SECONDS')
 /** 관객석이 송출되는 동안 관객이 흥분해 소음을 내는 주기(초) */
 export const AUDIENCE_NOISE_SECONDS = 3
 export const AUDIENCE_NOISE_INTENSITY: Intensity = 1

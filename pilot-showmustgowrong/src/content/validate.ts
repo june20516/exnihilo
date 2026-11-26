@@ -318,6 +318,21 @@ export function validateShow(
   const knownTags = new Set(performers.flatMap((p) => p.tags))
   const knownCameraIds = new Set(show.cameras.map((c) => c.id))
 
+  const { autoCut } = show
+  if (autoCut.rotation.length === 0) errors.push('자동 컷 오류: rotation이 비어 있음')
+  const autoCutCameras: [string, string][] = [
+    ...autoCut.rotation.map((id): [string, string] => ['rotation', id]),
+    ['incidentCamera', autoCut.incidentCamera],
+    ['fallbackCamera', autoCut.fallbackCamera],
+  ]
+  for (const [field, id] of autoCutCameras) {
+    if (!knownCameraIds.has(id)) errors.push(`자동 컷 오류: ${field}에 없는 카메라 ${id}`)
+  }
+  const incident = show.cameras.find((camera) => camera.id === autoCut.incidentCamera)
+  if (incident !== undefined && incident.tracking !== true) {
+    errors.push(`자동 컷 오류: incidentCamera ${autoCut.incidentCamera}가 추적 카메라가 아님`)
+  }
+
   const checkTarget = (target: TargetSelector, owner: string) => {
     if (typeof target === 'object' && !knownTags.has(target.tag)) {
       errors.push(`알 수 없는 태그: ${target.tag} (${owner})`)

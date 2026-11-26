@@ -74,6 +74,7 @@ const SHOW: ShowDef = {
       fovDegrees: 30,
       range: 6,
       shotIntensity: 2,
+      tracking: true,
     }),
     // 관객 구역만 잡고 무대의 누구도 잡지 않는다
     camera({
@@ -94,6 +95,7 @@ const SHOW: ShowDef = {
   benchSpot: { x: 15, z: 6 },
   exit: { x: 15.8, z: 4 },
   audienceZone: { minX: 0, maxX: 3, minZ: 1, maxZ: 7 },
+  autoCut: { rotation: ['wide', 'close', 'wide', 'audienceCam'], incidentCamera: 'close', fallbackCamera: 'wide' },
 }
 
 const directive = (id: string, action: ActionDef): DirectiveDef => ({ id, label: id, expect: id, action })

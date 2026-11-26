@@ -209,6 +209,15 @@ describe('게임 조정 목록', () => {
     expect(isValidThresholds(thresholds)).toBe(valid)
   })
 
+  it.each([
+    ['최소 유지 = 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: 5 }, true],
+    ['최소 유지 > 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: 5.5 }, false],
+    ['컷 길이를 최소 유지 아래로', { AUTO_SHOT_BODY_SECONDS: 1 }, false],
+  ])('자동 PD 관계: %s', (_name, changes: Record<string, number>, valid) => {
+    const defaults = Object.fromEntries(TUNABLES.map((def) => [def.key, def.defaultValue]))
+    expect(violatedConstraints({ ...defaults, ...changes }, TUNING_CONSTRAINTS).length === 0).toBe(valid)
+  })
+
   it('모르는 키를 물으면 throw한다', () => {
     expect(() => tuned('없는키')).toThrow('없는키')
   })

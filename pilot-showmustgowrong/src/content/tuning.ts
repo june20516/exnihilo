@@ -610,8 +610,16 @@ const THRESHOLD_CONSTRAINTS: readonly TuningConstraint[] = [
   },
 ]
 
+const AUTO_DIRECTOR_CONSTRAINTS: readonly TuningConstraint[] = [
+  {
+    keys: ['AUTO_MIN_HOLD_BODY_SECONDS', 'AUTO_SHOT_BODY_SECONDS'],
+    description: '최소 컷 유지는 평소 컷 길이 이하여야 합니다',
+    holds: (v) => v['AUTO_MIN_HOLD_BODY_SECONDS'] <= v['AUTO_SHOT_BODY_SECONDS'],
+  },
+]
+
 /** 항목 사이의 관계. 엔진이 throw하는 관계는 없고, 감정 문턱만 조합이 어긋나면 단계 판정이 뒤엉킨다 */
-export const TUNING_CONSTRAINTS: readonly TuningConstraint[] = THRESHOLD_CONSTRAINTS
+export const TUNING_CONSTRAINTS: readonly TuningConstraint[] = [...THRESHOLD_CONSTRAINTS, ...AUTO_DIRECTOR_CONSTRAINTS]
 
 function loadTuning(): ResolvedTuning & { storageError: string | null } {
   const { overrides, error } = initialOverrides(TUNING_STORAGE_KEY)

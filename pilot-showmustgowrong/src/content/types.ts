@@ -165,6 +165,16 @@ export interface CornerDef {
   startTag: string
 }
 
+/** 자동 PD가 쓰는 컷 규칙. 카메라 id는 ShowDef.cameras 안에 있어야 한다. */
+export interface AutoCutDef {
+  /** 평소 컷 순서(카메라 id). 추적 카메라 차례마다 대상을 다음 출연자로 넘긴다 */
+  rotation: string[]
+  /** 출연자 사고 때 쓰는 추적 카메라 id */
+  incidentCamera: string
+  /** 장비·관객 사고 때 쓰는 카메라 id */
+  fallbackCamera: string
+}
+
 export interface ShowDef {
   id: string
   name: string
@@ -182,6 +192,8 @@ export interface ShowDef {
   /** 이탈한 출연자가 걸어가는 바닥 위치 */
   exit: FloorPoint
   audienceZone: { minX: number; maxX: number; minZ: number; maxZ: number }
+  /** 자동 PD 컷 규칙 */
+  autoCut: AutoCutDef
 }
 
 export const COMMON_EMOTIONS = ['irritation', 'excitement', 'anxiety', 'boredom'] as const
