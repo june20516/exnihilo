@@ -8,7 +8,7 @@ import {
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { TALK_SHOW } from '@/content/talkShow'
 import type { EventIntensity, MindDef, SensitivityDef } from '@/content/types'
-import { showSecondsToSteps } from './showClock'
+import { showSecondsToSteps, showTimeScale } from './showClock'
 import { Mind, type ActiveSituations } from './emotion'
 import type { PhenomenonEvent } from './phenomena'
 
@@ -184,7 +184,7 @@ describe('사건 이유', () => {
 })
 
 describe('상황 이유', () => {
-  const SHOW_MINUTES_PER_REAL_SECOND = 10 / 60 // 토크쇼 배율 10
+  const SHOW_MINUTES_PER_REAL_SECOND = showTimeScale(TALK_SHOW) / 60
   /** 10초(실제) 동안 offScreen이면 극 중 100초가 지난 만큼 쌓인다 */
   const ACCUMULATED =
     SITUATION_REFERENCE_PER_SHOW_MINUTE * 10 * SHOW_MINUTES_PER_REAL_SECOND
@@ -308,6 +308,11 @@ describe('상황 이유', () => {
     const before = mind.value('irritation')
     mind.advance(OFF_AIR, 300)
     expect(mind.value('irritation')).toBe(before)
+    // 이미 처리한 구간(300~600)을 다시 쌓지 않는다
+    mind.advance(OFF_AIR, 630)
+    const gain =
+      SITUATION_REFERENCE_PER_SHOW_MINUTE * 0.5 * SHOW_MINUTES_PER_REAL_SECOND
+    expect(mind.value('irritation')).toBeCloseTo(before + gain)
   })
 })
 

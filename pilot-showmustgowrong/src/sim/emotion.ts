@@ -174,7 +174,7 @@ export class Mind {
       0,
       stepsToShowSeconds(step - this.lastStep, this.show) / SECONDS_PER_MINUTE,
     )
-    this.lastStep = step
+    this.lastStep = Math.max(this.lastStep, step)
     this.updateDecaying(step)
     this.updateSituations(situations, showMinutes)
     return this.updateStages(step)
