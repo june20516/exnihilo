@@ -187,6 +187,31 @@ describe('TuningPanel', () => {
     expect(screen.queryByText('다음 방송부터')).toBeNull()
   })
 
+  it('저장이 한 번 성공한 뒤 실패하면 마지막 성공 상태 기준으로 다음 방송부터를 보인다', () => {
+    const storage = fakeStorage()
+    renderPanel(storage)
+    fireEvent.change(screen.getByLabelText('진행 속도 슬라이더'), { target: { value: '2' } })
+    expect(screen.getByText('다음 방송부터')).toBeTruthy()
+
+    storage.removeItem = vi.fn(() => {
+      throw new Error('지우기 실패')
+    })
+    // 편집값은 applied와 같아졌지만 저장소에는 여전히 2가 남아 있다
+    fireEvent.change(screen.getByLabelText('진행 속도 슬라이더'), { target: { value: '1' } })
+    expect(screen.getByRole('alert').textContent).toContain('지우기 실패')
+    expect(screen.getByText('다음 방송부터')).toBeTruthy()
+  })
+
+  it('패널이 닫히면 Esc 리스너가 해제된다', () => {
+    const onClose = vi.fn()
+    const { unmount } = render(
+      <TuningPanel defs={DEFS} applied={APPLIED} rejected={[]} storage={null} storageKey={KEY} onClose={onClose} />,
+    )
+    unmount()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('Esc를 누르면 닫는다', () => {
     const onClose = vi.fn()
     render(

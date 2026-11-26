@@ -58,9 +58,9 @@ export function TuningPanel({
   const [values, setValues] = useState<TuningValues>(() =>
     initialValues(defs, storage, storageKey),
   )
-  /** 숫자 입력 칸에 사용자가 치고 있는 글자 */
   /** 마지막으로 저장에 성공한 값. 다음 방송에 실제로 쓰일 값이다 */
   const [savedValues, setSavedValues] = useState<TuningValues>(values)
+  /** 숫자 입력 칸에 사용자가 치고 있는 글자 */
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({})
   const [warnings, setWarnings] = useState<Readonly<Record<string, string>>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
