@@ -21,6 +21,8 @@ export interface LineInput {
 /** silent면 행동 줄과 현상 줄을 남기지 않는다(버릇·터짐이 자기 줄을 따로 남긴다, L3) */
 export interface ActionOptions {
   silent?: boolean
+  /** 주면 이 행동이 남기는 첫 사고 줄 앞에 붙인다 */
+  linePrefix?: string
 }
 
 /** 행동을 실행한 결과: 내뿜은 현상과 이동 대상(이동이 없거나 home이면 대상 없음) */

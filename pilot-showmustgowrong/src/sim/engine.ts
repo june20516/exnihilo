@@ -19,6 +19,7 @@ import {
   STUDIO_DEPTH,
   STUDIO_HEIGHT,
   STUDIO_WIDTH,
+  TAKEOVER_BODY_SECONDS,
   TOLERANCE_COUNT,
   VIEW_LOG_LINES,
   VIEWERS_START,
@@ -49,9 +50,10 @@ import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame, viewersTrendOf } from './broadcast'
 import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
-import { describeEvent, describeRootEvent, withObject, withSubject } from './describe'
+import { describeEvent, describeRootEvent, entityName, withObject, withSubject } from './describe'
 import { Director, type AdEffect } from './director'
 import { StudioLife, type BurstRecord, type LifeMember } from './life'
+import { eventNoun } from './narration'
 import { LifeActions, type ActionOptions, type ActionResult, type LineInput } from './lifeActions'
 import { EventLog, isStir, type Perceiver, type PhenomenonEvent } from './phenomena'
 import { PhysicsWorld, initPhysics, type Contact } from './physics'
@@ -70,11 +72,20 @@ import {
   type Phase,
   type RecentPhenomenon,
   type StaffView,
+  type TakeoverView,
 } from './engineTypes'
 import { updateGaze } from './gaze'
 import { dropGoneActorInputs, validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
 import { showSecondsToSteps } from './showClock'
+import {
+  activeInvolvement,
+  remainingTakeoverSteps,
+  takeoverWindowSteps,
+  updateInvolvement,
+  type Involvement,
+  type InvolvementMap,
+} from './takeover'
 import { NO_TARGET, StageLocator, type Emitter, type Target } from './targeting'
 import { type FloorPoint, floorDistance, type Vec3, yawBetween } from './vec'
 
@@ -96,6 +107,8 @@ const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
 const MOTION_CAUSE_STEPS = secondsToSteps(MOTION_CAUSE_SECONDS)
 const POSE_HOLD_STEPS = secondsToSteps(POSE_HOLD_SECONDS)
 const WALK_MAX_STEPS = secondsToSteps(WALK_MAX_SECONDS)
+/** 출연자 지시가 연루 사고를 이어받는 창. 조정값 0이면 0(꺼짐)이다 */
+const TAKEOVER_WINDOW_STEPS = takeoverWindowSteps(TAKEOVER_BODY_SECONDS, STEPS_PER_SECOND)
 /** 시간이 지나면 풀리는 감정 포즈. 넘어짐·놀람은 물리나 다른 행동이 끝낸다. */
 const FADING_POSES: ReadonlySet<Pose> = new Set(['angry', 'laugh'])
 /** onAirFrame 목표점이 스튜디오 벽에 붙지 않게 두는 여백(m) */
@@ -132,6 +145,11 @@ const SILENCE_BREAKING_STIR_KINDS: ReadonlySet<PhenomenonEvent['kind']> = new Se
 /** 화면에 보이는 사고인가. gaze와 silence, 기척(강도 0)은 아니다. */
 function isPhenomenonShown(event: PhenomenonEvent): event is StrongEvent {
   return event.kind !== 'gaze' && event.kind !== 'silence' && isStrong(event)
+}
+
+/** emit이 이 사건의 현상 줄을 남기는가. 기척과 silent는 줄이 없다. */
+function leavesLine(event: PhenomenonEvent, silent: boolean): boolean {
+  return !silent && !isStir(event)
 }
 
 /** from에서 to로 향하는 바닥 평면 단위 벡터. 같은 자리면 null. */
@@ -179,6 +197,8 @@ export class Broadcast {
   private pendingEvents: PhenomenonEvent[] = []
   /** 이번 스텝에 생긴 이벤트. 광고로 멈춘 스텝은 재개 뒤에도 이어서 쌓는다. */
   private currentEvents: PhenomenonEvent[] = []
+  /** 출연자마다 마지막으로 연루된 사고(지시 이어받기, spec Plan B1 3.2). 광고가 지운다. */
+  private readonly involvement: InvolvementMap = new Map()
   /** 방송이 조용한 스텝 수(정적 줄·시청률). 송출된 사고나 소리 나는 기척이 끊는다. */
   private silentSteps = 0
   /**
@@ -507,7 +527,37 @@ export class Broadcast {
       return
     }
     this.life.addDirective(actorId, outcome.moodShifts, outcome.label, this.stepCount)
-    this.executeAction(member, outcome.action, null)
+    const cause = this.takeoverCause(member)
+    const linePrefix =
+      cause === null
+        ? undefined
+        : `${entityName(cause.sourceId, this.names)}의 ${eventNoun(cause)}에 이어 `
+    this.executeAction(member, outcome.action, cause, { linePrefix })
+  }
+
+  /** 출연자 지시가 이어받을 사고: 창 안의 마지막 연루 사고. 이탈했으면 없다. */
+  private takeoverCause(member: CastMember): PhenomenonEvent | null {
+    return this.takeoverEntry(member)?.event ?? null
+  }
+
+  private takeoverEntry(member: CastMember): Involvement | null {
+    if (member.walkedOut) return null
+    return activeInvolvement(
+      this.involvement.get(member.def.id),
+      this.stepCount,
+      TAKEOVER_WINDOW_STEPS,
+    )
+  }
+
+  private takeoverView(member: CastMember): TakeoverView | null {
+    const entry = this.takeoverEntry(member)
+    if (entry === null) return null
+    const remainingSteps = remainingTakeoverSteps(entry, this.stepCount, TAKEOVER_WINDOW_STEPS)
+    return {
+      eventId: entry.event.id,
+      text: this.describe(entry.event),
+      remainingBodySeconds: remainingSteps * STEP_SECONDS,
+    }
   }
 
   private directStaff(staffId: string, directiveId: string): void {
@@ -556,6 +606,7 @@ export class Broadcast {
       }
     }
     this.log.breakChains()
+    this.involvement.clear()
     this.silentSteps = 0
     this.lullSteps = 0
     this.currentPhase = 'adBreak'
@@ -938,6 +989,7 @@ export class Broadcast {
     const members = this.cast.active()
     const perceivers = members.map((member) => this.perceiverOf(member))
     this.life.perceive(this.pendingEvents, perceivers, this.stepCount)
+    updateInvolvement(this.involvement, this.pendingEvents, perceivers)
     if (!this.life.isTickStep(this.stepCount)) return
     const outputs = this.life.tick({
       step: this.stepCount,
@@ -1087,6 +1139,7 @@ export class Broadcast {
   /**
    * 행동을 실행하고 내뿜은 현상과 이동 대상을 돌려준다.
    * silent면 행동 줄과 현상 줄을 남기지 않는다(점수·연쇄는 그대로).
+   * linePrefix는 행동 줄이 있으면 그 줄, 없으면 첫 현상 줄 앞에 붙는다.
    */
   private executeAction(
     member: CastMember,
@@ -1095,23 +1148,25 @@ export class Broadcast {
     options: ActionOptions = {},
   ): ActionResult {
     const silent = options.silent ?? false
+    let linePrefix = options.linePrefix ?? ''
     member.pose = action.pose
     member.poseStep = this.stepCount
     this.setMotionCause(member, cause)
     const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
     if (action.line !== undefined && !silent) {
       this.addLine({
-        text: action.line,
+        text: `${linePrefix}${action.line}`,
         kind: 'incident',
         // 광고 전 원인이면 1부터 센다(Ruling 9)
         depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
         eventId: null,
         position: emitter.position,
       })
+      linePrefix = ''
     }
     const moveTarget =
       action.move === undefined ? NO_TARGET : this.move(member, emitter, action.move, cause)
-    return { events: this.emitAll(emitter, action.emits, cause, silent), moveTarget }
+    return { events: this.emitAll(emitter, action.emits, cause, silent, linePrefix), moveTarget }
   }
 
   /** 이동하고 이동 대상을 돌려준다(home 이동은 대상 없음). */
@@ -1168,13 +1223,16 @@ export class Broadcast {
     emits: readonly EmitDef[],
     cause: PhenomenonEvent | null,
     silent = false,
+    linePrefix = '',
   ): PhenomenonEvent[] {
+    // 접두는 줄을 남긴 첫 현상에만 붙는다(기척은 줄이 없다)
+    let prefix = linePrefix
     return emits.map((emit) => {
       const intensity =
         emit.intensity === 'causePlusOne'
           ? (Math.min(MAX_INTENSITY, (cause?.intensity ?? 0) + 1) as Intensity)
           : emit.intensity
-      return this.emit(
+      const event = this.emit(
         {
           kind: emit.kind,
           intensity,
@@ -1184,7 +1242,10 @@ export class Broadcast {
           causeId: cause?.id ?? null,
         },
         silent,
+        prefix,
       )
+      if (leavesLine(event, silent)) prefix = ''
+      return event
     })
   }
 
@@ -1212,6 +1273,7 @@ export class Broadcast {
   private emit(
     partial: Omit<PhenomenonEvent, 'id' | 'depth' | 'step'>,
     silent = false,
+    linePrefix = '',
   ): PhenomenonEvent {
     const event = this.log.emit({ ...partial, step: this.stepCount })
     this.currentEvents.push(event)
@@ -1220,9 +1282,9 @@ export class Broadcast {
     if (this.deepestEvent === null || event.depth > this.deepestEvent.depth) {
       this.deepestEvent = event
     }
-    if (!silent) {
+    if (leavesLine(event, silent)) {
       this.addLine({
-        text: this.describe(event),
+        text: `${linePrefix}${this.describe(event)}`,
         kind: event.kind === 'silence' ? 'silence' : 'incident',
         depth: event.depth,
         eventId: event.id,
@@ -1373,6 +1435,7 @@ export class Broadcast {
       mood: this.life.mood(member.def.id),
       emotions: this.life.emotions(member.def.id),
       misfireChance: this.director.previewMisfireChance(member.def.id),
+      takeover: this.takeoverView(member),
     }
   }
 

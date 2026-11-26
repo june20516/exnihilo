@@ -960,8 +960,15 @@ describe('반응과 시선', () => {
     expect(broadcast.view().log.map((line) => line.text)).toContain('와이드가 렉스를 잡았다')
   })
 
+  /**
+   * 렉스의 코너 소음(스텝 0)을 뺀 무대. 있으면 스텝 10의 지시가 그 소음을 이어받아(지시 이어받기)
+   * 지시가 연쇄의 뿌리가 되지 않는다.
+   */
+  const shoutSetup = () =>
+    setup({ performers: [{ ...REX, reactions: [] }, MO], staff: [], equipment: [] })
+
   it('반응은 다음 스텝에 한 단계씩 전파되고 longestChain이 그 연쇄를 돌려준다', async () => {
-    const broadcast = await open(setup({ staff: [], equipment: [] }))
+    const broadcast = await open(shoutSetup())
     run(broadcast, 10)
     broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'shout' }])
     const fromMo = (step: number) =>
@@ -988,7 +995,7 @@ describe('반응과 시선', () => {
   })
 
   it('summary.rootLine은 가장 깊은 연쇄의 원인 없는 첫 사건 줄이다', async () => {
-    const broadcast = await open(setup({ staff: [], equipment: [] }))
+    const broadcast = await open(shoutSetup())
     expect(broadcast.summary().rootLine).toBeNull()
     run(broadcast, 10)
     broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'shout' }])
@@ -998,7 +1005,7 @@ describe('반응과 시선', () => {
   })
 
   it('longestChain은 광고 뒤 사건만 담는다', async () => {
-    const broadcast = await open(setup({ staff: [], equipment: [] }))
+    const broadcast = await open(shoutSetup())
     run(broadcast, 10)
     broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'shout' }])
     broadcast.step([])

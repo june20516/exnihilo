@@ -47,6 +47,8 @@ export const WALKOUT_INTENSITY: Intensity = 2
 /** 조명이 부서질 때 구역 중앙에 생기는 어둠의 강도 */
 export const LIGHT_DARKNESS_INTENSITY: Intensity = 2
 export const MOTION_CAUSE_SECONDS = tuned('MOTION_CAUSE_SECONDS')
+/** 출연자 지시가 그 출연자의 마지막 연루 사고를 이어받는 몸 초. 0이면 이어받지 않는다 */
+export const TAKEOVER_BODY_SECONDS = tuned('TAKEOVER_BODY_SECONDS')
 /** 관객석이 송출되는 동안 관객이 흥분해 소음을 내는 주기(초) */
 export const AUDIENCE_NOISE_SECONDS = 3
 export const AUDIENCE_NOISE_INTENSITY: Intensity = 1
