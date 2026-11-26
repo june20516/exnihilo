@@ -528,11 +528,15 @@ export class Broadcast {
     }
     this.life.addDirective(actorId, outcome.moodShifts, outcome.label, this.stepCount)
     const cause = this.takeoverCause(member)
-    const linePrefix =
-      cause === null
-        ? undefined
-        : `${entityName(cause.sourceId, this.names)}의 ${eventNoun(cause)}에 이어 `
+    const linePrefix = cause === null ? undefined : this.takeoverPrefix(member, cause)
     this.executeAction(member, outcome.action, cause, { linePrefix })
+  }
+
+  /** "<출처>의 <사고>에 이어 ". 자기 사고를 이으면 뒤 문장의 주어와 겹치므로 이름을 뺀다. */
+  private takeoverPrefix(member: CastMember, cause: PhenomenonEvent): string {
+    const noun = eventNoun(cause)
+    if (cause.sourceId === member.def.id) return `${noun}에 이어 `
+    return `${entityName(cause.sourceId, this.names)}의 ${noun}에 이어 `
   }
 
   /** 출연자 지시가 이어받을 사고: 창 안의 마지막 연루 사고. 이탈했으면 없다. */
@@ -540,13 +544,19 @@ export class Broadcast {
     return this.takeoverEntry(member)?.event ?? null
   }
 
+  /**
+   * 원인·접두·view 표시가 함께 쓰는 판단. 광고에 끊긴 사고는 기억에 남아 있어도 잇지 않는다
+   * (reset 없는 광고는 광고 직전 사고를 재개 첫 스텝에 다시 인지시킨다).
+   */
   private takeoverEntry(member: CastMember): Involvement | null {
     if (member.walkedOut) return null
-    return activeInvolvement(
+    const entry = activeInvolvement(
       this.involvement.get(member.def.id),
       this.stepCount,
       TAKEOVER_WINDOW_STEPS,
     )
+    if (entry === null || this.log.linkedCauseDepth(entry.event.id) === 0) return null
+    return entry
   }
 
   private takeoverView(member: CastMember): TakeoverView | null {
