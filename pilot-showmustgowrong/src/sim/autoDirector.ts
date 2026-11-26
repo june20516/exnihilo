@@ -6,7 +6,7 @@ import type { BroadcastInput, BroadcastView, RecentPhenomenon } from './engineTy
 export interface AutoDirectorTiming {
   /** 평소 한 컷을 잡는 스텝 수 */
   shotSteps: number
-  /** 다른 출연자의 사고로 컷을 옮기기 전에 지금 컷을 잡는 최소 스텝 수 */
+  /** 사고로 컷을 옮기기 전에 지금 컷을 잡는 최소 스텝 수. 모든 사고 컷 전환(평소 컷 → 사고, 사고 → 다른 사고)에 건다 */
   minHoldSteps: number
 }
 
@@ -69,7 +69,7 @@ export class AutoDirector {
     )
   }
 
-  /** 매 스텝 부른다. 낼 입력이 없으면 빈 배열 */
+  /** 몇 스텝마다 불러도 된다(시간은 view.step으로 잰다). 낼 입력이 없으면 빈 배열 */
   decide(view: BroadcastView): BroadcastInput[] {
     if (view.phase !== 'live') {
       // 광고 중에 난 현상도 본 것으로 친다. 광고 뒤에 남은 낡은 사고에 반응하지 않게 한다
@@ -126,6 +126,7 @@ export class AutoDirector {
       // 바깥(엔진·플레이어)이 송출이나 대상을 바꿔 두었으면 사고 컷으로 돌려놓는다
       return this.inputsFor(view, cut)
     }
+    // 컷이 깜빡이지 않게 모든 사고 컷 전환에 최소 유지를 건다(spec Plan B1 2.3)
     if (view.step - cut.sinceStep < this.timing.minHoldSteps) return []
     this.pendingIncident = null
     this.cut = { ...target, sinceStep: view.step }

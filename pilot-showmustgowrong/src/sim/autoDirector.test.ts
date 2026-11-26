@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { AUTO_SHOT_BODY_SECONDS, STEP_SECONDS } from '@/content/balance'
+import { AUTO_MIN_HOLD_BODY_SECONDS, AUTO_SHOT_BODY_SECONDS, STEP_SECONDS } from '@/content/balance'
 import type { Intensity } from '@/content/types'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
@@ -11,6 +11,8 @@ const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 const seconds = (value: number) => Math.round(value * STEPS_PER_SECOND)
 /** 평소 컷 길이(조정값, 몸 초) */
 const SHOT = seconds(AUTO_SHOT_BODY_SECONDS)
+/** 사고 컷 전환 전 최소 유지(조정값, 몸 초) */
+const HOLD = seconds(AUTO_MIN_HOLD_BODY_SECONDS)
 const ORDER = ['rex', 'priya', 'okafor', 'mo']
 
 let baseView: BroadcastView
@@ -228,6 +230,21 @@ describe('AutoDirector 사고', () => {
       }),
     )
     expect(director.decide(viewAt(200 + seconds(1.5), onClose))).toEqual([TRACK('okafor')])
+  })
+
+  it('평소 컷을 최소 유지만큼 잡기 전에 난 첫 사고도 최소 유지가 지난 뒤에 옮긴다', () => {
+    const director = newDirector()
+    director.decide(viewAt(0))
+    expect(director.decide(viewAt(HOLD - 1, { phenomena: [phenomenon(1, 'priya')] }))).toEqual([])
+    expect(director.decide(viewAt(HOLD))).toEqual([TRACK('priya'), SWITCH('close')])
+  })
+
+  it('장비 사고도 지금 컷을 최소 유지만큼 잡은 뒤에 와이드로 넘긴다', () => {
+    const director = afterPriyaIncident()
+    const onClose = { onAir: 'close', closeTarget: 'priya' }
+    const light = phenomenon(2, 'overheatedLight', { kind: 'impact' })
+    expect(director.decide(viewAt(200 + HOLD - 1, { ...onClose, phenomena: [light] }))).toEqual([])
+    expect(director.decide(viewAt(200 + HOLD, onClose))).toEqual([SWITCH('wide')])
   })
 
   it('장비 사고는 와이드로 넘긴다', () => {

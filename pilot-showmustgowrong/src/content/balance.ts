@@ -51,7 +51,7 @@ export const MOTION_CAUSE_SECONDS = tuned('MOTION_CAUSE_SECONDS')
 export const TAKEOVER_BODY_SECONDS = tuned('TAKEOVER_BODY_SECONDS')
 /** 자동 PD가 평소 한 컷을 잡는 몸 초 */
 export const AUTO_SHOT_BODY_SECONDS = tuned('AUTO_SHOT_BODY_SECONDS')
-/** 자동 PD가 다른 출연자의 사고로 컷을 옮기기 전에 지금 컷을 잡는 최소 몸 초 */
+/** 자동 PD가 사고로 컷을 옮기기 전에 지금 컷을 잡는 최소 몸 초. 모든 사고 컷 전환에 건다 */
 export const AUTO_MIN_HOLD_BODY_SECONDS = tuned('AUTO_MIN_HOLD_BODY_SECONDS')
 /** 관객석이 송출되는 동안 관객이 흥분해 소음을 내는 주기(초) */
 export const AUDIENCE_NOISE_SECONDS = 3

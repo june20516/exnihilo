@@ -17,8 +17,9 @@
  * - 콘텐츠 검증이 0을 거부하는 값: 출연자 감정 속도(perShowMinute·fadePerShowMinute > 0, validate.ts). 0이면 엔진 생성이
  *   throw해 화면이 깨진다.
  *
- * 관계 규칙(TUNING_CONSTRAINTS): 범위 안 값이라도 조합이 어긋나면(예: 내림 문턱 >= 진입 문턱) 걸린 저장값을
- * 기본값으로 되돌리고 TUNING.rejected에 conflict로 남긴다. 감정 문턱 관계는 콘텐츠 문턱 검증(isValidThresholds)과 같다.
+ * 관계 규칙(TUNING_CONSTRAINTS): 범위 안 값이라도 조합이 어긋나면(예: 내림 문턱 >= 진입 문턱, 최소 컷 유지 > 평소
+ * 컷 길이) 걸린 저장값을 기본값으로 되돌리고 TUNING.rejected에 conflict로 남긴다. 감정 문턱 관계는 콘텐츠 문턱
+ * 검증(isValidThresholds)과 같다.
  *
  * 시간 단위: 몸 초는 물리 시간(평소 실제 1초, 개입 슬로모션 중 실제 5초), 극 중 초·분은 쇼 배율이 곱해진 시간
  * (토크쇼 배율 10: 극 중 1분 = 평소 실제 6초), 실제 초는 사람이 보는 시간이다.
@@ -477,8 +478,9 @@ export const TUNABLES: readonly TunableDef[] = [
   // 실제 토크쇼 컷 4~8초에서 골랐다(spec Plan B1 2.3). Task 7이 상수로 쓴다.
   // 컷 길이 5 -> 8(Plan B1 Task 8): 관객석 컷은 4컷 순환에 한 번이고 관객 소음(실제 3초마다)이 송출되어 밋밋함을
   // 끊는다. 설계상 네 칸 모두 같은 컷 길이라 한 바퀴는 5초×4 = 실제 20초에서 8초×4 = 32초가 된다(관객석 컷 평소 실제
-  // 분당 3.0 -> 1.9회). 실제로는 관객 소음이 사고라 관객석 컷이 약 2.9초 만에 와이드로 넘어가고, 출연자 사고를
-  // 따라가느라 클로즈업은 길어진다. 측정(기본 라인업 시드 1~10)으로 관객석 컷은 평소 실제 분당 2.23 -> 1.30회였다.
+  // 분당 3.0 -> 1.9회). 실제로는 관객 소음이 사고라 관객석 컷이 평균 몸 2.88초(중앙값 3.00초) 만에 와이드로 넘어가고,
+  // 출연자 사고를 따라가느라 클로즈업은 길어진다. 측정(기본 라인업 시드 1~10, 몸 0.1초 호출)으로 관객석 컷은 평소
+  // 실제 분당 2.23 -> 1.30회였다.
   // 다른 네 값을 최종값으로 두고 컷만 5일 때 기본 라인업 큰 터짐 1~3회가 시드 64%(32/50)였다.
   // 8은 실제 토크쇼 컷 4~8초의 가장 긴 쪽이고, spec 2.3의 값(5)을 이 측정으로 바꿨다.
   ...group('자동 PD', [
@@ -495,7 +497,7 @@ export const TUNABLES: readonly TunableDef[] = [
       label: '최소 컷 유지',
       unit: '몸 초',
       defaultValue: 1.5,
-      description: '다른 출연자의 사고로 컷을 옮기기 전에 지금 컷을 잡는 최소 시간. 컷이 깜빡이지 않게 한다.',
+      description: '사고를 따라 컷을 옮기기 전에 지금 컷을 잡는 최소 시간. 컷이 깜빡이지 않게 한다.',
     },
   ]),
 
@@ -636,7 +638,12 @@ const AUTO_DIRECTOR_CONSTRAINTS: readonly TuningConstraint[] = [
   },
 ]
 
-/** 항목 사이의 관계. 엔진이 throw하는 관계는 없고, 감정 문턱만 조합이 어긋나면 단계 판정이 뒤엉킨다 */
+/**
+ * 항목 사이의 관계. 엔진이 throw하는 관계는 없다. 어긋나면 게임이 이상해지는 조합만 막는다.
+ * - 감정 문턱: 조합이 어긋나면 단계 판정이 뒤엉킨다.
+ * - 자동 PD: 최소 컷 유지가 평소 컷 길이보다 길면 사고를 따라 컷을 옮기기까지 평소 컷 하나보다 오래 기다려
+ *   "일어난 일 따라가기"(spec Plan B1 2.3)가 늦어진다.
+ */
 export const TUNING_CONSTRAINTS: readonly TuningConstraint[] = [...THRESHOLD_CONSTRAINTS, ...AUTO_DIRECTOR_CONSTRAINTS]
 
 function loadTuning(): ResolvedTuning & { storageError: string | null } {
