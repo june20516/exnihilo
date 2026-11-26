@@ -13,3 +13,6 @@ export type {
   TuningStorage,
   TuningValues,
 } from './tuning'
+export { TuningPanel } from './TuningPanel'
+export type { TuningPanelProps } from './TuningPanel'
+export { useTuningHotkey } from './useTuningHotkey'
