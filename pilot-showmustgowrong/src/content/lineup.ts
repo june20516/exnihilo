@@ -1,14 +1,14 @@
+import { JUNE_MIND } from './minds/june'
+import { MO_MIND } from './minds/mo'
+import { OKAFOR_MIND } from './minds/okafor'
+import { PRIYA_MIND } from './minds/priya'
+import { REX_MIND } from './minds/rex'
 import type { ActionDef, EquipmentDef, PerformerDef, StaffDef } from './types'
 
 /**
  * Plan 1 고정 라인업(spec 7.1~7.3). 출연자 성격은 반응과 지시 데이터로만 표현한다.
  * 무대 출연자 순서가 home spot 순서다(x 4, 6.5, 9.5, 12).
  */
-
-const ANGRY_AT_CAUSE: ActionDef = {
-  pose: 'angry',
-  emits: [{ kind: 'anger', intensity: 2, target: 'cause' }],
-}
 
 const BODY_SLAM: ActionDef = {
   pose: 'angry',
@@ -23,29 +23,14 @@ const REX: PerformerDef = {
   shortName: '렉스',
   role: 'MC',
   tendency:
-    '카메라 시선을 8초 못 받으면 카메라로 돌진(분노 2). 화면에 잡히면 표정을 푼다. 웃음 2↑ 받으면 → 분노 3(욕설)',
+    '화면 밖에 오래 있으면 주목 욕구가 쌓여 카메라로 돌진. 비웃음엔 짜증',
   presence: 3,
   tolerance: 'high',
   weight: 'normal',
   tags: ['host'],
   misfire: 'overdo',
+  mind: REX_MIND,
   reactions: [
-    {
-      trigger: { kind: 'gaze', when: 'absentFor', seconds: 8 },
-      action: {
-        pose: 'angry',
-        move: { type: 'dash', toward: 'onAirCamera', speed: 9 },
-        emits: [{ kind: 'anger', intensity: 2, target: 'none' }],
-      },
-    },
-    {
-      trigger: { kind: 'gaze', when: 'enter' },
-      action: { pose: 'idle', emits: [], line: '렉스가 카메라를 찾아 표정을 푼다' },
-    },
-    {
-      trigger: { kind: 'laughter', min: 2, scope: 'targetsSelf' },
-      action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 3, target: 'cause' }] },
-    },
     {
       trigger: { kind: 'corner', tag: 'host' },
       action: { pose: 'idle', emits: [{ kind: 'noise', intensity: 1, target: 'none' }] },
@@ -55,18 +40,20 @@ const REX: PerformerDef = {
     {
       id: 'stepUp',
       label: '카메라 앞으로 나오세요',
-      expect: '송출 화면 안으로 걸어 들어가 소음 1(잡히면 분노가 풀림)',
+      expect: '송출 화면 안으로 걸어 들어가 소음 1(잡히면 분노가 풀림) (주목 욕구 ▼)',
       action: {
         pose: 'idle',
         move: { type: 'walk', toward: 'onAirFrame', speed: 4 },
         emits: [{ kind: 'noise', intensity: 1, target: 'none' }],
       },
+      moodShifts: [{ emotion: 'attention', amount: -40 }],
     },
     {
       id: 'pressGuest',
       label: '게스트를 몰아붙이세요',
-      expect: '게스트에게 분노 2',
+      expect: '게스트에게 분노 2 (짜증 ▼)',
       action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 2, target: { tag: 'guest' } }] },
+      moodShifts: [{ emotion: 'irritation', amount: -20 }],
     },
   ],
 }
@@ -83,6 +70,7 @@ const PRIYA: PerformerDef = {
   weight: 'light',
   tags: ['panel'],
   misfire: 'overdo',
+  mind: PRIYA_MIND,
   reactions: [
     {
       trigger: { kind: 'laughter', min: 1, scope: 'perceived' },
@@ -100,17 +88,19 @@ const PRIYA: PerformerDef = {
     {
       id: 'laughBig',
       label: '크게 웃어 주세요',
-      expect: '웃음 2',
+      expect: '웃음 2 (흥분 ▲)',
       action: { pose: 'laugh', emits: [{ kind: 'laughter', intensity: 2, target: 'none' }] },
+      moodShifts: [{ emotion: 'excitement', amount: 20 }],
     },
     {
       id: 'cutHost',
       label: 'MC 한 번 끊어 주세요',
-      expect: 'MC에게 웃음 2 → 렉스가 분노 3로 받을 수 있음',
+      expect: 'MC에게 웃음 2 → 렉스가 분노 3로 받을 수 있음 (흥분 ▲)',
       action: {
         pose: 'laugh',
         emits: [{ kind: 'laughter', intensity: 2, target: { tag: 'host' } }],
       },
+      moodShifts: [{ emotion: 'excitement', amount: 10 }],
     },
   ],
 }
@@ -121,15 +111,14 @@ const OKAFOR: PerformerDef = {
   name: '제럴드 오카포 박사',
   shortName: '오카포',
   role: '게스트',
-  tendency: '자신을 향한 분노·웃음을 받으면 → 상대에게 분노 2',
+  tendency: '자기를 향한 웃음·분노에 짜증이 쌓여 기여가 큰 사람에게 버럭',
   presence: 1,
   tolerance: 'low',
   weight: 'normal',
   tags: ['guest'],
   misfire: 'awkward',
+  mind: OKAFOR_MIND,
   reactions: [
-    { trigger: { kind: 'anger', min: 1, scope: 'targetsSelf' }, action: ANGRY_AT_CAUSE },
-    { trigger: { kind: 'laughter', min: 1, scope: 'targetsSelf' }, action: ANGRY_AT_CAUSE },
     {
       trigger: { kind: 'corner', tag: 'guest' },
       action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 1, target: { tag: 'host' } }] },
@@ -139,18 +128,27 @@ const OKAFOR: PerformerDef = {
     {
       id: 'rebut',
       label: '반박하세요',
-      expect: 'MC에게 분노 2',
+      expect: 'MC에게 분노 2 (짜증 ▼)',
       action: { pose: 'angry', emits: [{ kind: 'anger', intensity: 2, target: { tag: 'host' } }] },
+      moodShifts: [{ emotion: 'irritation', amount: -25 }],
     },
     {
       id: 'approachHost',
       label: 'MC한테 가 보세요',
-      expect: 'MC에게 돌진, 소음 1',
+      expect: 'MC에게 돌진, 소음 1 (짜증 ▲)',
       action: {
         pose: 'idle',
         move: { type: 'dash', toward: { tag: 'host' }, speed: 4 },
         emits: [{ kind: 'noise', intensity: 1, target: 'none' }],
       },
+      moodShifts: [{ emotion: 'irritation', amount: 15 }],
+    },
+    {
+      id: 'calmDown',
+      label: '진정하세요',
+      expect: '짜증 ▼ 크게',
+      action: { pose: 'idle', emits: [] },
+      moodShifts: [{ emotion: 'irritation', amount: -40 }],
     },
   ],
 }
@@ -161,15 +159,18 @@ const MO: PerformerDef = {
   name: '"마운틴" 모 타비타',
   shortName: '모',
   role: '레슬러',
-  tendency: '분노 2↑ 인지하거나 충돌을 받으면 → 바디슬램',
+  tendency: '분노·소음·충돌에 흥분이 쌓여 바디슬램. 충돌을 받으면 바로 바디슬램',
   presence: 2,
   tolerance: 'normal',
   weight: 'heavy',
   tags: ['athlete'],
   misfire: 'overdo',
+  mind: MO_MIND,
   reactions: [
-    { trigger: { kind: 'anger', min: 2, scope: 'perceived' }, action: BODY_SLAM },
-    { trigger: { kind: 'impact', min: 1, scope: 'targetsSelf' }, action: BODY_SLAM },
+    {
+      trigger: { kind: 'impact', min: 1, scope: 'targetsSelf' },
+      action: BODY_SLAM,
+    },
     {
       trigger: { kind: 'corner', tag: 'athlete' },
       action: { pose: 'idle', emits: [{ kind: 'noise', intensity: 2, target: 'none' }] },
@@ -179,22 +180,24 @@ const MO: PerformerDef = {
     {
       id: 'flex',
       label: '힘 자랑 해 주세요',
-      expect: '도약하며 소음 2',
+      expect: '도약하며 소음 2 (흥분 ▼)',
       action: {
         pose: 'angry',
         move: { type: 'leap', toward: 'none', speed: 6 },
         emits: [{ kind: 'noise', intensity: 2, target: 'none' }],
       },
+      moodShifts: [{ emotion: 'excitement', amount: -30 }],
     },
     {
       id: 'approachHost',
       label: 'MC한테 가 보세요',
-      expect: 'MC에게 돌진(충돌 위험)',
+      expect: 'MC에게 돌진(충돌 위험) (흥분 ▲)',
       action: {
         pose: 'idle',
         move: { type: 'dash', toward: { tag: 'host' }, speed: 6 },
         emits: [],
       },
+      moodShifts: [{ emotion: 'excitement', amount: 20 }],
     },
   ],
 }
@@ -205,18 +208,15 @@ const JUNE: PerformerDef = {
   name: '준 휘태커 할머니',
   shortName: '준',
   role: '시청자',
-  tendency: '정적이면 옛날이야기로 웃음 1. 소음 3이면 놀라 넘어짐',
+  tendency: '정적이면 수다 욕구가 쌓여 옛날이야기. 소음 3이면 놀라 넘어짐',
   presence: 3,
   tolerance: 'max',
   weight: 'light',
   tags: ['viewer'],
   misfire: 'awkward',
   hitViolenceMultiplier: 2,
+  mind: JUNE_MIND,
   reactions: [
-    {
-      trigger: { kind: 'silence', min: 1, scope: 'perceived' },
-      action: { pose: 'laugh', emits: [{ kind: 'laughter', intensity: 1, target: 'none' }] },
-    },
     {
       trigger: { kind: 'noise', min: 3, scope: 'perceived' },
       action: { pose: 'fallen', move: { type: 'leap', toward: 'none', speed: 2 }, emits: [] },
@@ -226,8 +226,9 @@ const JUNE: PerformerDef = {
     {
       id: 'story',
       label: '옛날이야기 해 주세요',
-      expect: '웃음 1로 정적을 깸',
+      expect: '웃음 1로 정적을 깸 (수다 욕구 ▼)',
       action: { pose: 'laugh', emits: [{ kind: 'laughter', intensity: 1, target: 'none' }] },
+      moodShifts: [{ emotion: 'chatter', amount: -50 }],
     },
     {
       id: 'stepUp',

@@ -110,6 +110,8 @@ export interface LogLine {
   depth: number
   /** 버릇·터짐 줄은 처음 내뿜은 현상의 id다(L3) */
   eventId: number | null
+  /** 묶인 줄이 가진 마지막 사건의 id. 묶이지 않았으면 eventId와 같다. 첫~마지막 id 범위로 강조한다. */
+  lastEventId: number | null
   x: number
   y: number
   z: number

@@ -436,6 +436,7 @@ describe('로그 묶기', () => {
         kind: 'incident',
         step: noises[0].step,
         eventId: noises[0].id,
+        lastEventId: noises.at(-1)?.id,
         repeat: noises.length,
       }),
     ])

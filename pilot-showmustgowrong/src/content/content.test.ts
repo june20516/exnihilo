@@ -5,6 +5,9 @@ import { STANDING_Y } from '@/sim/cast'
 import { Broadcast } from '@/sim/engine'
 import { initPhysics, PhysicsWorld } from '@/sim/physics'
 import { type FloorPoint, floorDistance, yawBetween } from '@/sim/vec'
+import { fillTemplate } from '@/sim/narration'
+import { COMMON_EMOTIONS } from './types'
+import { COMMON_HABITS } from './commonMind'
 import { LINEUP } from './lineup'
 import { TALK_SHOW } from './talkShow'
 import type { ActionDef, PerformerDef, PhenomenonKind, Trigger } from './types'
@@ -184,6 +187,103 @@ describe('토크쇼 콘텐츠', () => {
   })
 })
 
+describe('라인업 감정·버릇·반사 반응 옮기기', () => {
+  const performerById = (id: string): PerformerDef => {
+    const found = allPerformers.find((performer) => performer.id === id)
+    if (found === undefined) throw new Error(`출연자가 없습니다: ${id}`)
+    return found
+  }
+  const mindOf = (id: string) => {
+    const { mind } = performerById(id)
+    if (mind === undefined) throw new Error(`mind가 없습니다: ${id}`)
+    return mind
+  }
+  const commonHabitIds = new Set(COMMON_HABITS.map((habit) => habit.id))
+  const personalHabits = (id: string) =>
+    mindOf(id).habits.filter((habit) => !commonHabitIds.has(habit.id))
+
+  it('라인업 출연자 5명이 모두 mind를 갖고 공용 감정 4개를 가진다', () => {
+    expect(allPerformers).toHaveLength(5)
+    for (const performer of allPerformers) {
+      const ids = performer.mind?.emotions.map((emotion) => emotion.id) ?? []
+      for (const common of COMMON_EMOTIONS) expect(ids, performer.id).toContain(common)
+    }
+  })
+
+  it('개인 감정은 렉스 attention, 준 chatter뿐이다', () => {
+    const personal = (id: string) =>
+      mindOf(id)
+        .emotions.map((emotion) => emotion.id)
+        .filter((emotionId) => !(COMMON_EMOTIONS as readonly string[]).includes(emotionId))
+    expect(personal('rex')).toEqual(['attention'])
+    expect(personal('june')).toEqual(['chatter'])
+    for (const id of ['priya', 'okafor', 'mo']) expect(personal(id), id).toEqual([])
+  })
+
+  it('living spec 3.7 표대로 반사 반응이 남고 옮겨졌다', () => {
+    const triggers = (id: string) =>
+      performerById(id).reactions.map((reaction) => JSON.stringify(reaction.trigger))
+    const t = (trigger: Trigger) => JSON.stringify(trigger)
+    expect(triggers('rex')).toEqual([t({ kind: 'corner', tag: 'host' })])
+    expect(triggers('priya')).toEqual([
+      t({ kind: 'laughter', min: 1, scope: 'perceived' }),
+      t({ kind: 'noise', min: 3, scope: 'perceived' }),
+    ])
+    expect(triggers('okafor')).toEqual([t({ kind: 'corner', tag: 'guest' })])
+    expect(triggers('mo')).toEqual([
+      t({ kind: 'impact', min: 1, scope: 'targetsSelf' }),
+      t({ kind: 'corner', tag: 'athlete' }),
+    ])
+    expect(triggers('june')).toEqual([t({ kind: 'noise', min: 3, scope: 'perceived' })])
+  })
+
+  it('출연자마다 응답이 아닌 대표 버릇이 3~5개, 응답 버릇이 1개 있다', () => {
+    for (const performer of allPerformers) {
+      const habits = personalHabits(performer.id)
+      const plain = habits.filter((habit) => habit.respondsTo === undefined)
+      const responses = habits.filter((habit) => habit.respondsTo !== undefined)
+      expect(plain.length, performer.id).toBeGreaterThanOrEqual(3)
+      expect(plain.length, performer.id).toBeLessThanOrEqual(5)
+      expect(responses, performer.id).toHaveLength(1)
+      for (const habit of habits) expect(habit.weight, habit.id).toBeGreaterThanOrEqual(2)
+    }
+    for (const habit of COMMON_HABITS) expect(habit.weight, habit.id).toBe(1)
+  })
+
+  it('버릇 문장을 narration으로 만들면 빈 토큰이 남지 않는다', () => {
+    const fill = (template: string) => fillTemplate(template, { target: '대상', reasons: '이유' })
+    for (const performer of allPerformers) {
+      const { habits, bursts } = mindOf(performer.id)
+      for (const habit of habits) {
+        const lines = [habit.line, habit.recall, habit.noun]
+        if (habit.targetLine !== undefined) lines.push(fill(habit.targetLine))
+        for (const line of lines) expect(line, `${performer.id}.${habit.id}`).not.toContain('{')
+      }
+      for (const [emotionId, burst] of Object.entries(bursts)) {
+        for (const action of [burst.small, burst.big]) {
+          const lines = [action.line]
+          if (action.targetLine !== undefined) lines.push(fill(action.targetLine))
+          if (action.intenseLine !== undefined) lines.push(fill(action.intenseLine))
+          for (const line of lines) expect(line, `${performer.id}.${emotionId}`).not.toContain('{')
+        }
+      }
+      for (const emotion of mindOf(performer.id).emotions) {
+        expect(fill(emotion.accumulate), `${performer.id}.${emotion.id}`).not.toContain('{')
+      }
+    }
+  })
+
+  it('오카포는 진정하세요 지시가 있고 짜증을 40 내린다', () => {
+    const calm = performerById('okafor').directives.find((directive) => directive.id === 'calmDown')
+    expect(calm).toMatchObject({
+      label: '진정하세요',
+      expect: '짜증 ▼ 크게',
+      moodShifts: [{ emotion: 'irritation', amount: -40 }],
+    })
+    expect(calm?.action.emits).toEqual([])
+  })
+})
+
 describe('토크쇼 장비(Ruling 28)', () => {
   const opened: Broadcast[] = []
   afterEach(() => {
@@ -201,6 +301,7 @@ describe('토크쇼 장비(Ruling 28)', () => {
     ...performerById('okafor'),
     id: 'heckler',
     shortName: '야유꾼',
+    mind: undefined,
     // 모의 지시가 host 태그를 가리키므로 검증을 통과하게 host를 단다
     tags: ['host'],
     reactions: [],
@@ -208,10 +309,11 @@ describe('토크쇼 장비(Ruling 28)', () => {
       {
         id: 'taunt',
         label: '도발',
-        expect: '분노 2',
+        expect: '충격 1',
+        // 모의 분노 반응은 감정으로 옮겨져 한 번의 분노로는 바로 터지지 않는다. 남은 충돌 반응으로 바디슬램을 끌어낸다.
         action: {
           pose: 'angry',
-          emits: [{ kind: 'anger', intensity: 2, target: { tag: 'athlete' } }],
+          emits: [{ kind: 'impact', intensity: 1, target: { tag: 'athlete' } }],
         },
       },
       { id: 'calm', label: '진정', expect: '없음', action: { pose: 'idle', emits: [] } },

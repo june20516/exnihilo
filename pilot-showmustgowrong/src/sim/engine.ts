@@ -1209,6 +1209,7 @@ export class Broadcast {
     const last = this.lines.at(-1)
     if (last !== undefined && last.text === text && last.kind === kind) {
       last.repeat += 1
+      if (eventId !== null) last.lastEventId = eventId
       return
     }
     this.lines.push({
@@ -1220,6 +1221,7 @@ export class Broadcast {
       repeat: 1,
       depth,
       eventId,
+      lastEventId: eventId,
       x: position.x,
       y: position.y,
       z: position.z,

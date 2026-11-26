@@ -1,21 +1,13 @@
 import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
 import { GAUGE_KINDS, type GaugeKind, type ShowDef } from '@/content/types'
 import type { BroadcastView, LogLine } from '@/sim/engine'
+import { containsEvent, logIndent, logTextClass } from './logFormat'
 import { GAUGE_LABELS, formatShowClock, formatShowEnd, formatViewers } from './labels'
 
 /** 사고 로그에 보여 주는 최근 줄 수 */
 const LOG_LINES_SHOWN = 14
-/** 연쇄 깊이 한 단계의 들여쓰기(px) */
-const LOG_INDENT_PX = 12
-/** 들여쓰기를 멈추는 연쇄 깊이(좁은 열에서 문장이 사라지지 않게) */
-const LOG_INDENT_MAX_LEVEL = 4
 /** 게이지 막대 전체 길이가 상한의 몇 배인지. 상한 눈금이 막대 안쪽에 보이게 여유를 둔다. */
 const GAUGE_TRACK_SCALE = 1.25
-
-/** 연쇄 깊이의 들여쓰기(px). 상한 단계에서 멈춘다. */
-function logIndent(depth: number): number {
-  return (Math.min(depth, LOG_INDENT_MAX_LEVEL) - 1) * LOG_INDENT_PX
-}
 
 const TREND_MARKS: Record<BroadcastView['viewersTrend'], { mark: string; className: string }> = {
   1: { mark: '▲', className: 'text-emerald-400' },
@@ -154,22 +146,23 @@ export function EventLog({ log, highlightedEventId, show }: EventLogProps) {
             key={line.index}
             data-log-index={line.index}
             className={`flex rounded-sm ${
-              line.eventId !== null && line.eventId === highlightedEventId
-                ? 'bg-amber-500/30 text-amber-100'
-                : ''
+              containsEvent(line, highlightedEventId) ? 'bg-amber-500/30 text-amber-100' : ''
             }`}
           >
             <span className="w-10 shrink-0 tabular-nums text-slate-500">
               {formatShowClock(line.step, show)}
             </span>
             <span
-              className="min-w-0 truncate"
+              className={`min-w-0 truncate ${logTextClass(line)}`}
               title={line.text}
               style={{ paddingLeft: `${logIndent(line.depth)}px` }}
             >
               {line.depth > 1 && <span className="text-slate-500">└ </span>}
               {line.text}
             </span>
+            {line.repeat > 1 && (
+              <span className="ml-1 shrink-0 tabular-nums text-slate-500">×{line.repeat}</span>
+            )}
           </li>
         ))}
       </ol>

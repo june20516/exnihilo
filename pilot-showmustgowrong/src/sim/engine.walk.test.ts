@@ -67,28 +67,11 @@ describe('카메라 앞으로(onAirFrame 걷기)', () => {
 })
 
 describe('렉스의 분노', () => {
-  it('화면 밖 분노 뒤 지시로 화면에 잡히면 표정을 푼다는 로그를 남기고 평소 포즈로 돌아온다', async () => {
-    const broadcast = await create()
-    broadcast.step([{ type: 'switch', cameraId: 'audienceCam' }])
-    runSeconds(broadcast, 8.5)
-    expect(rexOf(broadcast).pose).toBe('angry')
-
-    const before = broadcast.view().log.length
-    let relieved = false
-    broadcast.step([stepUp])
-    for (let step = 0; step < 4 * STEPS_PER_SECOND && !relieved; step++) {
-      broadcast.step()
-      relieved = broadcast.view().log.slice(before).some((line) => line.text.includes('표정을 푼다'))
-    }
-    expect(relieved).toBe(true)
-    expect(rexOf(broadcast).pose).toBe('idle')
-  })
-
+  // 화면 밖 8초 반응은 주목 욕구 감정으로 옮겨져, 화난 포즈는 지시(pressGuest)로 만든다.
   it(`화난 포즈는 새 행동이 없으면 ${POSE_HOLD_SECONDS}초 뒤 평소 포즈로 돌아온다`, async () => {
     const broadcast = await create()
-    broadcast.step([{ type: 'switch', cameraId: 'audienceCam' }])
-    // 8초에 화면 밖 분노가 터진다(다음 분노는 16초).
-    runSeconds(broadcast, 8.5)
+    broadcast.step()
+    broadcast.step([{ type: 'direct', actorId: 'rex', directiveId: 'pressGuest' }])
     expect(rexOf(broadcast).pose).toBe('angry')
     runSeconds(broadcast, POSE_HOLD_SECONDS)
     expect(rexOf(broadcast).pose).toBe('idle')
