@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "typescript/no-explicit-any": "error",
+    "no-restricted-properties": ["error", { "object": "Math", "property": "random", "message": "시드 RNG(@/kit/rng)를 쓰세요." }]
+  },
+  "overrides": [
+    {
+      "files": ["src/sim/**", "src/kit/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "object": "Math", "property": "random", "message": "시드 RNG(@/kit/rng)를 쓰세요." },
+          { "object": "Date", "property": "now", "message": "sim에서는 clock 입력을 쓰세요." },
+          { "object": "performance", "property": "now", "message": "sim에서는 clock 입력을 쓰세요." }
+        ]
+      }
+    }
+  ]
+}

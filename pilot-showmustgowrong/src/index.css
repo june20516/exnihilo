@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: 'Pretendard', system-ui, sans-serif;
+}
+
+/* Pixi가 캔버스에 논리 크기(1280×720)를 인라인으로 박으므로, 화면에서는 호스트 크기로 줄인다(Ruling 31). */
+.studio-host > canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

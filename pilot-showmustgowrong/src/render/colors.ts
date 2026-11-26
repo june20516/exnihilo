@@ -1,0 +1,67 @@
+import type { Pose } from '@/content/types'
+
+/** 렌더링 색 모음. 0xRRGGBB. */
+export const COLORS = {
+  background: 0x14141c,
+  floor: 0x3a3340,
+  floorTile: 0x4a4252,
+  floorEdge: 0x6b6074,
+  backWall: 0x241f2c,
+  audienceZone: 0x2a3a52,
+  audienceZoneLine: 0x4d6a94,
+  exit: 0x3f8f5f,
+  homeSpot: 0xd8c27a,
+  benchSpot: 0x8a8f99,
+  darkness: 0x05040a,
+  shadow: 0x000000,
+  light: 0xf2e08a,
+  lightCord: 0x8a8f99,
+  setWall: 0x8a6a4a,
+  equipmentReleased: 0xe0703a,
+  cameraFan: 0x7ab8ff,
+  cameraOnAirFan: 0xe5252a,
+  cameraOnAirStroke: 0xe5252a,
+  cameraBody: 0xcfd6e0,
+  /** 끌어 조준하는 카메라의 손잡이와 시야 미리보기 */
+  aimPreview: 0xffc83d,
+  actorOutline: 0x000000,
+  nameText: 0xffffff,
+  moodTrack: 0x2a2a33,
+  moodFill: 0xf2c94c,
+  moodDanger: 0xe5252a,
+  toleranceDot: 0xf2e08a,
+  toleranceDotEmpty: 0x4a4a55,
+  burstTag: 0xe5252a,
+  burstText: 0xffffff,
+  trackingIcon: 0xffd23f,
+  staffBody: 0x4a7bd0,
+  staffHead: 0xf0c8a0,
+  startledBubble: 0xffd23f,
+  startledText: 0x1a1a22,
+  recoveryTrack: 0x2a2a33,
+  recoveryFill: 0x5ad1a0,
+  noise: 0x7ab8ff,
+  laughter: 0xf2c94c,
+  exposure: 0xff6fb5,
+  impact: 0xffffff,
+  anger: 0xe5484d,
+  vignette: 0x000000,
+} as const
+
+export const POSE_COLORS: Record<Pose, number> = {
+  idle: 0x9aa7b8,
+  laugh: 0xf2c94c,
+  angry: 0xe5484d,
+  panic: 0xb07ee0,
+  flying: 0x56c2e6,
+  fallen: 0x6f6a78,
+}
+
+export const POSE_SYMBOLS: Record<Pose, string> = {
+  idle: '',
+  laugh: 'ㅋ',
+  angry: '#',
+  panic: '!',
+  flying: '~',
+  fallen: '@',
+}
