@@ -203,17 +203,20 @@ describe('체감 목표', () => {
   })
 
   it('유예 뒤 큰 터짐까지 평균이 몸 8초 이상이다(시드 200개, 2단계 유지)', () => {
+    const chance = 1 - Math.exp(-LIFE_TICK_BODY_SECONDS / BIG_BURST_MTB_BODY_SECONDS)
+    // 유예가 끝나는 틱에서 첫 판정을 하므로 순수 대기 기댓값은 0.5/p - 0.5다
+    const expected = LIFE_TICK_BODY_SECONDS / chance - LIFE_TICK_BODY_SECONDS
+    expect(expected).toBeGreaterThanOrEqual(8)
+
     const waits: number[] = []
     for (const seed of SEEDS) {
-      const life = stage2Life(seed, 85)
-      const timed = run(life, ['a'], 0, REAL_SECONDS_STEPS(600), { nudge: false })
+      const timed = run(stage2Life(seed, 85), ['a'], 0, REAL_SECONDS_STEPS(600), { nudge: false })
       const big = bursts(timed).find(({ output }) => output.size === 'big')
       expect(big).toBeDefined()
-      // 틱 한 번의 판정은 직전 틱 간격 전체에 대한 것이라 그 간격을 대기에 포함한다
-      waits.push((big!.step - GRACE_STEPS) / STEPS_PER_SECOND + LIFE_TICK_BODY_SECONDS)
+      waits.push((big!.step - GRACE_STEPS) / STEPS_PER_SECOND)
     }
     const mean = waits.reduce((sum, wait) => sum + wait, 0) / waits.length
-    expect(mean).toBeGreaterThanOrEqual(BIG_BURST_MTB_BODY_SECONDS)
+    expect(Math.abs(mean - expected)).toBeLessThanOrEqual(expected * 0.15)
   })
 
   it.each([

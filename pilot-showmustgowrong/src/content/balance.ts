@@ -234,10 +234,11 @@ export const SMALL_BURST_COOLDOWN_SHOW_SECONDS = 120
 /** 2단계 진입 뒤 큰 터짐이 없는 유예(몸 초). living spec 1.1의 "2단계 진입 3초 안에는 터지지 않는다". */
 export const BIG_BURST_GRACE_BODY_SECONDS = 3
 /**
- * 유예 뒤 큰 터짐까지의 평균 목표(몸 초). 틱 확률 p = 1 - e^(-0.5/8) ≈ 0.061이라
- * 평균 대기 0.5/p ≈ 8.25초이고, living spec 1.1의 "유예 뒤 평균 8초 이상"을 만족한다.
+ * 유예 뒤 큰 터짐까지의 평균 목표(몸 초). 유예가 끝나는 틱에서 첫 판정을 하므로 순수 대기 기댓값은
+ * 0.5/p - 0.5이고, 틱 확률 p = 1 - e^(-0.5/8.5) ≈ 0.0571이라 약 8.25초다.
+ * living spec 1.1의 "유예 뒤 평균 8초 이상"을 만족한다.
  */
-export const BIG_BURST_MTB_BODY_SECONDS = 8
+export const BIG_BURST_MTB_BODY_SECONDS = 8.5
 /** 같은 감정·같은 단계 진입 줄이 다시 나오지 않는 극 중 초(실제 12초). 문턱 근처 깜빡임을 줄 하나로 줄인다. */
 export const STAGE_LINE_COOLDOWN_SHOW_SECONDS = 120
 /** 이웃을 근처로 보는 반경(m). 이웃 home spot 간격(2.5~3m)만 근처다. */
