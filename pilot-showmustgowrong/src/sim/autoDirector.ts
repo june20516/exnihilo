@@ -23,8 +23,6 @@ const DEFAULT_TIMING: AutoDirectorTiming = {
 interface Cut {
   cameraId: string
   targetId: string | null
-  /** 사고 때문에 잡은 컷인가(평소 순서의 컷이면 false) */
-  incident: boolean
   /** 이 컷을 잡기 시작한(또는 사고로 시간을 다시 센) 스텝 */
   sinceStep: number
 }
@@ -66,7 +64,11 @@ export class AutoDirector {
 
   /** 매 스텝 부른다. 낼 입력이 없으면 빈 배열 */
   decide(view: BroadcastView): BroadcastInput[] {
-    if (view.phase !== 'live') return []
+    if (view.phase !== 'live') {
+      // 광고 중에 난 현상도 본 것으로 친다. 광고 뒤에 남은 낡은 사고에 반응하지 않게 한다
+      for (const phenomenon of view.recentPhenomena) this.seenPhenomenonIds.add(phenomenon.id)
+      return []
+    }
     const activeIds = new Set(view.actors.filter((actor) => !actor.walkedOut).map((actor) => actor.id))
 
     if (this.cut === null) {
@@ -78,6 +80,9 @@ export class AutoDirector {
 
     const incident = this.newestIncident(view, activeIds)
     if (incident !== null) this.pendingIncident = incident
+    const pending = this.pendingIncident
+    // 기다리는 사이 대상이 이탈했으면 그 사고는 버린다(이탈자를 따라가지 않는다)
+    if (pending !== null && pending.targetId !== null && !activeIds.has(pending.targetId)) this.pendingIncident = null
     if (this.pendingIncident !== null) return this.handleIncident(view, this.pendingIncident)
 
     if (view.step - this.cut.sinceStep >= this.timing.shotSteps) {
@@ -109,13 +114,14 @@ export class AutoDirector {
     const cut = this.requireCut()
     if (cut.cameraId === target.cameraId && cut.targetId === target.targetId) {
       // 같은 컷에서 또 사고가 났다: 컷은 그대로 두고 잡는 시간을 다시 센다
-      this.cut = { ...cut, incident: true, sinceStep: view.step }
+      this.cut = { ...cut, sinceStep: view.step }
       this.pendingIncident = null
-      return []
+      // 바깥(엔진·플레이어)이 송출이나 대상을 바꿔 두었으면 사고 컷으로 돌려놓는다
+      return this.inputsFor(view, cut)
     }
     if (view.step - cut.sinceStep < this.timing.minHoldSteps) return []
     this.pendingIncident = null
-    this.cut = { ...target, incident: true, sinceStep: view.step }
+    this.cut = { ...target, sinceStep: view.step }
     return this.inputsFor(view, target)
   }
 
@@ -129,7 +135,7 @@ export class AutoDirector {
       if (this.trackingCameraIds.has(cameraId) && targetId === null) continue // 남은 출연자가 없어 건너뛴다
       this.rotationIndex = index
       const target = { cameraId, targetId }
-      this.cut = { ...target, incident: false, sinceStep: view.step }
+      this.cut = { ...target, sinceStep: view.step }
       return this.inputsFor(view, target)
     }
     if (this.cut !== null) this.cut = { ...this.cut, sinceStep: view.step }
@@ -150,7 +156,7 @@ export class AutoDirector {
   }
 
   /** 추적 카메라는 대상을 먼저 바꾸고(track) 송출을 바꾼다(switch). 이미 그 상태면 입력을 내지 않는다. */
-  private inputsFor(view: BroadcastView, target: IncidentTarget): BroadcastInput[] {
+  private inputsFor(view: BroadcastView, target: Pick<Cut, 'cameraId' | 'targetId'>): BroadcastInput[] {
     const inputs: BroadcastInput[] = []
     if (target.targetId !== null && view.cameraTargets[target.cameraId] !== target.targetId) {
       inputs.push({

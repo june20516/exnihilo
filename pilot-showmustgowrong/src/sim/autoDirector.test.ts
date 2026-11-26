@@ -226,14 +226,43 @@ describe('AutoDirector 사고', () => {
     const director = newDirector()
     director.decide(viewAt(0))
     director.decide(viewAt(SHOT, { onAir: 'wide' }))
+    // 평소 순서 전환(SHOT * 2)과 겹치지 않는 시점
     const input = director.decide(
-      viewAt(SHOT * 2, {
+      viewAt(SHOT + seconds(2), {
         onAir: 'close',
         closeTarget: 'rex',
         phenomena: [phenomenon(1, 'audience')],
       }),
     )
     expect(input).toEqual([SWITCH('wide')])
+  })
+
+  it('클로즈업 대상이 이미 그 출연자이고 송출만 다르면 switch만 낸다', () => {
+    const director = newDirector()
+    director.decide(viewAt(0))
+    expect(
+      director.decide(viewAt(200, { onAir: 'wide', closeTarget: 'priya', phenomena: [phenomenon(1, 'priya')] })),
+    ).toEqual([SWITCH('close')])
+  })
+
+  it('같은 대상 사고에서 바깥이 송출을 바꿔 두었으면 사고 컷으로 돌려놓는다', () => {
+    const director = afterPriyaIncident()
+    const moved = { onAir: 'wide', closeTarget: 'rex', phenomena: [phenomenon(2, 'priya')] }
+    expect(director.decide(viewAt(260, moved))).toEqual([TRACK('priya'), SWITCH('close')])
+  })
+
+  it('기다리는 사고의 대상이 이탈하면 그 사고를 버린다', () => {
+    const director = afterPriyaIncident()
+    const onClose = { onAir: 'close', closeTarget: 'priya' }
+    director.decide(viewAt(230, { ...onClose, phenomena: [phenomenon(2, 'rex')] }))
+    expect(director.decide(viewAt(200 + seconds(1.5), { ...onClose, walkedOut: ['rex'] }))).toEqual([])
+  })
+
+  it('광고 중에 난 현상은 광고 뒤에 사고로 치지 않는다', () => {
+    const director = newDirector()
+    director.decide(viewAt(0))
+    director.decide(viewAt(100, { phase: 'adBreak', phenomena: [phenomenon(1, 'priya')] }))
+    expect(director.decide(viewAt(200, { phenomena: [phenomenon(1, 'priya')] }))).toEqual([])
   })
 
   it('기척(강도 0)은 무시한다', () => {
