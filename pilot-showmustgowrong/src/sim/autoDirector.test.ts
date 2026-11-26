@@ -148,6 +148,25 @@ describe('AutoDirector 평소 순서', () => {
     expect(director.decide(viewAt(SHOT * 2, { onAir: 'wide', walkedOut: ORDER }))).toEqual([SWITCH('audienceCam')])
   })
 
+  /** rotation이 클로즈업(추적 카메라) 하나뿐인 쇼 */
+  const closeOnlyShow = { ...TALK_SHOW, autoCut: { ...TALK_SHOW.autoCut, rotation: ['close'] } }
+
+  it('rotation이 추적 카메라뿐이고 처음 부를 때 활동 출연자가 없으면 잡을 컷이 없어 오류다', () => {
+    const director = new AutoDirector(closeOnlyShow, ORDER)
+    expect(() => director.decide(viewAt(0, { walkedOut: ORDER }))).toThrow('컷을 잡기 전')
+  })
+
+  it('rotation이 추적 카메라뿐인데 컷을 잡은 뒤 모두 이탈하면 지금 컷을 이어 가고 시간을 다시 센다', () => {
+    const director = new AutoDirector(closeOnlyShow, ORDER)
+    expect(director.decide(viewAt(0))).toEqual([TRACK('rex'), SWITCH('close')])
+    const onClose = { onAir: 'close', closeTarget: 'rex', walkedOut: ORDER }
+    // 쓸 칸이 없어 입력이 없다. 잡은 시간은 SHOT부터 다시 센다
+    expect(director.decide(viewAt(SHOT, onClose))).toEqual([])
+    expect(director.decide(viewAt(SHOT * 2 - 1, onClose))).toEqual([])
+    // 다시 센 시간이 컷 길이를 넘으면 또 칸을 찾는다. 대상 출연자가 돌아왔으면 그 출연자를 잡는다
+    expect(director.decide(viewAt(SHOT * 2, { onAir: 'close', closeTarget: 'rex' }))).toEqual([TRACK('priya')])
+  })
+
   it('광고 중에는 아무것도 내지 않는다', () => {
     const director = newDirector()
     director.decide(viewAt(0))
@@ -311,7 +330,8 @@ describe('AutoDirector 사고', () => {
 })
 
 describe('AutoDirector 결정론', () => {
-  async function measureWithAutoDirector(seed: number) {
+  /** intervalSteps마다 decide를 부른다(sim은 6스텝 = 몸 0.1초) */
+  async function measureWithAutoDirector(seed: number, intervalSteps = 1) {
     const broadcast = await Broadcast.create({
       show: TALK_SHOW,
       ...LINEUP,
@@ -322,7 +342,10 @@ describe('AutoDirector 결정론', () => {
         TALK_SHOW,
         LINEUP.performers.map((performer) => performer.id),
       )
-      while (broadcast.phase === 'live') broadcast.step(director.decide(broadcast.view()))
+      while (broadcast.phase === 'live') {
+        const turn = broadcast.currentStep % intervalSteps === 0
+        broadcast.step(turn ? director.decide(broadcast.view()) : [])
+      }
       return measureFinishedBroadcast(broadcast, LINEUP.performers)
     } finally {
       broadcast.dispose()
@@ -332,6 +355,13 @@ describe('AutoDirector 결정론', () => {
   it('실제 라인업 시드 3 방송을 자동 PD로 두 번 돌린 지표가 같다', async () => {
     const first = await measureWithAutoDirector(3)
     const second = await measureWithAutoDirector(3)
+    expect(second).toEqual(first)
+    expect(first.lineCount).toBeGreaterThan(0)
+  }, 30_000)
+
+  it('sim처럼 6스텝(몸 0.1초)마다 불러도 시드 3 방송 두 번의 지표가 같다', async () => {
+    const first = await measureWithAutoDirector(3, 6)
+    const second = await measureWithAutoDirector(3, 6)
     expect(second).toEqual(first)
     expect(first.lineCount).toBeGreaterThan(0)
   }, 30_000)

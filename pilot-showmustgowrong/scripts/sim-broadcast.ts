@@ -6,7 +6,7 @@
  *   기본 라인업에만 걸고 준 라인업은 비율만 출력한다. 이어서 고정 와이드(카메라를 바꾸지 않음) 방송을 참고로 출력한다
  *   (게이트 없음, 종료 코드에 영향 없음). 실패한 게이트가 있으면 종료 코드 1.
  * - `npm run sim -- --fixed`: 고정 와이드 방송만 돌리고 living spec 7.1 게이트를 건다(렉스 게이트는 비율만 출력).
- * - `npm run sim -- --log <seed> [june]`: 그 자동 PD 방송의 전체 로그를 극 중 시각, 줄 종류, ×N과 함께 출력한다.
+ * - `npm run sim -- --log <seed> [june]`(june은 인자 어디에 있어도 된다): 그 자동 PD 방송의 전체 로그를 극 중 시각, 줄 종류, ×N과 함께 출력한다.
  *   `--fixed`와 함께 쓰면 고정 와이드 방송의 로그다.
  * - `npm run sim -- --tune <파일.json>`: 조정 패널의 "바뀐 값 복사" JSON으로 돌린다(--log, --fixed와 함께 쓸 수 있다).
  *   쓰지 못한 조정값이 있으면 목록을 출력하고 종료 코드 2로 끝난다.
@@ -239,7 +239,8 @@ function parseLogArgs(args: readonly string[]): { seed: number; june: boolean } 
   if (index < 0) return null
   const seed = Number(args[index + 1])
   if (!Number.isInteger(seed)) throw new Error('--log 다음에 정수 시드가 필요합니다')
-  return { seed, june: args[index + 2] === 'june' }
+  // june은 위치와 상관없이 인자 어디에 있어도 준 라인업이다(예: --fixed --log 3 june, --log 3 --fixed june)
+  return { seed, june: args.includes('june') }
 }
 
 const cameraMode: CameraMode = cliArgs.includes('--fixed') ? 'fixed' : 'auto'

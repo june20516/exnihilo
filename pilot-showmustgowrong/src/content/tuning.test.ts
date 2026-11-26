@@ -155,9 +155,15 @@ describe('게임 조정 목록', () => {
     expect(balance.SMALL_BURST_MTB_SHOW_SECONDS).toBe(50)
     expect(balance.RELIEF_AMOUNT).toBe(-40)
     expect(tuned('TAKEOVER_BODY_SECONDS')).toBe(5)
-    // Plan B1 Task 8이 자동 PD 무입력 검증에 맞춰 5에서 8로 바꿨다(tuning.ts 근거)
-    expect(tuned('AUTO_SHOT_BODY_SECONDS')).toBe(8)
     expect(tuned('AUTO_MIN_HOLD_BODY_SECONDS')).toBe(1.5)
+  })
+
+  it('Plan B1 Task 8이 자동 PD 무입력 검증에 맞춰 바꾼 기본값(근거는 tuning.ts와 작업 로그)', () => {
+    expect(tuned('AUTO_SHOT_BODY_SECONDS')).toBe(8) // 5에서
+    expect(balance.SITUATION_FADE_PER_SHOW_MINUTE).toBe(3.5) // 4에서
+    expect(balance.HABIT_BOREDOM_SHORTEN).toBe(0.55) // 0.4에서
+    expect(tuned('mind.rex.attention.offScreen.perShowMinute')).toBe(12) // 7에서
+    expect(tuned('mind.rex.attention.offScreen.fadePerShowMinute')).toBe(15) // 40에서
   })
 
   it('출연자 감정 속도는 같은 키의 조정값이다', () => {
