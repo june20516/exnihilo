@@ -18,6 +18,8 @@ export interface TuningPanelProps {
   rejected: readonly RejectedOverride[]
   storage: TuningStorage | null
   storageKey: string
+  /** 페이지를 불러올 때 저장값을 읽지 못한 오류(깨진 JSON 등). 없으면 null */
+  loadError?: string | null
   onClose(): void
 }
 
@@ -50,6 +52,7 @@ export function TuningPanel({
   rejected,
   storage,
   storageKey,
+  loadError = null,
   onClose,
 }: TuningPanelProps): ReactElement {
   const [values, setValues] = useState<TuningValues>(() =>
@@ -141,6 +144,7 @@ export function TuningPanel({
       </p>
 
       {[
+        loadError,
         storageMissing ? '저장소를 쓸 수 없어 바꾼 값이 저장되지 않습니다.' : null,
         saveError,
         copyError,

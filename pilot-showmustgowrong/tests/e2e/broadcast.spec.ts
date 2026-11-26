@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { INTERVENTION_REAL_SECONDS } from '../../src/content/balance'
+import { TUNING_STORAGE_KEY } from '../../src/content/tuning'
 
 const SCREENSHOT_PATH = 'tests/screens/broadcast-1280x720.png'
 const INTERVENTION_SCREENSHOT_PATH = 'tests/screens/broadcast-intervention-1280x720.png'
@@ -302,4 +303,60 @@ test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 �
   await dragCloseupTo(page, 'rex')
   await expect(label).toHaveAttribute('data-aim-mode', 'tracking')
   await expect(label).not.toContainText('지시로 고정')
+})
+
+/** 페이지 스크립트보다 먼저 localStorage에 조정값을 둔다. 새로고침 때마다 다시 쓰므로 새로고침 테스트에는 쓰지 않는다. */
+async function storeTuning(page: Page, json: string): Promise<void> {
+  await page.addInitScript(
+    ([key, value]) => window.localStorage.setItem(key, value),
+    [TUNING_STORAGE_KEY, json] as const,
+  )
+}
+
+const MTB_INPUT = '작은 터짐 평균 대기 숫자'
+
+test('저장된 조정값이 있으면 백틱으로 연 수치 조정에 그 값과 바뀜이 보인다', async ({ page }) => {
+  await storeTuning(page, '{"SMALL_BURST_MTB_SHOW_SECONDS": 60}')
+  await openBroadcast(page)
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await expect(dialog).toBeHidden()
+  await page.keyboard.press('`')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('60')
+  await expect(dialog.getByText('바뀜')).toHaveCount(1)
+  // 지금 방송이 이미 60으로 돌고 있으므로 다음 방송 안내는 없다
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
+})
+
+test('범위 밖 저장값은 버리고 알리며 게임은 기본값으로 정상 시작한다', async ({ page }) => {
+  await storeTuning(page, '{"SMALL_BURST_MTB_SHOW_SECONDS": 99999}')
+  await openBroadcast(page)
+  // 버린 값이 있으면 패널이 열린 채로 시작한다
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await expect(dialog).toContainText('저장값 1개를 쓰지 않았습니다')
+  await expect(dialog).toContainText('SMALL_BURST_MTB_SHOW_SECONDS: 범위 밖')
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('50')
+  await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
+  const startTime = await page.getByTestId('broadcast-time').textContent()
+  await expect(page.getByTestId('broadcast-time')).not.toHaveText(startTime ?? '', { timeout: 15_000 })
+})
+
+test('패널에서 바꾼 값은 다음 방송부터 표시되고 새로고침 뒤 지금 값이 된다', async ({ page }) => {
+  await openBroadcast(page)
+  await page.keyboard.press('`')
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  const input = dialog.getByLabel(MTB_INPUT)
+  await input.fill('')
+  // 숫자를 키로 쳐서 게임의 1·2·3 카메라 단축키로 새지 않는지도 본다
+  await input.pressSequentially('120')
+  await expect(input).toHaveValue('120')
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(1)
+  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
+
+  await page.reload()
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+  await page.keyboard.press('`')
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('120')
+  await expect(dialog.getByText('바뀜')).toHaveCount(1)
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
 })

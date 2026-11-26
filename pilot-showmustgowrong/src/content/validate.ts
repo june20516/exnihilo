@@ -1,6 +1,8 @@
+import { validateTunables, type TunableDef } from '@/kit/tuning/tuning'
 import type { FloorPoint } from '@/sim/vec'
 import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import { TEMPLATE_TOKEN } from './templateTokens'
+import { TUNABLES } from './tuning'
 import {
   COMMON_EMOTIONS,
   type ActionDef,
@@ -276,14 +278,18 @@ function checkMoodShifts(
   return errors
 }
 
-/** 오류 메시지 목록을 돌려준다. 빈 배열이면 통과. performers는 무대와 대기 출연자를 합친 전체다. */
+/**
+ * 오류 메시지 목록을 돌려준다. 빈 배열이면 통과. performers는 무대와 대기 출연자를 합친 전체다.
+ * tunables는 조정 항목 정의다(spec Plan B1 1.4: 모든 기본값이 자기 범위 안). 테스트가 잘못된 정의를 넣을 수 있게 인자로 받는다.
+ */
 export function validateShow(
   show: ShowDef,
   performers: PerformerDef[],
   staff: StaffDef[],
   equipment: EquipmentDef[],
+  tunables: readonly TunableDef[] = TUNABLES,
 ): string[] {
-  const errors: string[] = []
+  const errors: string[] = validateTunables(tunables).map((error) => `조정 항목 오류: ${error}`)
 
   if (!(Number.isFinite(show.showMinutes) && show.showMinutes > 0)) errors.push(`극 중 길이 오류: ${show.showMinutes}분`)
   const { hour, minute } = show.startTime

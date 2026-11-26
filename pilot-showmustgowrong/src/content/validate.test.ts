@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { TunableDef } from '@/kit/tuning/tuning'
 import { COMMON_EMOTION_DEFS } from './emotions'
 import type {
   ActionDef,
@@ -105,6 +106,23 @@ describe('validateShow', () => {
 
   it('유효한 픽스처에는 빈 배열을 돌려준다', () => {
     expect(validateShow(show, performers, [makeStaff()], equipment)).toEqual([])
+  })
+
+  it('조정 항목 검증 오류가 콘텐츠 검증에 실린다', () => {
+    const badTunable: TunableDef = {
+      key: 'BAD',
+      group: '묶음',
+      label: '이름',
+      unit: '몸 초',
+      defaultValue: 10,
+      min: 0,
+      max: 5,
+      step: 1,
+      description: '설명',
+    }
+    expect(validateShow(show, performers, [makeStaff()], equipment, [badTunable])).toEqual([
+      '조정 항목 오류: 기본값이 범위 밖입니다: BAD',
+    ])
   })
 
   it('극 중 길이가 0 이하이거나 시작 시각이 범위 밖이면 오류', () => {

@@ -4,12 +4,59 @@
  * - `npm run sim`: 입력 0개(L7, 카메라 스위처도 쓰지 않음)로 시드 1~50 × 라인업 2개(기본, 준 라인업)를
  *   끝까지 돌려 라인업별 시드 표와 게이트 결과를 출력한다. 실패한 게이트가 있으면 종료 코드 1.
  * - `npm run sim -- --log <seed> [june]`: 그 방송의 전체 로그를 극 중 시각, 줄 종류, ×N과 함께 출력한다.
+ * - `npm run sim -- --tune <파일.json>`: 조정 패널의 "바뀐 값 복사" JSON으로 돌린다(--log와 함께 쓸 수 있다).
+ *   쓰지 못한 조정값이 있으면 목록을 출력하고 종료 코드 2로 끝난다.
+ *
+ * 조정값은 앱 모듈을 불러올 때 한 번 풀리므로, 앱 모듈은 조정값을 globalThis에 둔 뒤 동적 import한다.
  */
-import { formatShowClock } from '@/app/labels'
-import { JUNE_LINEUP, LINEUP, type Lineup } from '@/content/lineup'
-import { TALK_SHOW } from '@/content/talkShow'
-import { Broadcast, type LogLine } from '@/sim/engine'
-import { evaluateGates, measureBroadcast, type BroadcastMetrics } from '@/sim/livingMetrics'
+import { readFileSync } from 'node:fs'
+import type { Lineup } from '@/content/lineup'
+import type { LogLine } from '@/sim/engine'
+import type { BroadcastMetrics } from '@/sim/livingMetrics'
+
+const TUNE_EXIT_CODE = 2
+
+function parseTuneArg(args: readonly string[]): string | null {
+  const index = args.indexOf('--tune')
+  if (index < 0) return null
+  const path = args[index + 1]
+  if (path === undefined || path.startsWith('--')) throw new Error('--tune 다음에 JSON 파일 경로가 필요합니다')
+  return path
+}
+
+function readTuneFile(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as unknown
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.error(`조정값 파일을 읽지 못했습니다: ${path}: ${reason}`)
+    process.exit(TUNE_EXIT_CODE)
+  }
+}
+
+const cliArgs = process.argv.slice(2)
+const tunePath = parseTuneArg(cliArgs)
+if (tunePath !== null) globalThis.__EXNIHILO_TUNING__ = readTuneFile(tunePath)
+
+// 조정값을 둔 뒤에 불러온다(정적 import는 위 코드보다 먼저 평가된다)
+const { changedValues } = await import('@/kit/tuning/tuning')
+const { TUNABLES, TUNING } = await import('@/content/tuning')
+
+if (TUNING.rejected.length > 0) {
+  console.error(`쓰지 못한 조정값 ${TUNING.rejected.length}개:`)
+  for (const item of TUNING.rejected) console.error(`  ${item.key} = ${JSON.stringify(item.value)} (${item.reason})`)
+  process.exit(TUNE_EXIT_CODE)
+}
+const changed = Object.entries(changedValues(TUNABLES, TUNING.values))
+console.log(
+  changed.length === 0 ? '조정값: 기본' : `조정값: ${changed.map(([key, value]) => `${key}=${value}`).join(', ')}`,
+)
+
+const { formatShowClock } = await import('@/app/labels')
+const { JUNE_LINEUP, LINEUP } = await import('@/content/lineup')
+const { TALK_SHOW } = await import('@/content/talkShow')
+const { Broadcast } = await import('@/sim/engine')
+const { evaluateGates, measureBroadcast } = await import('@/sim/livingMetrics')
 
 const SEEDS = Array.from({ length: 50 }, (_, index) => index + 1)
 
@@ -122,6 +169,6 @@ function parseLogArgs(args: readonly string[]): { seed: number; june: boolean } 
   return { seed, june: args[index + 2] === 'june' }
 }
 
-const logArgs = parseLogArgs(process.argv.slice(2))
+const logArgs = parseLogArgs(cliArgs)
 if (logArgs) await printLog(logArgs.seed, logArgs.june)
 else await verifyAll()

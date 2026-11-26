@@ -1,6 +1,7 @@
 import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
+import { tuned } from '../tuning'
 
 /** 프리야: 웃음과 소음에 쉽게 들뜨고 정적을 못 견딘다 */
 export const PRIYA_MIND: MindDef = {
@@ -13,8 +14,8 @@ export const PRIYA_MIND: MindDef = {
       emotion: 'boredom',
       on: 'situation',
       situation: { kind: 'silence' },
-      // 정적을 못 견뎌 공용(4.5)보다 빠르다. 8이면 방송당 큰 터짐이 두 번 나는 일이 잦았다(Task 10)
-      perShowMinute: 6,
+      // 속도와 근거는 tuning.ts
+      perShowMinute: tuned('mind.priya.boredom.silence.perShowMinute'),
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),

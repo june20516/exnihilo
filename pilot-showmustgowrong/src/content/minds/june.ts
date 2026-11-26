@@ -1,6 +1,7 @@
 import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
+import { tuned } from '../tuning'
 
 /** 준: 정적이면 수다 욕구가 쌓여 옛날이야기를 늘어놓는다. 소음엔 쉽게 놀란다 */
 export const JUNE_MIND: MindDef = {
@@ -19,8 +20,8 @@ export const JUNE_MIND: MindDef = {
       emotion: 'chatter',
       on: 'situation',
       situation: { kind: 'silence' },
-      perShowMinute: 9,
-      fadePerShowMinute: 20,
+      perShowMinute: tuned('mind.june.chatter.silence.perShowMinute'),
+      fadePerShowMinute: tuned('mind.june.chatter.silence.fadePerShowMinute'),
       label: { noun: '밋밋한 진행', clause: '한참 끼어들 틈만 보던' },
     },
     { emotion: 'anxiety', on: 'event', kind: 'noise', scope: 'perceived', amount: 12 },
@@ -28,14 +29,14 @@ export const JUNE_MIND: MindDef = {
       emotion: 'anxiety',
       on: 'situation',
       situation: { kind: 'nearTag', tag: 'athlete', present: true },
-      perShowMinute: 2,
+      perShowMinute: tuned('mind.june.anxiety.nearTag.perShowMinute'),
       label: { noun: '덩치 큰 옆자리', clause: '덩치 큰 옆자리에 앉은' },
     },
     {
       emotion: 'boredom',
       on: 'situation',
       situation: { kind: 'silence' },
-      perShowMinute: 3,
+      perShowMinute: tuned('mind.june.boredom.silence.perShowMinute'),
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),

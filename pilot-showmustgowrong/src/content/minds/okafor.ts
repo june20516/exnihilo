@@ -1,6 +1,7 @@
 import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
+import { tuned } from '../tuning'
 
 /** 오카포: 자기를 향한 웃음·분노에 짜증이 쌓여 기여가 큰 사람에게 버럭한다 */
 export const OKAFOR_MIND: MindDef = {
@@ -14,8 +15,8 @@ export const OKAFOR_MIND: MindDef = {
       emotion: 'boredom',
       on: 'situation',
       situation: { kind: 'silence' },
-      // 공용(4.5)과 프리야(6) 사이로 두어 정적 지루함이 출연자마다 다른 때 차오르게 한다(Task 10)
-      perShowMinute: 5.5,
+      // 속도와 근거는 tuning.ts
+      perShowMinute: tuned('mind.okafor.boredom.silence.perShowMinute'),
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),

@@ -10,9 +10,14 @@ function isTextEntry(target: EventTarget | null): boolean {
   return target.isContentEditable || target.closest('[contenteditable]:not([contenteditable="false"])') !== null
 }
 
-/** 백틱(`)으로 열고 닫는다. 입력창에 포커스가 있으면 무시한다 */
-export function useTuningHotkey(): [open: boolean, setOpen: (open: boolean) => void] {
-  const [open, setOpen] = useState(false)
+/**
+ * 백틱(`)으로 열고 닫는다. 입력창에 포커스가 있으면 무시한다.
+ * initialOpen은 처음 열림 상태다(불러올 때 버린 저장값을 바로 알릴 때 쓴다).
+ */
+export function useTuningHotkey(
+  initialOpen = false,
+): [open: boolean, setOpen: (open: boolean) => void] {
+  const [open, setOpen] = useState(initialOpen)
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {

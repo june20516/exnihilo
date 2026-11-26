@@ -144,6 +144,21 @@ describe('TuningPanel', () => {
     expect(screen.getByText('바뀜')).toBeTruthy()
   })
 
+  it('불러오기 오류(loadError)가 있으면 패널 위 오류로 보인다', () => {
+    render(
+      <TuningPanel
+        defs={DEFS}
+        applied={APPLIED}
+        rejected={[]}
+        storage={fakeStorage()}
+        storageKey={KEY}
+        loadError="조정값을 읽지 못했습니다: 깨진 JSON"
+        onClose={() => {}}
+      />,
+    )
+    expect(screen.getByRole('alert').textContent).toBe('조정값을 읽지 못했습니다: 깨진 JSON')
+  })
+
   it('저장 오류와 복사 오류는 서로 지우지 않는다', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('거부됨'))
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -247,6 +262,13 @@ describe('useTuningHotkey', () => {
     const { result } = renderHook(() => useTuningHotkey())
     expect(result.current[0]).toBe(false)
     act(() => void fireEvent.keyDown(window, { key: '`' }))
+    expect(result.current[0]).toBe(true)
+    act(() => void fireEvent.keyDown(window, { key: '`' }))
+    expect(result.current[0]).toBe(false)
+  })
+
+  it('initialOpen이면 열린 채로 시작하고 백틱으로 닫는다', () => {
+    const { result } = renderHook(() => useTuningHotkey(true))
     expect(result.current[0]).toBe(true)
     act(() => void fireEvent.keyDown(window, { key: '`' }))
     expect(result.current[0]).toBe(false)

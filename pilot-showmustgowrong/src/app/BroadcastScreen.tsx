@@ -199,6 +199,8 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   // 화면이 뜨자마자 누른 키도 놓치지 않도록 리스너는 마운트 때 한 번 붙이고 최신 상태는 effect event로 읽는다.
   const onKeyDown = useEffectEvent((event: KeyboardEvent): void => {
     if (event.repeat || view === null || view.phase === 'ended') return
+    // 조정 패널의 입력 칸에 치는 숫자·Space가 카메라 전환과 개입으로 새지 않게 한다
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
     const cameraIndex = SWITCHER_KEYS.indexOf(event.key)
     if (cameraIndex >= 0) {
       const camera = show.cameras[cameraIndex]

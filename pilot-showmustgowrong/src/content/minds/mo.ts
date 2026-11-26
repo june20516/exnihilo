@@ -1,6 +1,7 @@
 import { COMMON_HABITS, COMMON_SENSITIVITIES, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
+import { tuned } from '../tuning'
 
 /** 모의 터짐 문장. 흥분의 큰 터짐(바디슬램)은 행동까지 달라서 아래 MO_MIND에서 따로 덮는다 */
 const MO_BURSTS = withBurstTexts({
@@ -43,7 +44,7 @@ export const MO_MIND: MindDef = {
       emotion: 'excitement',
       on: 'situation',
       situation: { kind: 'showTrait', trait: 'studioAudience' },
-      perShowMinute: 2,
+      perShowMinute: tuned('mind.mo.excitement.studioAudience.perShowMinute'),
       label: { noun: '관객의 함성', clause: '관객 앞에서 달아오른' },
     },
   ]),
