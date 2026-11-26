@@ -489,9 +489,7 @@ export class Broadcast {
       this.walkOut(member)
       return
     }
-    const directive = member.def.directives.find((candidate) => candidate.id === directiveId)
-    if (directive === undefined) throw new Error(`출연자 ${actorId}에게 없는 지시입니다: ${directiveId}`)
-    this.life.addDirective(actorId, outcome.moodShifts, directive.label, this.stepCount)
+    this.life.addDirective(actorId, outcome.moodShifts, outcome.label, this.stepCount)
     this.executeAction(member, outcome.action, null)
   }
 

@@ -19,7 +19,7 @@ import type {
 import { nextFloat, type RngState } from '@/kit/rng'
 
 export type DirectiveOutcome =
-  | { kind: 'executed'; action: ActionDef; misfired: boolean; moodShifts: MoodShift[] }
+  | { kind: 'executed'; action: ActionDef; misfired: boolean; label: string; moodShifts: MoodShift[] }
   | { kind: 'walkout' }
 
 export type AdEffect = 'relief' | 'reset' | 'setup'
@@ -68,8 +68,11 @@ function misfireAction(action: ActionDef, misfire: 'overdo' | 'awkward'): Action
 
 /** overdo면 양이 커지고 awkward면 부호가 반대다. 엇나감 판정을 그대로 따르므로 난수를 쓰지 않는다. */
 function misfireMoodShifts(shifts: readonly MoodShift[], misfire: 'overdo' | 'awkward'): MoodShift[] {
-  const factor = misfire === 'overdo' ? OVERDO_MULTIPLIER : -1
-  return shifts.map((shift) => ({ ...shift, amount: shift.amount * factor }))
+  // awkward는 0 - amount로 뒤집어 amount 0에서 -0이 생기지 않게 한다.
+  return shifts.map((shift) => ({
+    ...shift,
+    amount: misfire === 'overdo' ? shift.amount * OVERDO_MULTIPLIER : 0 - shift.amount,
+  }))
 }
 
 /** PD 개입의 상태(내성, 피로, 광고)와 판정. 지시 결과의 실행은 엔진이 맡는다. */
@@ -150,17 +153,17 @@ export class Director {
     }
     const moodShifts = (directive.moodShifts ?? []).map((shift) => ({ ...shift }))
     if (performer.misfire === 'never') {
-      return [{ kind: 'executed', action: directive.action, misfired: false, moodShifts }, rng]
+      return [{ kind: 'executed', action: directive.action, misfired: false, label: directive.label, moodShifts }, rng]
     }
 
     const chance = misfireChance(fatigueBefore, FATIGUE_MISFIRE_PER_POINT)
     const [misfired, next] = rollMisfire(chance, rng)
     if (!misfired) {
-      return [{ kind: 'executed', action: directive.action, misfired: false, moodShifts }, next]
+      return [{ kind: 'executed', action: directive.action, misfired: false, label: directive.label, moodShifts }, next]
     }
     const action = misfireAction(directive.action, performer.misfire)
     const shifts = misfireMoodShifts(moodShifts, performer.misfire)
-    return [{ kind: 'executed', action, misfired: true, moodShifts: shifts }, next]
+    return [{ kind: 'executed', action, misfired: true, label: directive.label, moodShifts: shifts }, next]
   }
 
   directStaff(

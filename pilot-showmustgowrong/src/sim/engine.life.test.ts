@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { STEP_SECONDS } from '@/content/balance'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { TALK_SHOW } from '@/content/talkShow'
@@ -20,6 +20,7 @@ import {
   type BroadcastSetup,
   type LogLine,
 } from './engine'
+import { StudioLife } from './life'
 import { isStir, type PhenomenonEvent } from './phenomena'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
@@ -695,18 +696,22 @@ describe('지시의 감정 변화', () => {
     expect(irritationOf(broadcast, 'mo')?.reasons).toEqual([])
   })
 
-  it('이탈 지시는 실행되지 않아 감정 변화를 더하지 않고, 이탈 전 두 번의 지시만 이유가 된다', async () => {
+  it('이탈 지시는 실행되지 않아 addDirective를 부르지 않고, 이탈 전 두 번만 부른다', async () => {
     const low = { ...withVent('rex', '렉스', { small: QUIET_BURST, big: QUIET_BURST }), tolerance: 'low' as const }
     const broadcast = await open(setup({ performers: [low, MO] }))
-    const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
-    broadcast.step([direct])
-    broadcast.step([direct])
-    const reasons = irritationOf(broadcast, 'rex')?.reasons ?? []
-    expect(reasons.filter((reason) => reason.source.type === 'directive')).toHaveLength(2)
-    // 세 번째 지시는 이탈이라 출연자가 무대를 떠난다(이유를 더할 대상도 없다)
-    broadcast.step([direct])
-    expect(broadcast.view().actors.find((actor) => actor.id === 'rex')?.walkedOut).toBe(true)
-    expect(irritationOf(broadcast, 'rex')).toBeUndefined()
+    const spy = vi.spyOn(StudioLife.prototype, 'addDirective')
+    try {
+      const direct: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'vent' }
+      broadcast.step([direct])
+      broadcast.step([direct])
+      expect(spy).toHaveBeenCalledTimes(2)
+      // 세 번째 지시는 이탈이다
+      broadcast.step([direct])
+      expect(broadcast.view().actors.find((actor) => actor.id === 'rex')?.walkedOut).toBe(true)
+      expect(spy).toHaveBeenCalledTimes(2)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('지시 이유가 가장 큰 터짐 줄은 "PD의 \'<지시>\'에 <이름>이 …" 꼴이고 깊이 1이다', async () => {
