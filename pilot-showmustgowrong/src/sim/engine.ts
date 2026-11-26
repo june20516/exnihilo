@@ -441,6 +441,11 @@ export class Broadcast {
     return this.life.burstRecords()
   }
 
+  /** 방송 시작부터의 모든 로그 줄(복사본). view().log는 최근 줄만 담는다. */
+  logLines(): LogLine[] {
+    return this.lines.map((line) => ({ ...line }))
+  }
+
   /** 가장 깊은 연쇄의 뿌리 사건이 남긴 로그 줄. 줄이 없으면(묵음 emit) 그 사건의 문구다. */
   private rootLine(): BroadcastSummary['rootLine'] {
     if (this.deepestEvent === null) return null

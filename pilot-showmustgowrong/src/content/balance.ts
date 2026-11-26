@@ -184,19 +184,28 @@ export const AD_GAUGE_RELIEF = 25
 export const AD_EFFECT_PICKS = 2
 
 // 감정(living spec 1.1 체감 목표: 평온 -> 1단계 실제 40~60초, 1 -> 2단계 20~40초)
-/** 단계 문턱 기본값. 올라가는 문턱과 내려가는 문턱이 10 벌어져 값이 문턱 근처에서 흔들려도 단계가 깜빡이지 않는다. */
+/**
+ * 단계 문턱 기본값. 올라가는 문턱과 내려가는 문턱이 10 벌어져 값이 문턱 근처에서 흔들려도 단계가 깜빡이지 않는다.
+ * intense는 100(꽉 참)이다. 정적 지루함은 2단계에서도 계속 오르므로 95면 큰 터짐 대기(평균 실제 11초) 중에 자주
+ * 넘었고, 강도 3 소음이 반사 반응 사슬을 깊이 4로 키웠다(Task 10 무입력 sim). 공용 정적 지루함(실제 초당 0.45)으로
+ * 80에서 100까지 실제 약 44초라, 2단계를 그만큼 참은 "참다 터진" 경우만 intense가 된다.
+ */
 export const DEFAULT_THRESHOLDS: EmotionThresholds = {
   rise: [50, 80],
   fall: [40, 70],
-  intense: 95,
+  intense: 100,
 }
 /**
  * 기준 상황이 참일 때 극 중 1분에 쌓이는 감정(포인트). 토크쇼(배율 10)에서
  * 0 -> 50은 극 중 8.3분 = 실제 50초(목표 40~60초), 50 -> 80은 극 중 5분 = 실제 30초(목표 20~40초).
  */
 export const SITUATION_REFERENCE_PER_SHOW_MINUTE = 6
-/** 상황 조건이 끝나면 극 중 1분에 빠지는 감정. 쌓인 속도의 2배라 50이 실제 25초에 0이 된다. */
-export const SITUATION_FADE_PER_SHOW_MINUTE = 12
+/**
+ * 상황 조건이 끝나면 극 중 1분에 빠지는 감정. 토크쇼 실제 초당 0.4라 50이 실제 125초에 0이 된다.
+ * 사건 하나가 정적을 끊는 실제 5초 동안 모두의 정적 감정이 2만 빠진다. 12(실제 5초에 6)였을 때는 1단계 출연자
+ * 셋의 작은 터짐이 서로의 지루함을 계속 깎아 아무도 2단계에 닿지 못하는 방송이 시드의 30% 가까이 나왔다(Task 10).
+ */
+export const SITUATION_FADE_PER_SHOW_MINUTE = 4
 /** 상황 하나가 쌓을 수 있는 감정의 상한 */
 export const SITUATION_CAP = 100
 /**
@@ -213,8 +222,12 @@ export const INTENSITY_EMOTION_FACTOR: Record<EventIntensity, number> = {
 }
 /** 같은 이유가 살아 있는 개수별 배율(림월드식 중첩). 개수가 넘으면 마지막 값을 쓴다. */
 export const REPEAT_MULTIPLIERS: readonly number[] = [1, 0.6, 0.35, 0.2]
-/** 작은 터짐이 그 감정의 양수 이유를 남기는 비율(55 -> 33, 1단계 아래로) */
-export const SMALL_BURST_KEEP = 0.6
+/**
+ * 작은 터짐이 그 감정의 양수 이유를 남기는 비율. 2단계 문턱 80에서 작은 터짐이 나도 72라 내려가는 문턱 70 위에
+ * 남는다(living spec 3.3: 작은 터짐은 2단계 유예 중에도 일어날 수 있다). 0.6이면 80 -> 48로 2단계가 끝나
+ * 2단계 구간의 절반이 큰 터짐 없이 끝났다(Task 10).
+ */
+export const SMALL_BURST_KEEP = 0.9
 /** 큰 터짐 뒤 후련함(감정 포인트) */
 export const RELIEF_AMOUNT = -40
 /** 후련함이 0으로 줄어드는 데 걸리는 극 중 초. 600초 = 토크쇼 실제 60초 */
@@ -223,8 +236,13 @@ export const RELIEF_SHOW_SECONDS = 600
 // 스튜디오 생활(living spec 1.1, 3.3: 터짐, 버릇, 응답, 재촉)
 /** 터짐 확률을 판정하는 주기(몸 초). 감정 틱이 이 간격으로 돈다. */
 export const LIFE_TICK_BODY_SECONDS = 0.5
-/** 1단계 이상에서 작은 터짐 사이의 평균 극 중 초. 토크쇼(배율 10)에서 실제 12초에 한 번. */
-export const SMALL_BURST_MTB_SHOW_SECONDS = 120
+/**
+ * 1단계 이상에서 작은 터짐 사이의 평균 극 중 초. 토크쇼(배율 10)에서 실제 42초에 한 번이고 쿨다운(실제 12초)을
+ * 더하면 감정 하나가 1단계에 머무는 동안 평균 실제 54초에 한 번이다. 실제 12초였을 때는 1단계에서 2단계(정적 속도에
+ * 따라 실제 약 30~70초)로 가는 동안 거의 반드시 작은 터짐이 나 큰 터짐이 방송당 0.04회였다. 42초에서 무입력 방송당 작은 터짐
+ * 평균 5.7~6.7회(living spec 7.1 목표 4~8회).
+ */
+export const SMALL_BURST_MTB_SHOW_SECONDS = 420
 /** 같은 감정의 작은 터짐 뒤 다시 터지지 않는 극 중 초(실제 12초). */
 export const SMALL_BURST_COOLDOWN_SHOW_SECONDS = 120
 /** 2단계 진입 뒤 큰 터짐이 없는 유예(몸 초). living spec 1.1의 "2단계 진입 3초 안에는 터지지 않는다". */

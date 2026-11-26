@@ -1,107 +1,127 @@
 /**
- * 헤드리스 방송 실행(plan Task 9 Step 5).
- * 시드 1~50으로 토크쇼를 입력 없이(스위처만 10초마다 wide → close → audienceCam 순환) 끝까지 돌리고
- * 시드별 결과와 평균을 출력한다. "연쇄가 아예 안 일어나거나 매번 폭주하는" 고장만 잡는 확인이지
- * 재미 지표가 아니다.
+ * 무입력 살아 있는 스튜디오 기계 검증(living spec 7.1, plan A Task 10).
+ *
+ * - `npm run sim`: 입력 0개(L7, 카메라 스위처도 쓰지 않음)로 시드 1~50 × 라인업 2개(기본, 준 라인업)를
+ *   끝까지 돌려 라인업별 시드 표와 게이트 결과를 출력한다. 실패한 게이트가 있으면 종료 코드 1.
+ * - `npm run sim -- --log <seed> [june]`: 그 방송의 전체 로그를 극 중 시각, 줄 종류, ×N과 함께 출력한다.
  */
-import { BROADCAST_STEPS, STEP_SECONDS } from '@/content/balance'
-import { LINEUP } from '@/content/lineup'
+import { formatShowClock } from '@/app/labels'
+import { JUNE_LINEUP, LINEUP, type Lineup } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
-import { Broadcast, type BroadcastInput } from '@/sim/engine'
+import { Broadcast, type LogLine } from '@/sim/engine'
+import { evaluateGates, measureBroadcast, type BroadcastMetrics } from '@/sim/livingMetrics'
 
 const SEEDS = Array.from({ length: 50 }, (_, index) => index + 1)
-const SWITCH_CYCLE = ['wide', 'close', 'audienceCam'] as const
-const SWITCH_SECONDS = 10
-const EARLY_HALT_SECONDS = 30
-const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
-const SWITCH_STEPS = SWITCH_SECONDS * STEPS_PER_SECOND
 
-interface SeedResult {
-  seed: number
-  peakViewers: number
-  maxChainDepth: number
-  eventCount: number
-  haltedBy: string | null
-  endSeconds: number
-  brokenEquipment: number
+interface NamedLineup {
+  name: string
+  lineup: Lineup
 }
 
-function switcherInputs(step: number): BroadcastInput[] {
-  if (step % SWITCH_STEPS !== 0) return []
-  const cameraId = SWITCH_CYCLE[(step / SWITCH_STEPS) % SWITCH_CYCLE.length]
-  return [{ type: 'switch', cameraId }]
+const LINEUPS: readonly NamedLineup[] = [
+  { name: '기본 라인업(렉스, 프리야, 오카포, 모)', lineup: LINEUP },
+  { name: '준 라인업(렉스, 프리야, 오카포, 준)', lineup: JUNE_LINEUP },
+]
+
+interface RunResult {
+  metrics: BroadcastMetrics
+  lines: LogLine[]
 }
 
-async function runSeed(seed: number): Promise<SeedResult> {
-  const broadcast = await Broadcast.create({ show: TALK_SHOW, ...LINEUP, seed })
+async function runNoInput(lineup: Lineup, seed: number): Promise<RunResult> {
+  const broadcast = await Broadcast.create({ show: TALK_SHOW, ...lineup, seed })
   try {
-    while (broadcast.phase === 'live') broadcast.step(switcherInputs(broadcast.currentStep))
-    const summary = broadcast.summary()
-    const view = broadcast.view()
-    return {
-      seed,
-      peakViewers: summary.peakViewers,
-      maxChainDepth: summary.maxChainDepth,
-      eventCount: summary.eventCount,
-      haltedBy: view.haltedBy,
-      endSeconds: view.step / STEPS_PER_SECOND,
-      brokenEquipment: view.equipment.filter((piece) => piece.released).length,
-    }
+    while (broadcast.phase === 'live') broadcast.step([])
+    const lines = broadcast.logLines()
+    const metrics = measureBroadcast(
+      lines,
+      broadcast.burstRecords(),
+      broadcast.summary(),
+      broadcast.view().haltedBy !== null,
+      broadcast.currentStep,
+    )
+    return { metrics, lines }
   } finally {
     broadcast.dispose()
   }
 }
 
-function average(values: number[]): number {
+function formatRow(cells: (string | number)[]): string {
+  return cells.map((cell) => String(cell).padStart(8)).join(' |')
+}
+
+function printSeedTable(results: readonly BroadcastMetrics[]): void {
+  console.log(
+    formatRow(['seed', 'gap(s)', 'silence', 'big', 'big/1', 'small', 'warn(s)', 'halt', 'depth', 'lines']),
+  )
+  results.forEach((metrics, index) => {
+    const delays = metrics.warningDelaysBodySeconds.map((delay) => delay.toFixed(1)).join(',')
+    console.log(
+      formatRow([
+        SEEDS[index],
+        metrics.maxGapRealSeconds.toFixed(2),
+        `${(metrics.silenceLineRatio * 100).toFixed(0)}%`,
+        metrics.bigBursts,
+        metrics.maxBigBurstsPerActor,
+        metrics.smallBursts,
+        delays || '-',
+        metrics.halted ? 'yes' : '-',
+        metrics.maxChainDepth,
+        metrics.lineCount,
+      ]),
+    )
+  })
+}
+
+function average(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function formatRow(cells: (string | number)[]): string {
-  return cells.map((cell) => String(cell).padStart(10)).join(' |')
-}
-
-async function main(): Promise<void> {
-  const results: SeedResult[] = []
-  for (const seed of SEEDS) results.push(await runSeed(seed))
-
-  console.log(formatRow(['seed', 'peak(천)', 'maxDepth', 'events', 'haltedBy', 'end(s)', 'broken']))
-  for (const result of results) {
+async function verifyAll(): Promise<void> {
+  let failed = false
+  for (const { name, lineup } of LINEUPS) {
+    const results: BroadcastMetrics[] = []
+    for (const seed of SEEDS) results.push((await runNoInput(lineup, seed)).metrics)
+    console.log(`\n== ${name}, 시드 ${SEEDS.length}개 무입력 ==`)
+    printSeedTable(results)
     console.log(
-      formatRow([
-        result.seed,
-        result.peakViewers.toFixed(1),
-        result.maxChainDepth,
-        result.eventCount,
-        result.haltedBy ?? '-',
-        result.endSeconds.toFixed(1),
-        result.brokenEquipment,
-      ]),
+      `평균: 큰 터짐 ${average(results.map((run) => run.bigBursts)).toFixed(2)}, ` +
+        `작은 터짐 ${average(results.map((run) => run.smallBursts)).toFixed(2)}, ` +
+        `줄 ${average(results.map((run) => run.lineCount)).toFixed(1)}`,
     )
+    for (const gate of evaluateGates(results)) {
+      console.log(`${gate.pass ? 'PASS' : 'FAIL'} ${gate.name}: ${gate.detail}`)
+      if (!gate.pass) failed = true
+    }
   }
-
-  const halted = results.filter((result) => result.haltedBy !== null)
-  const earlyHalted = halted.filter((result) => result.endSeconds < EARLY_HALT_SECONDS)
-  const depths = results.map((result) => result.maxChainDepth)
-  console.log(
-    [
-      `평균: 최고 시청자 ${average(results.map((result) => result.peakViewers)).toFixed(1)}천`,
-      `최대 연쇄 깊이 ${average(depths).toFixed(2)}` +
-        ` (최소 ${Math.min(...depths)}, 최대 ${Math.max(...depths)})`,
-      `이벤트 ${average(results.map((result) => result.eventCount)).toFixed(1)}`,
-      `중단 ${halted.length}/${results.length}`,
-      `${EARLY_HALT_SECONDS}초 안 중단 ${earlyHalted.length}/${results.length}`,
-      `장비 파손 ${average(results.map((result) => result.brokenEquipment)).toFixed(2)}`,
-      `방송 길이 ${BROADCAST_STEPS / STEPS_PER_SECOND}초`,
-    ].join(', '),
-  )
-
-  const failures: string[] = []
-  if (average(depths) < 2) failures.push('최대 연쇄 깊이 평균이 2 미만입니다.')
-  if (earlyHalted.length === results.length) failures.push('모든 시드가 30초 안에 중단됩니다.')
-  if (failures.length > 0) {
-    console.error(`확인 기준 미달:\n${failures.join('\n')}`)
+  if (failed) {
+    console.error('\n실패한 게이트가 있습니다.')
     process.exitCode = 1
   }
 }
 
-await main()
+function formatLogLine(line: LogLine): string {
+  const repeat = line.repeat > 1 ? ` ×${line.repeat}` : ''
+  const indent = '  '.repeat(Math.max(0, line.depth - 1))
+  return `${formatShowClock(line.step, TALK_SHOW)} [${line.kind.padEnd(8)}] ${indent}${line.text}${repeat}`
+}
+
+async function printLog(seed: number, june: boolean): Promise<void> {
+  const { name, lineup } = june ? LINEUPS[1] : LINEUPS[0]
+  const { metrics, lines } = await runNoInput(lineup, seed)
+  console.log(`== ${name}, 시드 ${seed} 무입력 전체 로그 (${lines.length}줄) ==`)
+  for (const line of lines) console.log(formatLogLine(line))
+  console.log(JSON.stringify(metrics))
+}
+
+function parseLogArgs(args: readonly string[]): { seed: number; june: boolean } | null {
+  const index = args.indexOf('--log')
+  if (index < 0) return null
+  const seed = Number(args[index + 1])
+  if (!Number.isInteger(seed)) throw new Error('--log 다음에 정수 시드가 필요합니다')
+  return { seed, june: args[index + 2] === 'june' }
+}
+
+const logArgs = parseLogArgs(process.argv.slice(2))
+if (logArgs) await printLog(logArgs.seed, logArgs.june)
+else await verifyAll()

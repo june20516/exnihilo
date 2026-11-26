@@ -23,6 +23,16 @@ import {
 import { StudioLife } from './life'
 import { isStir, type PhenomenonEvent } from './phenomena'
 
+// 이 파일은 깊이·문형·뿌리 줄 같은 구조를 짧은 창(실제 20~60초)에서 본다. 작은 터짐 빈도·해소 비율·상황 fade는
+// 무입력 sim(Task 10)으로 맞추는 수치라, 구조 테스트가 그 조정에 흔들리지 않도록 작성 당시 값으로 고정한다
+// (작은 터짐 MTB 극 중 120초 = 실제 12초, 해소 0.6배, fade 극 중 분당 12).
+vi.mock('@/content/balance', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/content/balance')>()),
+  SMALL_BURST_MTB_SHOW_SECONDS: 120,
+  SMALL_BURST_KEEP: 0.6,
+  SITUATION_FADE_PER_SHOW_MINUTE: 12,
+}))
+
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 const seconds = (value: number) => Math.round(value * STEPS_PER_SECOND)
 

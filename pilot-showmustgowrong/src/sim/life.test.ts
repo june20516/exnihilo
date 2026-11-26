@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BIG_BURST_GRACE_BODY_SECONDS,
   BIG_BURST_MTB_BODY_SECONDS,
+  DEFAULT_THRESHOLDS,
   HABIT_COOLDOWN_SHOW_SECONDS,
   LIFE_TICK_BODY_SECONDS,
   LOG_NUDGE_SHOW_SECONDS,
@@ -9,6 +10,7 @@ import {
   RESPONSE_COOLDOWN_SHOW_SECONDS,
   SMALL_BURST_COOLDOWN_SHOW_SECONDS,
   SMALL_BURST_KEEP,
+  SMALL_BURST_MTB_SHOW_SECONDS,
   STAGE_LINE_COOLDOWN_SHOW_SECONDS,
   STEP_SECONDS,
 } from '@/content/balance'
@@ -334,15 +336,15 @@ describe('터짐', () => {
     expect(view.value).toBeLessThanOrEqual(85 - 40 + 1e-6)
   })
 
-  it('큰 터짐 값이 95 이상이면 intense이고 강도 2 emit이 3이 된다', () => {
-    const first = firstBig(stage2Life(7, 96))
+  it('큰 터짐 값이 intense 문턱 이상이면 intense이고 강도 2 emit이 3이 된다', () => {
+    const first = firstBig(stage2Life(7, DEFAULT_THRESHOLDS.intense))
     expect(first.output.intense).toBe(true)
     expect(first.output.burst.action.emits.map((emit) => emit.intensity)).toEqual([3, 1])
     // 원본 콘텐츠는 바뀌지 않는다
     expect(BURSTS.irritation.big.action.emits.map((emit) => emit.intensity)).toEqual([2, 1])
   })
 
-  it('큰 터짐 값이 95 미만이면 intense가 아니고 행동은 그대로다', () => {
+  it('큰 터짐 값이 intense 문턱 미만이면 intense가 아니고 행동은 그대로다', () => {
     const first = firstBig(stage2Life(7, 85))
     expect(first.output.intense).toBe(false)
     expect(first.output.burst.action.emits.map((emit) => emit.intensity)).toEqual([2, 1])
@@ -350,7 +352,8 @@ describe('터짐', () => {
 
   it('터짐의 cause는 가장 큰 이유가 사건이면 그 사건, 상황이면 null이다', () => {
     const event = makeEvent()
-    const eventLife = stage2Life(9, 85, {
+    // 사건 이유는 실제 18초 뒤 사라지므로 큰 터짐이 그 안에 나는 시드를 쓴다(시드 9는 Task 10 수치에서 늦게 터진다)
+    const eventLife = stage2Life(1, 85, {
       sensitivities: [
         { emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 5 },
       ],
@@ -376,13 +379,19 @@ describe('터짐', () => {
     expect(bySituation.output.cause).toBeNull()
   })
 
-  it('작은 터짐은 1단계 이상에서 일어나고 이유를 0.6배로 줄이며 쿨다운이 있다', () => {
+  it('작은 터짐은 1단계 이상에서 일어나고 이유를 SMALL_BURST_KEEP배로 줄이며 쿨다운이 있다', () => {
     const sensitivities: MindDef['sensitivities'] = [
       { emotion: 'irritation', on: 'event', kind: 'noise', scope: 'perceived', amount: 10 },
     ]
     const cooldown = showSecondsToSteps(SMALL_BURST_COOLDOWN_SHOW_SECONDS, TALK_SHOW)
+    // 기본값 45는 내려가는 문턱(40) 위라 300초 내내 1단계다. 평균 간격은 쿨다운 + MTB(실제 초)이고,
+    // 시드 하나의 횟수는 흔들리므로 시드 20개 합이 기댓값의 절반을 넘는지 본다.
+    const meanGapSteps = cooldown + showSecondsToSteps(SMALL_BURST_MTB_SHOW_SECONDS, TALK_SHOW)
+    const seeds = SEEDS.slice(0, 20)
+    const expectedTotal = (REAL_SECONDS_STEPS(300) / meanGapSteps) * seeds.length
+    let total = 0
     let checked = false
-    for (const seed of SEEDS.slice(0, 20)) {
+    for (const seed of seeds) {
       const life = stage2Life(seed, 45, { sensitivities })
       life.perceive([makeEvent({ intensity: 2 })], [perceiver('a')], 0)
       const smallSteps: number[] = []
@@ -409,8 +418,10 @@ describe('터짐', () => {
       smallSteps.slice(1).forEach((step, index) => {
         expect(step - smallSteps[index]).toBeGreaterThanOrEqual(cooldown)
       })
-      expect(smallSteps.length).toBeGreaterThan(5)
+      expect(smallSteps.length).toBeGreaterThan(0)
+      total += smallSteps.length
     }
+    expect(total).toBeGreaterThan(expectedTotal / 2)
     expect(checked).toBe(true)
   })
 })

@@ -24,7 +24,9 @@ export const COMMON_SENSITIVITIES: SensitivityDef[] = [
     emotion: 'boredom',
     on: 'situation',
     situation: { kind: 'silence' },
-    perShowMinute: 6,
+    // 기준(6)의 0.75배. 정적이 이어지면 실제 약 110초에 1단계, 다시 약 67초에 2단계다. 출연자마다 속도를
+    // 다르게 두어(프리야 6, 오카포 5.5, 공용 4.5, 렉스 4) 같은 정적에 모두 함께 2단계에 닿지 않게 한다(Task 10).
+    perShowMinute: 4.5,
     label: SILENCE_BOREDOM_LABEL,
   },
 ]

@@ -4,6 +4,7 @@ import {
   SITUATION_CAP,
   SITUATION_FADE_PER_SHOW_MINUTE,
   SITUATION_REFERENCE_PER_SHOW_MINUTE,
+  SMALL_BURST_KEEP,
 } from '@/content/balance'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { TALK_SHOW } from '@/content/talkShow'
@@ -194,7 +195,7 @@ describe('상황 이유', () => {
     }
   }
 
-  it('상황이 끝나면 쌓인 속도의 2배로 빠지고 0이 되면 이유가 사라진다', () => {
+  it('상황이 끝나면 SITUATION_FADE 속도로 빠지고 0이 되면 이유가 사라진다', () => {
     const mind = makeMind({ sensitivities: [OFF_SCREEN] })
     accumulate(mind)
     expect(mind.value('irritation')).toBeCloseTo(ACCUMULATED)
@@ -203,7 +204,9 @@ describe('상황 이유', () => {
     expect(mind.value('irritation')).toBeCloseTo(
       ACCUMULATED - SITUATION_FADE_PER_SHOW_MINUTE * 2.5 * SHOW_MINUTES_PER_REAL_SECOND,
     )
-    mind.advance(IDLE, 600 + 300)
+    const fadeRealSeconds =
+      ACCUMULATED / (SITUATION_FADE_PER_SHOW_MINUTE * SHOW_MINUTES_PER_REAL_SECOND)
+    mind.advance(IDLE, 600 + Math.ceil(fadeRealSeconds * STEPS_PER_SECOND) + 30)
     expect(mind.value('irritation')).toBe(0)
     expect(mind.topReasons('irritation', 5)).toEqual([])
   })
@@ -380,11 +383,11 @@ describe('단계(히스테리시스)', () => {
 })
 
 describe('터짐 뒤처리', () => {
-  it('relieveSmall은 양수 이유를 0.6배로, catharsis는 양수 이유를 지우고 -40 후련함을 붙인다', () => {
+  it('relieveSmall은 양수 이유를 SMALL_BURST_KEEP배로, catharsis는 양수 이유를 지우고 -40 후련함을 붙인다', () => {
     const small = makeMind()
     small.addDirective([{ emotion: 'irritation', amount: 55 }], '참기', 0)
     small.relieveSmall('irritation')
-    expect(small.value('irritation')).toBeCloseTo(33)
+    expect(small.value('irritation')).toBeCloseTo(55 * SMALL_BURST_KEEP)
 
     const big = makeMind({ baseline: { irritation: 50 } })
     big.addDirective([{ emotion: 'irritation', amount: 20 }], '참기', 0)

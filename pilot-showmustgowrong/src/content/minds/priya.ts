@@ -13,7 +13,8 @@ export const PRIYA_MIND: MindDef = {
       emotion: 'boredom',
       on: 'situation',
       situation: { kind: 'silence' },
-      perShowMinute: 8,
+      // 정적을 못 견뎌 공용(4.5)보다 빠르다. 8이면 방송당 큰 터짐이 두 번 나는 일이 잦았다(Task 10)
+      perShowMinute: 6,
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),

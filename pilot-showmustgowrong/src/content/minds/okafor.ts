@@ -1,4 +1,4 @@
-import { COMMON_BURSTS, COMMON_HABITS, COMMON_SENSITIVITIES, withSensitivities } from '../commonMind'
+import { COMMON_BURSTS, COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
 
@@ -10,6 +10,14 @@ export const OKAFOR_MIND: MindDef = {
     { emotion: 'irritation', on: 'event', kind: 'laughter', scope: 'targetsSelf', amount: 25 },
     { emotion: 'irritation', on: 'event', kind: 'anger', scope: 'targetsSelf', amount: 20 },
     { emotion: 'anxiety', on: 'event', kind: 'impact', scope: 'targetsSelf', amount: 20 },
+    {
+      emotion: 'boredom',
+      on: 'situation',
+      situation: { kind: 'silence' },
+      // 공용(4.5)과 프리야(6) 사이로 두어 정적 지루함이 출연자마다 다른 때 차오르게 한다(Task 10)
+      perShowMinute: 5.5,
+      label: SILENCE_BOREDOM_LABEL,
+    },
   ]),
   bursts: {
     ...COMMON_BURSTS,
@@ -62,9 +70,9 @@ export const OKAFOR_MIND: MindDef = {
     },
     {
       id: 'tie',
-      line: '헛기침을 하며 넥타이를 고쳐 맨다',
-      recall: '넥타이를 고쳐 매던',
-      noun: '헛기침',
+      line: '"학술적으로는 틀린 말입니다" 하고 정색한다',
+      recall: '정색하던',
+      noun: '정색',
       pose: 'idle',
       stir: { kind: 'anger', target: 'cause' },
       weight: 2,

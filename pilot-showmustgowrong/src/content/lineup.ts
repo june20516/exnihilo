@@ -304,14 +304,23 @@ const COLLAPSING_SET_WALL: EquipmentDef = {
   ],
 }
 
-export const LINEUP: {
+export interface Lineup {
   performers: PerformerDef[]
   bench: PerformerDef[]
   staff: StaffDef[]
   equipment: EquipmentDef[]
-} = {
+}
+
+export const LINEUP: Lineup = {
   performers: [REX, PRIYA, OKAFOR, MO],
   bench: [JUNE],
   staff: [COWARD_CAMERA_OPERATOR],
   equipment: [OVERHEATED_LIGHT, COLLAPSING_SET_WALL],
+}
+
+/** 준을 무대에 올린 라인업(L7): 모 자리에 준이 서고 모는 대기석에 있다. 무입력 검증(living spec 7.1)용 */
+export const JUNE_LINEUP: Lineup = {
+  ...LINEUP,
+  performers: [REX, PRIYA, OKAFOR, JUNE],
+  bench: [MO],
 }
