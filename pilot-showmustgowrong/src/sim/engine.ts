@@ -5,10 +5,11 @@ import {
   AUDIENCE_NOISE_SECONDS,
   BROADCAST_STEPS,
   CORNER_STEPS,
+  HABIT_REST_AFTER_ACTION_BODY_SECONDS,
   LEAP_VERTICAL_RATIO,
   LIGHT_DARKNESS_INTENSITY,
-  BURST_WARNING_TENSION,
   MOTION_CAUSE_SECONDS,
+  NEAR_RADIUS,
   ON_AIR_FRAME_DEPTH_RATIO,
   PHENOMENON_DISPLAY_SECONDS,
   POSE_HOLD_SECONDS,
@@ -33,6 +34,7 @@ import type {
   ActionDef,
   CameraDef,
   EmitDef,
+  EmotionId,
   EquipmentDef,
   GaugeKind,
   Intensity,
@@ -45,12 +47,26 @@ import type {
 } from '@/content/types'
 import { validateShow } from '@/content/validate'
 import { createRng, nextFloat, type RngState } from '@/kit/rng'
-import { BroadcastScore, inFrame } from './broadcast'
+import { BroadcastScore, inFrame, viewersTrendOf } from './broadcast'
 import { CameraRig, type DirectedAim } from './cameraRig'
 import { Cast, STANDING_Y, type CastMember } from './cast'
-import { describeEvent, describeRootEvent, withObject, withSubject } from './describe'
+import {
+  describeEvent,
+  describeRootEvent,
+  entityName,
+  withObject,
+  withSubject,
+} from './describe'
 import { Director, type AdEffect } from './director'
-import { EventLog, isStir, perceives, type PhenomenonEvent } from './phenomena'
+import {
+  StudioLife,
+  type BurstRecord,
+  type HabitTargetResolved,
+  type LifeMember,
+  type LifeOutput,
+} from './life'
+import { burstLine, eventNoun, habitLine, stageLine } from './narration'
+import { EventLog, isStir, type Perceiver, type PhenomenonEvent } from './phenomena'
 import { PhysicsWorld, initPhysics, type Contact } from './physics'
 import {
   ShowValidationError,
@@ -63,6 +79,7 @@ import {
   type ChainLine,
   type EquipmentView,
   type InputRecord,
+  type LogKind,
   type LogLine,
   type Phase,
   type RecentPhenomenon,
@@ -71,9 +88,8 @@ import {
 import { updateGaze } from './gaze'
 import { dropGoneActorInputs, validateInputs } from './inputValidation'
 import { CooldownTable, cooldownKey, resolveReactions, type ReactorView } from './reactions'
-import { TENSION_WINDOW_STEPS, tensionOf, viewersTrendOf } from './tension'
 import { showSecondsToSteps } from './showClock'
-import { StageLocator, type Emitter } from './targeting'
+import { NO_TARGET, StageLocator, type Emitter, type Target } from './targeting'
 import { type FloorPoint, floorDistance, type Vec3, yawBetween } from './vec'
 
 export * from './engineTypes'
@@ -99,6 +115,8 @@ const FADING_POSES: ReadonlySet<Pose> = new Set(['angry', 'laugh'])
 /** onAirFrame 목표점이 스튜디오 벽에 붙지 않게 두는 여백(m) */
 const FLOOR_MARGIN = 0.5
 const PHENOMENON_DISPLAY_STEPS = secondsToSteps(PHENOMENON_DISPLAY_SECONDS)
+/** 행동 뒤 버릇과 터짐을 미루는 스텝(L5) */
+const HABIT_REST_STEPS = secondsToSteps(HABIT_REST_AFTER_ACTION_BODY_SECONDS)
 
 /** 관객은 고정 환경이라 콘텐츠가 아니라 balance 수치로 반응한다(spec 7.4, Ruling 17). */
 const AUDIENCE_REACTIONS: ReactionDef[] = [
@@ -110,6 +128,21 @@ const AUDIENCE_REACTIONS: ReactionDef[] = [
     },
   },
 ]
+
+/** 로그 한 줄을 남길 때 넘기는 값 */
+interface LineInput {
+  text: string
+  kind: LogKind
+  depth: number
+  eventId: number | null
+  position: Vec3
+  emotion?: EmotionId | null
+}
+
+/** 현상을 내지 않고 행동만 할 때(버릇·터짐이 자기 줄을 따로 남긴다, L3) */
+interface ActionOptions {
+  silent?: boolean
+}
 
 function cloneInput(input: BroadcastInput): BroadcastInput {
   return input.type === 'ad' ? { type: 'ad', effects: [...input.effects] } : { ...input }
@@ -145,6 +178,8 @@ export class Broadcast {
   private readonly locator: StageLocator
   private readonly score: BroadcastScore
   private readonly director: Director
+  /** 출연자의 감정과 버릇. 판정은 StudioLife가, 실행과 문장은 엔진이 맡는다. 난수는 따로 쓴다. */
+  private readonly life: StudioLife
   private readonly log = new EventLog()
   private readonly cooldowns = new CooldownTable()
   private readonly cameras = new Map<string, CameraDef>()
@@ -192,6 +227,7 @@ export class Broadcast {
     this.rng = createRng(setup.seed)
     this.score = new BroadcastScore(setup.show)
     this.director = new Director([...setup.performers, ...setup.bench], setup.staff)
+    this.life = new StudioLife(setup.show, setup.seed)
     this.cast = new Cast(physics)
     this.benchQueue = [...setup.bench]
     this.locator = new StageLocator({
@@ -306,6 +342,8 @@ export class Broadcast {
     // 4. 직전 스텝 이벤트에 대한 반응(한 스텝에 한 단계)
     this.resolvePendingReactions()
     this.fadePoses()
+    // 4-1. 생활: 인지, 감정 틱(단계 줄, 터짐, 응답, 버릇)
+    this.runLife()
     // 5. 카메라 방향(추적, 놀람 복구), 시선과 관객 흥분
     this.updateCameraRig()
     this.updateGaze()
@@ -344,7 +382,6 @@ export class Broadcast {
 
   view(): BroadcastView {
     const rating = this.setup.show.rating
-    const recentEvents = this.log.since(this.stepCount - TENSION_WINDOW_STEPS)
     return {
       step: this.stepCount,
       phase: this.currentPhase,
@@ -355,7 +392,7 @@ export class Broadcast {
       cameraAimModes: this.rig.aimModes(),
       cameraSubjects: structuredClone(this.cameraSubjects()),
       staff: this.rig.staffViews().map((view) => this.staffView(view)),
-      actors: this.cast.all().map((member) => this.actorView(member, recentEvents)),
+      actors: this.cast.all().map((member) => this.actorView(member)),
       equipment: [...this.equipment.keys()].map((id) => this.equipmentView(id)),
       viewers: this.score.viewers,
       viewersTrend: this.viewersTrend(),
@@ -408,6 +445,11 @@ export class Broadcast {
       maxChainDepth: this.deepestEvent?.depth ?? 0,
       rootLine: this.rootLine(),
     }
+  }
+
+  /** 지금까지의 감정 터짐 기록(복사본) */
+  burstRecords(): BurstRecord[] {
+    return this.life.burstRecords()
   }
 
   /** 가장 깊은 연쇄의 뿌리 사건이 남긴 로그 줄. 줄이 없으면(묵음 emit) 그 사건의 문구다. */
@@ -540,6 +582,7 @@ export class Broadcast {
     this.audienceOnAirSteps = 0
     // Ruling 22: 감정을 초기화하므로 광고 전 사고에 대한 반응도 남기지 않는다.
     this.pendingEvents = []
+    this.life.resetAll(this.stepCount)
   }
 
   /** 대기 출연자를 빈 home spot(없으면 bench 자리)에 올린다. */
@@ -557,6 +600,7 @@ export class Broadcast {
     const member = this.cast.add(performer, home)
     // 처음부터 화면에 있던 출연자는 '새로 잡힘'으로 치지 않는다.
     member.wasOnAir = this.isOnAir(this.cast.position(member))
+    this.life.join(performer, this.stepCount)
   }
 
   // ── 이탈 ──────────────────────────────────────────────
@@ -566,8 +610,15 @@ export class Broadcast {
     member.walkoutStep = this.stepCount
     member.pose = 'angry'
     this.setMotionCause(member, null)
+    this.life.leave(member.def.id)
     const position = this.cast.position(member)
-    this.addLine(`${withSubject(member.def.shortName)} 방송을 박차고 나간다!`, 1, null, position)
+    this.addLine({
+      text: `${withSubject(member.def.shortName)} 방송을 박차고 나간다!`,
+      kind: 'incident',
+      depth: 1,
+      eventId: null,
+      position,
+    })
     for (const kind of ['anger', 'noise'] as const) {
       this.emit({
         kind,
@@ -807,12 +858,13 @@ export class Broadcast {
   private panicCamera(member: StaffDef, cause: PhenomenonEvent | null): void {
     const camera = this.requireCamera(member.cameraId)
     this.rig.panic(member.id, this.randomAngle())
-    this.addLine(
-      `${withSubject(member.shortName)} 놀라 카메라를 휘둘렀다`,
-      (cause?.depth ?? 0) + 1,
-      null,
-      camera.position,
-    )
+    this.addLine({
+      text: `${withSubject(member.shortName)} 놀라 카메라를 휘둘렀다`,
+      kind: 'staff',
+      depth: (cause?.depth ?? 0) + 1,
+      eventId: null,
+      position: camera.position,
+    })
   }
 
   /**
@@ -828,8 +880,13 @@ export class Broadcast {
     })
     for (const staffId of this.rig.settledStaffIds()) {
       const member = this.requireStaff(staffId)
-      const text = `${withSubject(member.shortName)} 자리를 잡았다`
-      this.addLine(text, 1, null, this.requireCamera(member.cameraId).position)
+      this.addLine({
+        text: `${withSubject(member.shortName)} 자리를 잡았다`,
+        kind: 'staff',
+        depth: 1,
+        eventId: null,
+        position: this.requireCamera(member.cameraId).position,
+      })
     }
   }
 
@@ -856,9 +913,189 @@ export class Broadcast {
       trigger.when === 'enter'
         ? `${withSubject(camera.label)} ${withObject(name)} 잡았다`
         : `${withSubject(name)} 한동안 화면에 잡히지 않았다`
-    this.addLine(text, 1, null, this.cast.position(member))
+    const position = this.cast.position(member)
+    this.addLine({ text, kind: 'incident', depth: 1, eventId: null, position })
     this.executeAction(member, reaction.action, null)
     return true
+  }
+
+  // ── 생활(감정·버릇) ────────────────────────────────────
+
+  /**
+   * 활동 출연자가 직전 스텝 사건을 인지하고, 감정 틱이면 StudioLife의 출력을 순서대로 실행한다.
+   * 판정은 StudioLife, 문장은 narration이 맡고 여기서는 연결과 실행만 한다.
+   */
+  private runLife(): void {
+    const members = this.cast.active()
+    const perceivers = members.map((member) => this.perceiverOf(member))
+    this.life.perceive(this.pendingEvents, perceivers, this.stepCount)
+    if (!this.life.isTickStep(this.stepCount)) return
+    const outputs = this.life.tick({
+      step: this.stepCount,
+      silence: this.silenceLevel() > 0,
+      members: this.lifeMembers(members),
+      lastLineStep: this.lines.at(-1)?.step ?? 0,
+    })
+    for (const output of outputs) this.executeLifeOutput(output)
+  }
+
+  private perceiverOf(member: CastMember): Perceiver {
+    const position = this.cast.position(member)
+    return { id: member.def.id, ...position, inDarkness: this.inDarkness(position) }
+  }
+
+  /** mind가 있는 활동 출연자의 틱 상태. 근처 태그는 mind와 관계없이 다른 활동 출연자 모두에서 찾는다. */
+  private lifeMembers(active: readonly CastMember[]): LifeMember[] {
+    const placed = active.map((member) => ({ member, position: this.cast.position(member) }))
+    return placed
+      .filter(({ member }) => this.life.has(member.def.id))
+      .map(({ member, position }) => ({
+        id: member.def.id,
+        ...position,
+        onAir: this.isOnAir(position),
+        resting: this.isResting(member),
+        nearTags: placed
+          .filter(
+            (other) =>
+              other.member !== member && floorDistance(other.position, position) <= NEAR_RADIUS,
+          )
+          .flatMap((other) => other.member.def.tags),
+      }))
+  }
+
+  /** 넘어짐·날아감·walk 이동 중이거나 마지막 행동 뒤 잠깐이면 버릇과 터짐을 미룬다(L5). */
+  private isResting(member: CastMember): boolean {
+    return (
+      this.cast.placement(member).tumbling ||
+      member.walkGoal !== null ||
+      this.stepCount - member.poseStep < HABIT_REST_STEPS
+    )
+  }
+
+  private executeLifeOutput(output: LifeOutput): void {
+    const member = this.cast.get(output.actorId)
+    // StudioLife는 활동 출연자에게만 출력하지만, 같은 틱 안의 변화에도 어긋나지 않게 확인한다.
+    if (member === undefined || member.walkedOut) return
+    switch (output.type) {
+      case 'stage':
+        this.addLine({
+          text: stageLine(
+            member.def.shortName,
+            this.life.recentHabit(member.def.id, this.stepCount),
+            output.emotion,
+            output.stage,
+          ),
+          kind: 'stage',
+          depth: 1,
+          eventId: null,
+          position: this.cast.position(member),
+          emotion: output.emotion.id,
+        })
+        return
+      case 'habit':
+        this.performHabit(member, output)
+        return
+      case 'burst':
+        this.performBurst(member, output)
+        return
+    }
+  }
+
+  /** 버릇: 포즈, 이동, 기척(강도 0)을 하고 버릇 줄 하나만 남긴다. 줄은 기척의 id를 가진다(L3). */
+  private performHabit(member: CastMember, output: Extract<LifeOutput, { type: 'habit' }>): void {
+    const { habit, cause } = output
+    member.pose = habit.pose
+    member.poseStep = this.stepCount
+    const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
+    if (habit.move !== undefined) this.move(member, emitter, habit.move, cause)
+    const target = this.habitTarget(output.target, emitter, cause)
+    const stir =
+      habit.stir === undefined
+        ? null
+        : this.emit({
+            kind: habit.stir.kind,
+            intensity: 0,
+            sourceId: member.def.id,
+            targetId: target.id,
+            ...emitter.position,
+            causeId: cause?.id ?? null,
+            label: habit.noun,
+          })
+    // 버릇으로 움직이다 부딪히면 그 충돌은 버릇에서 이어진다.
+    if (habit.move !== undefined) this.setMotionCause(member, stir ?? cause)
+    this.addLine({
+      text: habitLine(
+        member.def.shortName,
+        habit,
+        this.performerName(target.id, member.def.id),
+        this.receivedFrom(cause),
+      ),
+      kind: 'habit',
+      depth: stir?.depth ?? cause?.depth ?? 0,
+      eventId: stir?.id ?? null,
+      position: emitter.position,
+    })
+  }
+
+  /** 터짐: 행동을 묵음으로 실행하고 터짐 줄 하나만 남긴다. 줄은 첫 사건의 id를 가진다(L3). */
+  private performBurst(member: CastMember, output: Extract<LifeOutput, { type: 'burst' }>): void {
+    const { burst, cause, emotion } = output
+    const position = this.cast.position(member)
+    const { move } = burst.action
+    // 이동 대상은 행동 전 자리로 푼다(home 이동은 대상이 없다).
+    const moveTarget =
+      move === undefined || move.type === 'home'
+        ? NO_TARGET
+        : this.locator.resolveTarget(move.toward, { id: member.def.id, position }, cause)
+    const events = this.executeAction(member, burst.action, cause, { silent: true })
+    const [first] = events
+    const targetName =
+      this.performerName(first?.targetId ?? null, member.def.id) ??
+      this.performerName(moveTarget.id, member.def.id)
+    this.addLine({
+      text: burstLine(
+        member.def.shortName,
+        this.life.recentHabit(member.def.id, this.stepCount),
+        emotion,
+        burst,
+        targetName,
+        output.intense,
+        output.top,
+        (id) => entityName(id, this.names),
+      ),
+      kind: 'incident',
+      depth: first?.depth ?? (cause === null ? 1 : cause.depth + 1),
+      eventId: first?.id ?? null,
+      position,
+      emotion: emotion.id,
+    })
+  }
+
+  /** StudioLife가 푼 대상을 무대 위 대상으로. 이탈했거나 무대에 없는 출연자는 대상 없음이다. */
+  private habitTarget(
+    target: HabitTargetResolved,
+    emitter: Emitter,
+    cause: PhenomenonEvent | null,
+  ): Target {
+    if (target === null) return NO_TARGET
+    if (target.kind === 'actor') return this.locator.targetById(target.id)
+    return this.locator.resolveTarget(target.selector, emitter, cause)
+  }
+
+  /** 줄에 쓸 대상 출연자 이름. 출연자가 아니거나, 자기 자신이거나, 이탈했으면 null이다. */
+  private performerName(id: string | null, selfId: string): string | null {
+    if (id === null || id === selfId) return null
+    const member = this.cast.get(id)
+    if (member === undefined || member.walkedOut) return null
+    return member.def.shortName
+  }
+
+  /** 응답 버릇이 받은 현상(누구의 무엇). 원인이 없거나 출연자가 낸 것이 아니면 null이다. */
+  private receivedFrom(cause: PhenomenonEvent | null): { sourceName: string; noun: string } | null {
+    if (cause === null) return null
+    const source = this.cast.get(cause.sourceId)
+    if (source === undefined) return null
+    return { sourceName: source.def.shortName, noun: eventNoun(cause) }
   }
 
   // ── 송출, 정적, 슬로모션 ───────────────────────────────
@@ -954,21 +1191,29 @@ export class Broadcast {
 
   // ── 행동 실행 ─────────────────────────────────────────
 
+  /** 행동을 실행하고 내뿜은 현상을 돌려준다. silent면 행동 줄과 현상 줄을 남기지 않는다(점수·연쇄는 그대로). */
   private executeAction(
     member: CastMember,
     action: ActionDef,
     cause: PhenomenonEvent | null,
-  ): void {
+    options: ActionOptions = {},
+  ): PhenomenonEvent[] {
+    const silent = options.silent ?? false
     member.pose = action.pose
     member.poseStep = this.stepCount
     this.setMotionCause(member, cause)
     const emitter: Emitter = { id: member.def.id, position: this.cast.position(member) }
-    if (action.line !== undefined) {
-      const depth = cause === null ? 1 : cause.depth + 1
-      this.addLine(action.line, depth, null, emitter.position)
+    if (action.line !== undefined && !silent) {
+      this.addLine({
+        text: action.line,
+        kind: 'incident',
+        depth: cause === null ? 1 : cause.depth + 1,
+        eventId: null,
+        position: emitter.position,
+      })
     }
     if (action.move !== undefined) this.move(member, emitter, action.move, cause)
-    this.emitAll(emitter, action.emits, cause)
+    return this.emitAll(emitter, action.emits, cause, silent)
   }
 
   private move(
@@ -1021,21 +1266,25 @@ export class Broadcast {
     emitter: Emitter,
     emits: readonly EmitDef[],
     cause: PhenomenonEvent | null,
-  ): void {
-    for (const emit of emits) {
+    silent = false,
+  ): PhenomenonEvent[] {
+    return emits.map((emit) => {
       const intensity =
         emit.intensity === 'causePlusOne'
           ? (Math.min(MAX_INTENSITY, (cause?.intensity ?? 0) + 1) as Intensity)
           : emit.intensity
-      this.emit({
-        kind: emit.kind,
-        intensity,
-        sourceId: emitter.id,
-        targetId: this.locator.resolveTarget(emit.target, emitter, cause).id,
-        ...emitter.position,
-        causeId: cause?.id ?? null,
-      })
-    }
+      return this.emit(
+        {
+          kind: emit.kind,
+          intensity,
+          sourceId: emitter.id,
+          targetId: this.locator.resolveTarget(emit.target, emitter, cause).id,
+          ...emitter.position,
+          causeId: cause?.id ?? null,
+        },
+        silent,
+      )
+    })
   }
 
   private setMotionCause(member: CastMember, cause: PhenomenonEvent | null): void {
@@ -1058,7 +1307,11 @@ export class Broadcast {
 
   // ── 공통 ──────────────────────────────────────────────
 
-  private emit(partial: Omit<PhenomenonEvent, 'id' | 'depth' | 'step'>): PhenomenonEvent {
+  /** silent면 줄을 남기지 않는다(버릇·터짐이 자기 줄을 따로 남긴다, L3). */
+  private emit(
+    partial: Omit<PhenomenonEvent, 'id' | 'depth' | 'step'>,
+    silent = false,
+  ): PhenomenonEvent {
     const event = this.log.emit({ ...partial, step: this.stepCount })
     this.currentEvents.push(event)
     // 기척은 로그 줄이 없고 가장 깊은 연쇄 후보도 아니다.
@@ -1066,15 +1319,32 @@ export class Broadcast {
     if (this.deepestEvent === null || event.depth > this.deepestEvent.depth) {
       this.deepestEvent = event
     }
-    this.addLine(this.describe(event), event.depth, event.id, event)
+    if (!silent) {
+      this.addLine({
+        text: this.describe(event),
+        kind: event.kind === 'silence' ? 'silence' : 'incident',
+        depth: event.depth,
+        eventId: event.id,
+        position: event,
+      })
+    }
     return event
   }
 
-  private addLine(text: string, depth: number, eventId: number | null, position: Vec3): void {
+  /** 직전 줄과 text·kind가 같으면 새 줄 대신 직전 줄의 repeat를 올린다(step은 처음 것). */
+  private addLine({ text, kind, depth, eventId, position, emotion = null }: LineInput): void {
+    const last = this.lines.at(-1)
+    if (last !== undefined && last.text === text && last.kind === kind) {
+      last.repeat += 1
+      return
+    }
     this.lines.push({
       index: this.lines.length,
       step: this.stepCount,
       text,
+      kind,
+      emotion,
+      repeat: 1,
       depth,
       eventId,
       x: position.x,
@@ -1173,12 +1443,11 @@ export class Broadcast {
     return Math.min(LAST_CORNER_INDEX, index) as 0 | 1 | 2
   }
 
-  private actorView(member: CastMember, recentEvents: readonly PhenomenonEvent[]): ActorView {
+  private actorView(member: CastMember): ActorView {
     const placement = this.cast.placement(member)
     const pose: Pose = placement.tumbling ? (placement.grounded ? 'fallen' : 'flying') : member.pose
     const used = this.director.directivesUsed(member.def.id)
     const { position, up } = placement
-    const tension = this.tensionOf(member, recentEvents)
     return {
       id: member.def.id,
       name: member.def.name,
@@ -1191,19 +1460,10 @@ export class Broadcast {
       walkedOut: member.walkedOut,
       departed: member.departedAt !== null,
       directivesLeft: Math.max(0, TOLERANCE_COUNT[member.def.tolerance] - used),
-      tension,
-      aboutToBurst: tension >= BURST_WARNING_TENSION,
+      mood: this.life.mood(member.def.id),
+      emotions: this.life.emotions(member.def.id),
       misfireChance: this.director.previewMisfireChance(member.def.id),
     }
-  }
-
-  private tensionOf(member: CastMember, recentEvents: readonly PhenomenonEvent[]): number {
-    if (member.departedAt !== null) return 0
-    const { x, y, z } = this.cast.position(member)
-    const perceiver = { id: member.def.id, x, y, z, inDarkness: this.inDarkness({ x, y, z }) }
-    return tensionOf(member, recentEvents, this.cooldowns, this.stepCount, (event) =>
-      perceives(event, perceiver),
-    )
   }
 
   private viewersTrend(): -1 | 0 | 1 {

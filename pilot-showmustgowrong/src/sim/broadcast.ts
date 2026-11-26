@@ -9,6 +9,7 @@ import {
   SILENCE_LOSS_PER_SECOND,
   VIEWERS_PER_POINT,
   VIEWERS_START,
+  VIEWERS_TREND_EPSILON,
   gaugeRiskIncrease,
 } from '@/content/balance'
 import { GAUGE_KINDS } from '@/content/types'
@@ -145,4 +146,11 @@ export class BroadcastScore {
     this.currentViewers = Math.max(0, this.currentViewers + delta)
     this.currentPeakViewers = Math.max(this.currentPeakViewers, this.currentViewers)
   }
+}
+
+/** 1초 전과 비교한 시청자 추세. 차이가 VIEWERS_TREND_EPSILON 이하면 0이다. */
+export function viewersTrendOf(current: number, oneSecondAgo: number): -1 | 0 | 1 {
+  const difference = current - oneSecondAgo
+  if (Math.abs(difference) <= VIEWERS_TREND_EPSILON) return 0
+  return difference > 0 ? 1 : -1
 }

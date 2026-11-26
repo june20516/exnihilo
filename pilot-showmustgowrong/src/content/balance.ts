@@ -55,10 +55,6 @@ export const AUDIENCE_LAUGHTER_INTENSITY: Intensity = 1
 export const VIEW_LOG_LINES = 50
 
 // 판단 정보(spec 8.2)
-/** 현상 반응의 긴장도가 되돌아보는 시간(초) */
-export const TENSION_WINDOW_SECONDS = 1
-/** 긴장도가 이 값 이상이면 "곧 터짐!"을 붙인다. */
-export const BURST_WARNING_TENSION = 0.75
 /** 최근 현상으로 공간에 머무는 시간(초) */
 export const PHENOMENON_DISPLAY_SECONDS = 1.5
 /** 1초 전과 시청자 수 차이가 이 값(천 명) 이하면 추세 없음으로 본다. */

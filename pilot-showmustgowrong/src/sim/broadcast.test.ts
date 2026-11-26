@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { RATING_LIMITS, VIEWERS_START } from '@/content/balance'
+import { RATING_LIMITS, VIEWERS_START, VIEWERS_TREND_EPSILON } from '@/content/balance'
 import type { CameraDef, GaugeKind, ShowDef } from '@/content/types'
-import { BroadcastScore, inFrame } from './broadcast'
+import { BroadcastScore, inFrame, viewersTrendOf } from './broadcast'
 import type { PhenomenonEvent } from './phenomena'
 
 const camera = (overrides: Partial<CameraDef> = {}): CameraDef => ({
@@ -209,5 +209,14 @@ describe('기척(강도 0)', () => {
     // 대조: 같은 사건이 강도 1이면 점수와 시청자가 움직인다
     expect(score.scoreEvent(event({ kind: 'laughter', intensity: 1 }), 1, 1)).toBeGreaterThan(0)
     expect(score.viewers).not.toBe(viewersBefore)
+  })
+})
+
+describe('viewersTrendOf', () => {
+  it('차이가 VIEWERS_TREND_EPSILON 이하면 0, 넘으면 부호를 돌려준다', () => {
+    expect(viewersTrendOf(500 + VIEWERS_TREND_EPSILON, 500)).toBe(0)
+    expect(viewersTrendOf(500 - VIEWERS_TREND_EPSILON, 500)).toBe(0)
+    expect(viewersTrendOf(500 + VIEWERS_TREND_EPSILON + 0.1, 500)).toBe(1)
+    expect(viewersTrendOf(500 - VIEWERS_TREND_EPSILON - 0.1, 500)).toBe(-1)
   })
 })

@@ -1,4 +1,5 @@
 import type {
+  EmotionId,
   EquipmentDef,
   GaugeKind,
   Intensity,
@@ -9,6 +10,7 @@ import type {
   StaffDef,
 } from '@/content/types'
 import type { AdEffect } from './director'
+import type { EmotionView, MoodView } from './life'
 import type { Vec3 } from './vec'
 
 export type BroadcastInput =
@@ -44,10 +46,10 @@ export interface ActorView {
   /** 이탈 뒤 물리 월드에서 빠졌다. walkedOut이지만 departed가 아니면 아직 출구로 걸어가는 중이다. */
   departed: boolean
   directivesLeft: number
-  /** 다음 반응에 얼마나 가까운지 0~1(spec 8.2) */
-  tension: number
-  /** tension이 BURST_WARNING_TENSION 이상이라 "곧 터짐!"을 붙인다. */
-  aboutToBurst: boolean
+  /** 대표 감정(living spec 6). mind가 없거나 이탈했으면 null */
+  mood: MoodView | null
+  /** 감정마다의 값·단계·이유. mind가 없거나 이탈했으면 빈 배열 */
+  emotions: EmotionView[]
   /** 지금 지시하면 엇나갈 확률(0~1) */
   misfireChance: number
 }
@@ -87,13 +89,26 @@ export interface StaffView {
   z: number
 }
 
-/** 사고 로그 한 줄. eventId가 null이면 현상이 아닌 서술(이탈, 스태프 행동)이다. */
+/**
+ * 로그 줄 종류. habit: 버릇(응답 포함), stage: 감정 단계 진입, incident: 사고(현상, 터짐, 이탈, 시선, 행동 줄),
+ * staff: 스태프 놀람·복구, silence: 정적 단계.
+ */
+export type LogKind = 'habit' | 'stage' | 'incident' | 'staff' | 'silence'
+
+/** 사고 로그 한 줄. eventId가 null이면 현상이 아닌 서술(이탈, 스태프 행동, 단계 진입)이다. */
 export interface LogLine {
-  /** 방송 시작부터 이어지는 줄 번호. 같은 문장이 반복돼도 줄을 구분한다. */
+  /** 방송 시작부터 이어지는 줄 번호. 묶이지 않은 반복 문장도 줄을 구분한다. */
   index: number
+  /** 처음 찍힌 스텝(묶여도 바뀌지 않는다) */
   step: number
   text: string
+  kind: LogKind
+  /** stage 줄과 감정 터짐 줄의 감정. 그 밖은 null */
+  emotion: EmotionId | null
+  /** 같은 text·kind가 연달아 나와 묶인 횟수(1부터) */
+  repeat: number
   depth: number
+  /** 버릇·터짐 줄은 처음 내뿜은 현상의 id다(L3) */
   eventId: number | null
   x: number
   y: number

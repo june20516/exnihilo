@@ -38,8 +38,8 @@ const REX_VIEW: ActorView = {
   walkedOut: false,
   departed: false,
   directivesLeft: 4,
-  tension: 0,
-  aboutToBurst: false,
+  mood: null,
+  emotions: [],
   misfireChance: 0,
 }
 

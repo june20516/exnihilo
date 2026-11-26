@@ -7,6 +7,7 @@ import type {
 } from '@/content/types'
 import { withObject, withPartner, withSubject } from './describe'
 import type { Reason } from './emotion'
+import type { PhenomenonEvent } from './phenomena'
 
 /** 사건 이유의 기본 명사. label이 없는 사건에 쓴다 */
 export const KIND_NOUNS: Record<Exclude<PhenomenonKind, 'gaze' | 'silence'>, string> = {
@@ -29,6 +30,11 @@ export const EXTRA_KIND_NOUNS: Record<'gaze' | 'silence', string> = {
 
 function kindNoun(kind: PhenomenonKind): string {
   return kind === 'gaze' || kind === 'silence' ? EXTRA_KIND_NOUNS[kind] : KIND_NOUNS[kind]
+}
+
+/** 사건의 이름 명사. 버릇 기척은 label('킥킥거림'), 그 밖은 종류 명사('웃음')다 */
+export function eventNoun(event: PhenomenonEvent): string {
+  return event.label ?? kindNoun(event.kind)
 }
 
 function applyParticle(word: string, particle: string | undefined): string {
@@ -63,7 +69,7 @@ export function reasonNoun(reason: Reason, nameOf: (id: string) => string): stri
   switch (source.type) {
     case 'event': {
       const { event } = source
-      const noun = event.label ?? kindNoun(event.kind)
+      const noun = eventNoun(event)
       return event.sourceId === '' ? noun : `${nameOf(event.sourceId)}의 ${noun}`
     }
     case 'situation':

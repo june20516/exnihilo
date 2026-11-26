@@ -32,8 +32,8 @@ function actor(id: string, x: number, z: number, overrides: Partial<ActorView> =
     walkedOut: false,
     departed: false,
     directivesLeft: 1,
-    tension: 0,
-    aboutToBurst: false,
+    mood: null,
+    emotions: [],
     misfireChance: 0,
     ...overrides,
   }

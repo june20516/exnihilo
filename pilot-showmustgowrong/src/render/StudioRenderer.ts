@@ -95,8 +95,8 @@ const NAME_GAP = 2
 
 // 머리 위 표시
 const OVERHEAD_GAP = 6
-const TENSION_BAR_WIDTH = 34
-const TENSION_BAR_HEIGHT = 5
+const MOOD_BAR_WIDTH = 34
+const MOOD_BAR_HEIGHT = 5
 const TOLERANCE_DOT_RADIUS = 2.5
 const TOLERANCE_DOT_GAP = 3
 const TOLERANCE_ROW_GAP = 3
@@ -768,7 +768,7 @@ export class StudioRenderer {
   }
 
   /**
-   * 머리 위(아래에서 위로): 남은 내성 점, 긴장도 막대, "곧 터짐!" 태그. 클로즈업 대상이면 카메라 표시
+   * 머리 위(아래에서 위로): 남은 내성 점, 대표 감정 막대, "곧 터짐!" 태그. 클로즈업 대상이면 카메라 표시
    * (따라가는 중이면 채운 표시, 지시나 놀람으로 다른 곳을 보고 있으면 속이 빈 흐린 표시).
    */
   private drawOverhead(sprite: ActorSprite, actor: ActorView, trackMark: TrackMark | null): void {
@@ -787,22 +787,23 @@ export class StudioRenderer {
     }
     if (dotCount === 0) marks.circle(0, dotY, TOLERANCE_DOT_RADIUS).fill(COLORS.toleranceDotEmpty)
 
-    // 긴장도 막대
-    const barTop = dotY - TOLERANCE_DOT_RADIUS - TOLERANCE_ROW_GAP - TENSION_BAR_HEIGHT
-    const tension = Math.min(1, Math.max(0, actor.tension))
+    // 대표 감정 막대(값 0~100). 2단계면 위험 색과 "곧 터짐!"
+    const barTop = dotY - TOLERANCE_DOT_RADIUS - TOLERANCE_ROW_GAP - MOOD_BAR_HEIGHT
+    const moodFill = actor.mood === null ? 0 : Math.min(1, Math.max(0, actor.mood.value / 100))
+    const aboutToBurst = actor.mood?.stage === 2
     marks
-      .rect(-TENSION_BAR_WIDTH / 2, barTop, TENSION_BAR_WIDTH, TENSION_BAR_HEIGHT)
-      .fill(COLORS.tensionTrack)
-    if (tension > 0) {
+      .rect(-MOOD_BAR_WIDTH / 2, barTop, MOOD_BAR_WIDTH, MOOD_BAR_HEIGHT)
+      .fill(COLORS.moodTrack)
+    if (moodFill > 0) {
       marks
-        .rect(-TENSION_BAR_WIDTH / 2, barTop, TENSION_BAR_WIDTH * tension, TENSION_BAR_HEIGHT)
-        .fill(actor.aboutToBurst ? COLORS.tensionDanger : COLORS.tensionFill)
+        .rect(-MOOD_BAR_WIDTH / 2, barTop, MOOD_BAR_WIDTH * moodFill, MOOD_BAR_HEIGHT)
+        .fill(aboutToBurst ? COLORS.moodDanger : COLORS.moodFill)
     }
 
     // 클로즈업 대상: 막대 오른쪽의 작은 카메라
     if (trackMark !== null) {
-      const left = TENSION_BAR_WIDTH / 2 + TRACKING_ICON_GAP
-      const top = barTop + TENSION_BAR_HEIGHT / 2 - TRACKING_ICON_HEIGHT / 2
+      const left = MOOD_BAR_WIDTH / 2 + TRACKING_ICON_GAP
+      const top = barTop + MOOD_BAR_HEIGHT / 2 - TRACKING_ICON_HEIGHT / 2
       const lensX = left + TRACKING_ICON_WIDTH + TRACKING_ICON_HEIGHT / 2
       marks
         .roundRect(left, top, TRACKING_ICON_WIDTH, TRACKING_ICON_HEIGHT, 2)
@@ -822,7 +823,7 @@ export class StudioRenderer {
       }
     }
 
-    sprite.burstTag.visible = actor.aboutToBurst
+    sprite.burstTag.visible = aboutToBurst
     sprite.burstTag.position.set(0, barTop - BURST_GAP - sprite.burstTag.height / 2)
   }
 

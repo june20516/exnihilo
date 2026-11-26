@@ -11,6 +11,11 @@ const BUILT_IN_NAMES: Record<string, string> = {
   broadcast: '방송',
 }
 
+/** 로그에 쓰는 이름. shortNames(출연자·스태프 shortName, 장비 name, 카메라 label), 고정 환경 이름, id 순으로 찾는다. */
+export function entityName(id: string, shortNames: Record<string, string>): string {
+  return shortNames[id] ?? BUILT_IN_NAMES[id] ?? id
+}
+
 /** 끝 글자의 받침 유무. 한글이 아니면 null. */
 function hasFinalConsonant(word: string): boolean | null {
   const code = word.charCodeAt(word.length - 1)
@@ -62,7 +67,7 @@ export function describeRootEvent(
 /** 사고 로그 한 줄. 이름은 shortNames(출연자·스태프 shortName, 장비 name, 카메라 label)에서 찾는다. */
 export function describeEvent(event: PhenomenonEvent, shortNames: Record<string, string>): string {
   if (event.intensity === 0) throw new Error('기척은 문장이 없습니다')
-  const nameOf = (id: string): string => shortNames[id] ?? BUILT_IN_NAMES[id] ?? id
+  const nameOf = (id: string): string => entityName(id, shortNames)
   const source = nameOf(event.sourceId)
   const target = event.targetId === null ? null : nameOf(event.targetId)
 
