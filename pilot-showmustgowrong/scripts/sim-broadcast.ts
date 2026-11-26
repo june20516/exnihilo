@@ -63,11 +63,10 @@ console.log(
 )
 
 const { formatShowClock } = await import('@/app/labels')
-const { STEP_SECONDS } = await import('@/content/balance')
 const { JUNE_LINEUP, LINEUP } = await import('@/content/lineup')
 const { TALK_SHOW } = await import('@/content/talkShow')
 const { Broadcast } = await import('@/sim/engine')
-const { AutoDirector } = await import('@/sim/autoDirector')
+const { AUTO_DIRECTOR_INTERVAL_STEPS, AutoDirector } = await import('@/sim/autoDirector')
 const { evaluateGates, measureFinishedBroadcast } = await import('@/sim/livingMetrics')
 
 /** 렉스 게이트 이름(livingMetrics). 기본 라인업 자동 PD 방송에만 건다 */
@@ -86,12 +85,6 @@ const LINEUPS: readonly NamedLineup[] = [
   { name: '기본 라인업(렉스, 프리야, 오카포, 모)', lineup: LINEUP, rexGate: true },
   { name: '준 라인업(렉스, 프리야, 오카포, 준)', lineup: JUNE_LINEUP, rexGate: false },
 ]
-
-/**
- * 자동 PD를 부르는 간격: 6스텝 = 몸 0.1초. 매 스텝 view()를 만들면 방송 한 판이 고정 와이드의 약 2배 걸린다.
- * 자동 PD는 시간을 view.step 차이로 재고 컷 최소 유지가 몸 1.5초라 0.1초 늦게 보는 것은 컷에 거의 영향이 없다.
- */
-const DIRECTOR_INTERVAL_STEPS = Math.round(0.1 / STEP_SECONDS)
 
 /** auto: 자동 PD가 카메라를 돌린다. fixed: 카메라를 바꾸지 않는다(방송 시작 송출인 와이드 고정) */
 type CameraMode = 'auto' | 'fixed'
@@ -112,7 +105,7 @@ async function runNoInput(lineup: Lineup, seed: number, mode: CameraMode): Promi
     const performerOrder = lineup.performers.map((performer) => performer.id)
     const director = mode === 'auto' ? new AutoDirector(TALK_SHOW, performerOrder) : null
     while (broadcast.phase === 'live') {
-      const directorTurn = director !== null && broadcast.currentStep % DIRECTOR_INTERVAL_STEPS === 0
+      const directorTurn = director !== null && broadcast.currentStep % AUTO_DIRECTOR_INTERVAL_STEPS === 0
       broadcast.step(directorTurn ? director.decide(broadcast.view()) : [])
     }
     return {

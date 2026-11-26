@@ -3,7 +3,7 @@ import { AUTO_SHOT_BODY_SECONDS, STEP_SECONDS } from '@/content/balance'
 import type { Intensity } from '@/content/types'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
-import { AutoDirector } from './autoDirector'
+import { AUTO_DIRECTOR_INTERVAL_STEPS, AutoDirector } from './autoDirector'
 import { Broadcast, type BroadcastInput, type BroadcastView, type RecentPhenomenon } from './engine'
 import { measureFinishedBroadcast } from './livingMetrics'
 
@@ -330,7 +330,7 @@ describe('AutoDirector 사고', () => {
 })
 
 describe('AutoDirector 결정론', () => {
-  /** intervalSteps마다 decide를 부른다(sim은 6스텝 = 몸 0.1초) */
+  /** intervalSteps마다 decide를 부른다(sim은 AUTO_DIRECTOR_INTERVAL_STEPS) */
   async function measureWithAutoDirector(seed: number, intervalSteps = 1) {
     const broadcast = await Broadcast.create({
       show: TALK_SHOW,
@@ -359,9 +359,10 @@ describe('AutoDirector 결정론', () => {
     expect(first.lineCount).toBeGreaterThan(0)
   }, 30_000)
 
-  it('sim처럼 6스텝(몸 0.1초)마다 불러도 시드 3 방송 두 번의 지표가 같다', async () => {
-    const first = await measureWithAutoDirector(3, 6)
-    const second = await measureWithAutoDirector(3, 6)
+  it('sim과 같은 간격(AUTO_DIRECTOR_INTERVAL_STEPS)으로 불러도 시드 3 방송 두 번의 지표가 같다', async () => {
+    expect(AUTO_DIRECTOR_INTERVAL_STEPS).toBe(6)
+    const first = await measureWithAutoDirector(3, AUTO_DIRECTOR_INTERVAL_STEPS)
+    const second = await measureWithAutoDirector(3, AUTO_DIRECTOR_INTERVAL_STEPS)
     expect(second).toEqual(first)
     expect(first.lineCount).toBeGreaterThan(0)
   }, 30_000)

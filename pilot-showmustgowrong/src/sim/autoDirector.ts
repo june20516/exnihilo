@@ -14,6 +14,13 @@ function secondsToSteps(seconds: number): number {
   return Math.max(1, Math.round(seconds / STEP_SECONDS))
 }
 
+/**
+ * 방송을 끝까지 돌리는 쪽(sim)이 decide를 부르는 간격: 6스텝 = 몸 0.1초. 매 스텝 view()를 만들면 방송 한 판이
+ * 고정 와이드의 약 2배 걸린다. 시간은 view.step 차이로 재고 최소 유지가 몸 1.5초라 0.1초 늦게 보는 영향은 작다
+ * (시드 50 비교에서 게이트 결과가 같고 차이는 시드 1~2개).
+ */
+export const AUTO_DIRECTOR_INTERVAL_STEPS = secondsToSteps(0.1)
+
 const DEFAULT_TIMING: AutoDirectorTiming = {
   shotSteps: secondsToSteps(AUTO_SHOT_BODY_SECONDS),
   minHoldSteps: secondsToSteps(AUTO_MIN_HOLD_BODY_SECONDS),
