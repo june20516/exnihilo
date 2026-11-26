@@ -526,28 +526,66 @@ describe('validateShow', () => {
         habits([{ ...habitClock, when: [{ kind: 'nearTag', tag: 'nope', present: true }] }]),
       ).toContain('알 수 없는 태그: nope (a)')
       expect(habits([habitClock, { ...habitClock }])).toContain('중복 버릇 id: nose (a)')
-      expect(habits([habitReply])).toContain('버릇 시계 버릇 누락 오류: (a)')
+      expect(habits([habitReply])).toContain('버릇 시계 버릇 개수 오류: 0 (a)')
       expect(
         habits([{ ...habitClock, stir: { kind: 'noise', target: { tag: 'tag-b' } } }]),
       ).toBe('')
     })
 
-    it('6. 문형 토큰이 틀리면 오류', () => {
+    it('6. 문형 토큰이 틀리면 오류(출연자 id 포함)', () => {
       const withHabit = (overrides: Partial<HabitDef>) =>
         errorsFor(makeMind({ habits: [habitClock, { ...habitReply, ...overrides }] })).join('\n')
-      expect(withHabit({ targetLine: '쳐다보며 킥킥댄다' })).toContain('문형 오류: targetLine에 {target 없음')
-      expect(withHabit({ targetLine: '{who}를 본다' })).toContain('문형 오류: 알 수 없는 토큰 {who}')
-      expect(withHabit({ targetLine: '{target:로} 본다' })).toContain('문형 오류: 알 수 없는 토큰 {target:로}')
+      expect(withHabit({ targetLine: '쳐다보며 킥킥댄다' })).toContain('문형 오류: targetLine에 {target 없음 (a)')
+      expect(withHabit({ targetLine: '{who}를 본다' })).toContain('문형 오류: targetLine의 허용되지 않는 토큰 {who} (a)')
+      expect(withHabit({ targetLine: '{target:로} 본다' })).toContain(
+        '문형 오류: targetLine의 허용되지 않는 토큰 {target:로} (a)',
+      )
+      expect(withHabit({ targetLine: '{target:에게} 본다' })).toBe('')
 
       const noReasons = makeMind({ emotions: [{ ...shy, accumulate: '참던' }, ...COMMON_EMOTION_DEFS] })
-      expect(errorsFor(noReasons).join('\n')).toContain('문형 오류: accumulate에 {reasons 없음')
+      expect(errorsFor(noReasons).join('\n')).toContain('문형 오류: accumulate에 {reasons 없음 (a)')
+    })
 
-      const badBurst = makeMind()
-      badBurst.bursts.irritation = {
-        small: burstAction,
-        big: { ...burstAction, targetLine: '{target 를 때린다' },
+    it('6-1. 터짐 문형(targetLine·intenseLine·small)도 검사한다', () => {
+      const withBurst = (small: BurstAction, big: BurstAction = burstAction) => {
+        const mind = makeMind()
+        mind.bursts.irritation = { small, big }
+        return errorsFor(mind).join('\n')
       }
-      expect(errorsFor(badBurst).join('\n')).toContain('문형 오류: 알 수 없는 토큰 {target 를 때린다')
+      expect(withBurst(burstAction, { ...burstAction, targetLine: '{target 를 때린다' })).toContain(
+        '문형 오류: targetLine의 허용되지 않는 토큰 {target 를 때린다 (a)',
+      )
+      expect(withBurst(burstAction, { ...burstAction, targetLine: '때린다' })).toContain(
+        '문형 오류: targetLine에 {target 없음 (a)',
+      )
+      expect(withBurst(burstAction, { ...burstAction, intenseLine: '{who}에게 달려든다' })).toContain(
+        '문형 오류: intenseLine의 허용되지 않는 토큰 {who} (a)',
+      )
+      expect(withBurst({ ...burstAction, targetLine: '때린다' })).toContain('문형 오류: targetLine에 {target 없음 (a)')
+      expect(withBurst({ ...burstAction, intenseLine: '{target:을} 노려본다' })).toBe('')
+    })
+
+    it('6-2. 자리에 맞지 않는 토큰은 오류', () => {
+      const habit = (overrides: Partial<HabitDef>) =>
+        errorsFor(makeMind({ habits: [{ ...habitClock, ...overrides }] })).join('\n')
+      expect(habit({ line: '{target}를 본다' })).toContain('문형 오류: line의 허용되지 않는 토큰 {target} (a)')
+      expect(habit({ recall: '{target:을} 보던' })).toContain('문형 오류: recall의 허용되지 않는 토큰 {target:을} (a)')
+      expect(habit({ targetLine: '{reasons} 때문에 {target:을} 본다' })).toContain(
+        '문형 오류: targetLine의 허용되지 않는 토큰 {reasons} (a)',
+      )
+
+      const mind = makeMind()
+      mind.bursts.irritation = { small: { ...burstAction, line: '{target}를 친다' }, big: burstAction }
+      expect(errorsFor(mind).join('\n')).toContain('문형 오류: line의 허용되지 않는 토큰 {target} (a)')
+
+      const accumulate = (text: string) =>
+        errorsFor(makeMind({ emotions: [...COMMON_EMOTION_DEFS, { ...shy, accumulate: text }] })).join('\n')
+      expect(accumulate('{reasons}를 참던')).toBe('')
+      expect(accumulate('{reasons:을} 참던')).toBe('')
+      expect(accumulate('{reasons:와} 참던')).toContain('문형 오류: accumulate의 허용되지 않는 토큰 {reasons:와} (a)')
+      expect(accumulate('{reasons:에게} {target} 참던')).toContain(
+        '문형 오류: accumulate의 허용되지 않는 토큰 {target} (a)',
+      )
     })
 
     it('7. 지시의 moodShifts는 amount가 0이 아니고 지시받는 출연자의 감정만 가리킨다', () => {

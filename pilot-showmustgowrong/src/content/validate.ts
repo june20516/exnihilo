@@ -1,7 +1,7 @@
 import type { FloorPoint } from '@/sim/vec'
 import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
-import { COMMON_EMOTIONS } from './types'
 import { TEMPLATE_TOKEN } from './templateTokens'
+import { COMMON_EMOTIONS } from './types'
 import type {
   ActionDef,
   EmotionThresholds,
@@ -55,18 +55,44 @@ function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean 
   return pairsValid && rise[0] < rise[1] && fall[0] < fall[1] && rise[1] <= intense && intense <= 100
 }
 
-/** 문형 문자열 안의 토큰 후보({로 시작해 }까지, 닫히지 않으면 끝까지) 중 TEMPLATE_TOKEN에 맞지 않는 것 */
-function findUnknownTokens(text: string): string[] {
-  const exactToken = new RegExp(`^${TEMPLATE_TOKEN.source}$`)
-  const candidates = text.match(/\{[^}]*(\}|$)/g) ?? []
-  return candidates.filter((candidate) => !exactToken.test(candidate))
+type TemplateSlot = 'plain' | 'target' | 'accumulate'
+
+/** 자리별 필수 접두사와 허용 토큰. plain은 토큰 없음, target은 {target} 계열, accumulate는 {reasons[:을|에]} */
+const SLOT_RULES: Record<TemplateSlot, { required: string | null; isAllowed: (name: string, josa?: string) => boolean }> = {
+  plain: { required: null, isAllowed: () => false },
+  target: { required: null, isAllowed: (name) => name === 'target' },
+  accumulate: {
+    required: '{reasons',
+    isAllowed: (name, josa) => name === 'reasons' && (josa === undefined || josa === '을' || josa === '에'),
+  },
 }
 
-/** 문형 오류를 모은다. required가 있으면 그 접두사(`{target`·`{reasons`)가 text에 반드시 있어야 한다. */
-function checkTemplate(text: string, field: string, required: '{target' | '{reasons' | null): string[] {
+/** 문형 문자열의 토큰 후보({로 시작해 }까지, 닫히지 않으면 끝까지) 중 자리에 허용되지 않는 것 */
+function findDisallowedTokens(text: string, slot: TemplateSlot): string[] {
+  const exactToken = new RegExp(`^${TEMPLATE_TOKEN.source}$`)
+  const candidates = text.match(/\{[^}]*(\}|$)/g) ?? []
+  return candidates.filter((candidate) => {
+    const match = exactToken.exec(candidate)
+    return match === null || !SLOT_RULES[slot].isAllowed(match[1], match[2])
+  })
+}
+
+/** 문형 오류를 모은다. targetLine(requireTarget)은 {target이, accumulate는 {reasons가 반드시 있어야 한다. */
+function checkTemplate(
+  text: string,
+  field: string,
+  slot: TemplateSlot,
+  owner: string,
+  requireTarget = false,
+): string[] {
   const errors: string[] = []
-  if (required !== null && !text.includes(required)) errors.push(`문형 오류: ${field}에 ${required} 없음`)
-  for (const token of findUnknownTokens(text)) errors.push(`문형 오류: 알 수 없는 토큰 ${token}`)
+  const required = requireTarget ? '{target' : SLOT_RULES[slot].required
+  if (required !== null && !text.includes(required)) {
+    errors.push(`문형 오류: ${field}에 ${required} 없음 (${owner})`)
+  }
+  for (const token of findDisallowedTokens(text, slot)) {
+    errors.push(`문형 오류: ${field}의 허용되지 않는 토큰 ${token} (${owner})`)
+  }
   return errors
 }
 
@@ -80,7 +106,7 @@ function checkEmotionSet(mind: MindDef, owner: string): string[] {
   if (personalCount > MAX_PERSONAL_EMOTIONS) errors.push(`개인 감정 개수 오류: ${personalCount} (${owner})`)
   for (const id of findDuplicates(ids)) errors.push(`중복 감정 오류: ${id} (${owner})`)
   for (const emotion of mind.emotions) {
-    errors.push(...checkTemplate(emotion.accumulate, 'accumulate', '{reasons'))
+    errors.push(...checkTemplate(emotion.accumulate, 'accumulate', 'accumulate', owner))
   }
   return errors
 }
@@ -154,8 +180,10 @@ function checkHabit(habit: HabitDef, knownTags: ReadonlySet<string>, owner: stri
   for (const tag of tags) {
     if (!knownTags.has(tag)) errors.push(`알 수 없는 태그: ${tag} (${owner})`)
   }
-  errors.push(...checkTemplate(habit.line, 'line', null), ...checkTemplate(habit.recall, 'recall', null))
-  if (habit.targetLine !== undefined) errors.push(...checkTemplate(habit.targetLine, 'targetLine', '{target'))
+  errors.push(...checkTemplate(habit.line, 'line', 'plain', owner), ...checkTemplate(habit.recall, 'recall', 'plain', owner))
+  if (habit.targetLine !== undefined) {
+    errors.push(...checkTemplate(habit.targetLine, 'targetLine', 'target', owner, true))
+  }
   return errors
 }
 
@@ -167,18 +195,22 @@ function checkHabits(mind: MindDef, knownTags: ReadonlySet<string>, owner: strin
   }
   for (const habit of mind.habits) errors.push(...checkHabit(habit, knownTags, owner))
   if (mind.habits.length > 0 && mind.habits.every((habit) => habit.respondsTo !== undefined)) {
-    errors.push(`버릇 시계 버릇 누락 오류: (${owner})`)
+    errors.push(`버릇 시계 버릇 개수 오류: 0 (${owner})`)
   }
   return errors
 }
 
-function checkBurstLines(mind: MindDef): string[] {
+function checkBurstLines(mind: MindDef, owner: string): string[] {
   const errors: string[] = []
   for (const { small, big } of Object.values(mind.bursts)) {
     for (const burst of [small, big]) {
-      errors.push(...checkTemplate(burst.line, 'line', null))
-      if (burst.targetLine !== undefined) errors.push(...checkTemplate(burst.targetLine, 'targetLine', '{target'))
-      if (burst.intenseLine !== undefined) errors.push(...checkTemplate(burst.intenseLine, 'intenseLine', null))
+      errors.push(...checkTemplate(burst.line, 'line', 'plain', owner))
+      if (burst.targetLine !== undefined) {
+        errors.push(...checkTemplate(burst.targetLine, 'targetLine', 'target', owner, true))
+      }
+      if (burst.intenseLine !== undefined) {
+        errors.push(...checkTemplate(burst.intenseLine, 'intenseLine', 'target', owner))
+      }
     }
   }
   return errors
@@ -191,7 +223,7 @@ function checkMind(mind: MindDef, knownTags: ReadonlySet<string>, owner: string)
     ...checkThresholds(mind, owner),
     ...checkSensitivities(mind, owner),
     ...checkHabits(mind, knownTags, owner),
-    ...checkBurstLines(mind),
+    ...checkBurstLines(mind, owner),
   ]
 }
 
@@ -241,6 +273,7 @@ export function validateShow(
     }
   }
 
+  // 대상·조건 태그는 이 출연자 하나가 아니라 쇼 전체 출연자 태그의 합집합에서 찾는다.
   const knownTags = new Set(performers.flatMap((p) => p.tags))
   const knownCameraIds = new Set(show.cameras.map((c) => c.id))
 
@@ -263,17 +296,15 @@ export function validateShow(
     if (performer.role.trim() === '') errors.push(`빈 역할: ${performer.id}`)
     if (performer.tendency.trim() === '') errors.push(`빈 성향: ${performer.id}`)
     checkReactions(performer.reactions, performer.id)
+    const emotionIds = new Set<string>(performer.mind?.emotions.map((e) => e.id) ?? COMMON_EMOTIONS)
     for (const directive of performer.directives) {
       if (directive.expect.trim() === '') {
         errors.push(`빈 예상 결과: ${directive.id} (${performer.id})`)
       }
       for (const target of actionTargets(directive.action)) checkTarget(target, performer.id)
-    }
-    if (performer.mind) errors.push(...checkMind(performer.mind, knownTags, performer.id))
-    const emotionIds = new Set<string>(performer.mind?.emotions.map((e) => e.id) ?? COMMON_EMOTIONS)
-    for (const directive of performer.directives) {
       errors.push(...checkMoodShifts(directive.moodShifts ?? [], directive.id, emotionIds, performer.id))
     }
+    if (performer.mind) errors.push(...checkMind(performer.mind, knownTags, performer.id))
   }
 
   const operatedCameraIds = new Set<string>()
