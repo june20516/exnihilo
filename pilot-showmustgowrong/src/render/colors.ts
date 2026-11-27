@@ -1,5 +1,3 @@
-import type { Pose } from '@/content/types'
-
 /** 렌더링 색 모음. 0xRRGGBB. */
 export const COLORS = {
   background: 0x14141c,
@@ -32,7 +30,6 @@ export const COLORS = {
   badgeDisc: 0x14141c,
   /** 출연자 이름표 바탕. 테두리는 출연자 색이다 */
   nameTagBack: 0x14141c,
-  trackingIcon: 0xffd23f,
   /** 스튜디오 발밑의 클로즈업 대상 점선 고리 */
   closeupRing: 0xffd23f,
   staffBody: 0x4a7bd0,
@@ -48,21 +45,3 @@ export const COLORS = {
   anger: 0xe5484d,
   vignette: 0x000000,
 } as const
-
-export const POSE_COLORS: Record<Pose, number> = {
-  idle: 0x9aa7b8,
-  laugh: 0xf2c94c,
-  angry: 0xe5484d,
-  panic: 0xb07ee0,
-  flying: 0x56c2e6,
-  fallen: 0x6f6a78,
-}
-
-export const POSE_SYMBOLS: Record<Pose, string> = {
-  idle: '',
-  laugh: 'ㅋ',
-  angry: '#',
-  panic: '!',
-  flying: '~',
-  fallen: '@',
-}

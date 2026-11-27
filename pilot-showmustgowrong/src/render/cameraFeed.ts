@@ -1,5 +1,6 @@
 import type { CameraDef, EquipmentDef, Pose, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engineTypes'
+import type { MoodView } from '@/sim/life'
 import { floorDistance, normalizeDegrees, yawBetween } from '@/sim/vec'
 
 /** size 1이 되는 거리(m). 이보다 멀면 작아지고 가까우면 커진다. */
@@ -23,6 +24,8 @@ export interface FeedItem {
   /** 장비 종류. 출연자와 관객석은 null */
   equipmentKind: EquipmentKind | null
   pose: Pose | null
+  /** 출연자의 대표 감정. 출연자가 아니거나 마음이 없으면 null */
+  mood: MoodView | null
   /** 클로즈업이 지금 따라가는 대상. 지시나 놀람으로 다른 곳을 보고 있으면 false */
   highlighted: boolean
 }
@@ -55,6 +58,7 @@ interface Projection {
   label: string
   at: Placed
   pose: Pose | null
+  mood: MoodView | null
   equipmentKind: EquipmentKind | null
 }
 
@@ -78,7 +82,7 @@ export function cameraFeed(
   const following = view.cameraAimModes[camera.id] === 'tracking'
   const target = following ? (view.cameraTargets[camera.id] ?? null) : null
 
-  const project = ({ kind, id, label, at, pose, equipmentKind }: Projection) => {
+  const project = ({ kind, id, label, at, pose, mood, equipmentKind }: Projection) => {
     const distance = Math.max(MIN_DISTANCE, floorDistance(camera.position, at))
     const size = REFERENCE_DISTANCE / distance
     const offset = normalizeDegrees(yawBetween(camera.position, at) - yaw)
@@ -91,6 +95,7 @@ export function cameraFeed(
       heightOffset: at.y * size,
       equipmentKind,
       pose,
+      mood,
       highlighted: kind === 'actor' && id === target,
     }
     return { item, distance }
@@ -105,6 +110,7 @@ export function cameraFeed(
         label: actor.name,
         at: actor,
         pose: actor.pose,
+        mood: actor.mood,
         equipmentKind: null,
       })),
     ...view.equipment
@@ -115,6 +121,7 @@ export function cameraFeed(
         label: EQUIPMENT_LABELS[equipment.kind],
         at: equipment,
         pose: null,
+        mood: null,
         equipmentKind: equipment.kind,
       })),
   ]
@@ -125,6 +132,7 @@ export function cameraFeed(
       label: AUDIENCE_LABEL,
       at: audienceCenter(audienceZone),
       pose: null,
+      mood: null,
       equipmentKind: null,
     })
   }

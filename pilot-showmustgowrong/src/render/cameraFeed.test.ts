@@ -69,6 +69,19 @@ const FAR_ZONE = { minX: -14, maxX: -10, minZ: -2, maxZ: 2 } // 카메라 뒤쪽
 const feedOf = (v: FeedView) => cameraFeed(v, CAMERA, FAR_ZONE)
 const actorItem = (v: FeedView, id: string) => feedOf(v).find((item) => item.id === id)
 
+describe('mood', () => {
+  it('출연자의 대표 감정을 그대로 넘기고, 마음이 없으면 null이다', () => {
+    const mood = { emotion: 'irritation', name: '짜증', stage: 1, stageName: '발끈', value: 0.5 } as const
+    const point = polar(0, 10)
+    const v = view([
+      actor('a', point.x, point.z, { mood }),
+      actor('b', point.x, point.z + 1, { mood: null }),
+    ])
+    expect(actorItem(v, 'a')?.mood).toEqual(mood)
+    expect(actorItem(v, 'b')?.mood).toBeNull()
+  })
+})
+
 describe('screenX', () => {
   it('카메라 정면은 0, 화각 끝은 왼쪽 -1과 오른쪽 1이다', () => {
     const center = polar(0, 10)

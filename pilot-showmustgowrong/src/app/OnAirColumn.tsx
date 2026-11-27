@@ -1,15 +1,9 @@
-import { useMemo, type PointerEvent, type ReactNode } from 'react'
+import type { PointerEvent, ReactNode } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engine'
 import type { CameraAimMode } from '@/sim/engineTypes'
 import { CameraFeedCanvas } from './CameraFeedCanvas'
 import { SWITCHER_KEYS, cameraName } from './labels'
-
-const MONITOR_WIDTH = 264
-const MONITOR_HEIGHT = 149
-// 열 안쪽 폭 288px에 칸 3개(테두리·안쪽 여백 포함 칸당 92px)가 들어가는 크기
-const PREVIEW_WIDTH = 84
-const PREVIEW_HEIGHT = 47
 
 interface OnAirColumnProps {
   view: BroadcastView
@@ -69,11 +63,6 @@ export function OnAirColumn({
       : undefined
   const onAir = show.cameras.find((camera) => camera.id === view.onAirCameraId) ?? show.cameras[0]
   const onAirTarget = trackingTarget(view, onAir, performers)
-  // 미리보기는 폭이 좁아 본명 4개가 겹치므로 짧은 이름을 쓴다.
-  const shortNames = useMemo(
-    () => new Map([...performers].map(([id, performer]) => [id, performer.shortName])),
-    [performers],
-  )
   return (
     <aside className="relative flex w-[300px] shrink-0 flex-col gap-2 py-1 pr-3">
       <section
@@ -97,13 +86,12 @@ export function OnAirColumn({
             ON AIR
           </span>
         </span>
-        <span className="overflow-hidden rounded-md border border-slate-700">
+        <span className="block aspect-video w-full overflow-hidden rounded-md border border-slate-700">
           <CameraFeedCanvas
             view={view}
             camera={onAir}
             audienceZone={show.audienceZone}
-            width={MONITOR_WIDTH}
-            height={MONITOR_HEIGHT}
+            performers={performers}
           />
         </span>
       </section>
@@ -131,15 +119,14 @@ export function OnAirColumn({
             >
               <span
                 data-testid="camera-preview"
-                className={`overflow-hidden rounded-md ${isOnAir ? '' : 'opacity-90'}`}
+                className={`block aspect-video w-full overflow-hidden rounded-md ${isOnAir ? '' : 'opacity-90'}`}
               >
                 <CameraFeedCanvas
                   view={view}
                   camera={camera}
                   audienceZone={show.audienceZone}
-                  width={PREVIEW_WIDTH}
-                  height={PREVIEW_HEIGHT}
-                  shortNames={shortNames}
+                  performers={performers}
+                  compact
                 />
               </span>
               <span className="flex items-center gap-1 px-0.5 text-[11px] font-bold text-slate-200">

@@ -23,7 +23,7 @@ const STANDING_HEIGHT_METERS = 2 * FOOT_REACH_METERS
  * 키 기준 그림(렉스·프리야·오카포 idle)의 원본 높이(px). 이 그림을 캡슐 키에 맞추고 모든 그림에 같은
  * 배율을 쓴다. 그래서 모(268px)는 조금 크고 준(205px)은 작게, 그림끼리의 키 차이가 그대로 남는다.
  */
-const REFERENCE_ART_HEIGHT_PX = 256
+export const REFERENCE_ART_HEIGHT_PX = 256
 /**
  * 누운 그림(날아감·쓰러짐)의 최대 회전. 바닥의 x축·z축은 화면에서 30도 기울어 보이므로, 바닥에 누운
  * 몸은 늘 이 안에 든다. 이보다 크게 돌려야 하는 것은 선 채로 날거나 넘어진 몸이라 그림을 세우지 않는다.
