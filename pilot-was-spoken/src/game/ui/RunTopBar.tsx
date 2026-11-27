@@ -13,10 +13,12 @@ interface RunTopBarProps {
   /** 연출 재생 중이면 새 런을 막는다. */
   busy: boolean
   onNewRun: () => void
+  /** 조작 안내를 다시 연다. */
+  onHowToPlay: () => void
 }
 
-/** 런 상단: 층(3/7 · 정예), HP, 화폐, 시드, 새 런. 전투 중이면 HP는 전투의 탐험가 HP다. */
-export function RunTopBar({ state, busy, onNewRun }: RunTopBarProps) {
+/** 런 상단: 층(3/7 · 정예), HP, 화폐, 조작 안내, 새 런, 시드. 전투 중이면 HP는 전투의 탐험가 HP다. */
+export function RunTopBar({ state, busy, onNewRun, onHowToPlay }: RunTopBarProps) {
   /** 새 런은 두 번 눌러야 시작한다(진행 중인 런을 실수로 버리지 않게). */
   const [armed, setArmed] = useState(false)
   const floor = FLOORS[state.floor - 1]
@@ -42,6 +44,16 @@ export function RunTopBar({ state, busy, onNewRun }: RunTopBarProps) {
           <Icon name="paid" className="text-[20px]" />
           화폐 <b className="font-number text-lg font-normal">{state.gold}</b>
         </span>
+        <button
+          type="button"
+          data-testid="how-to-play-open"
+          title="플레이 방법"
+          aria-label="플레이 방법"
+          onClick={onHowToPlay}
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high"
+        >
+          <Icon name="help" className="text-[20px]" />
+        </button>
         <button
           type="button"
           data-testid="new-run"

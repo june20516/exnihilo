@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { freshRunWithoutHowToPlay } from './howToPlay.js'
 import { expectContentFits, expectInViewport, expectStacked } from './viewport.js'
 
 /** 터치 대상 최소 크기(px, 표시 spec §3.8). */
@@ -107,8 +108,7 @@ test.describe('가로(844×390) 상점', () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true })
   test('상점 화면도 스크롤 없이 보상 3개와 새로고침·다음 층 버튼이 보인다', async ({ page }) => {
     await page.goto('/?seed=5&debugEnemyHp=1')
-    await page.evaluate(() => window.localStorage.clear())
-    await page.reload()
+    await freshRunWithoutHowToPlay(page)
     await page.getByTestId('tile-bite').first().tap()
     await page.getByTestId('slot-0-verb').tap()
     await page.getByTestId('cast').tap()
