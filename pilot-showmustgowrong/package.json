@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "sim": "tsx --tsconfig tsconfig.app.json scripts/sim-broadcast.ts",
-    "sprites": "tsx --tsconfig tsconfig.scripts.json scripts/cut-sprites.ts"
+    "sprites": "tsx --tsconfig tsconfig.scripts.json scripts/cut-sprites.ts",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "^0.21.0",
@@ -37,6 +38,7 @@
     "tsx": "^4.23.15",
     "typescript": "~7.0.2",
     "vite": "^8.3.8",
-    "vitest": "^5.1.1"
+    "vitest": "^5.1.1",
+    "wrangler": "^4.168.0"
   }
 }
