@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CAPSULE, LIGHT_HALF_EXTENTS, SET_WALL_HALF_EXTENTS } from '@/content/balance'
 import type { BackdropKind, CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import { REFERENCE_ART_HEIGHT_PX } from '@/render/actorFigure'
@@ -53,6 +53,8 @@ const STAGE_RING_WIDTH = 1.5
 const NEUTRAL_BORDER = '#64748B'
 /** 2단계 깜박임을 다시 그리는 간격(실제 ms). 깜박임 반주기(250ms)보다 짧아야 한다 */
 const BLINK_REDRAW_MS = 100
+
+function drawNothing(): void {}
 
 /** 이름표 앞에 붙는 단계 아이콘. 0단계·마음 없음은 null이라 붙지 않는다 */
 interface StageIcon {
@@ -127,6 +129,19 @@ export function CameraFeedCanvas({
   /** 참조를 고정해 둬야 로드 전 그리기를 여러 번 해도 feedArt의 대기 콜백이 쌓이지 않는다 */
   const onArtLoad = useCallback(() => setArtVersion((version) => version + 1), [])
   const ratio = pixelRatio()
+  /** 깜박임 interval이 부르는 최신 그리기. view가 바뀌면 이것만 바꾸고 interval은 그대로 둔다 */
+  const drawRef = useRef<() => void>(drawNothing)
+  const items = useMemo(
+    () =>
+      cameraFeed(view, camera, audienceZone).map((item) =>
+        item.kind === 'actor' && compact
+          ? { ...item, label: performers.get(item.id)?.shortName ?? item.label }
+          : item,
+      ),
+    [view, camera, audienceZone, performers, compact],
+  )
+  // 2단계 고리는 슬로모션과 관계없이 실제 0.5초 주기로 깜박이므로, 있으면 실제 시간으로 다시 그린다
+  const blinks = items.some((item) => badgeLook(item.mood).blink)
 
   useEffect(() => {
     const host = hostRef.current
@@ -146,12 +161,10 @@ export function CameraFeedCanvas({
 
   useEffect(() => {
     const context = canvasRef.current?.getContext('2d')
-    if (!context || size.width <= 0 || size.height <= 0) return
-    const items = cameraFeed(view, camera, audienceZone).map((item) =>
-      item.kind === 'actor' && compact
-        ? { ...item, label: performers.get(item.id)?.shortName ?? item.label }
-        : item,
-    )
+    if (!context || size.width <= 0 || size.height <= 0) {
+      drawRef.current = drawNothing
+      return
+    }
     const draw = () => {
       // 캔버스 픽셀은 CSS 크기 x ratio이고, 그리기는 CSS 픽셀 좌표로 한다.
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
@@ -164,13 +177,16 @@ export function CameraFeedCanvas({
         onArtLoad,
       })
     }
+    drawRef.current = draw
     draw()
-    // 2단계 고리는 슬로모션과 관계없이 실제 0.5초 주기로 깜박이므로, 있으면 실제 시간으로 다시 그린다
-    const blinks = items.some((item) => badgeLook(item.mood).blink)
+  }, [items, camera.backdrop, performers, size, ratio, artVersion, onArtLoad])
+
+  // interval은 깜박이는 항목이 생기고 없어질 때만 만들고 지운다. 매번 최신 그리기(drawRef)를 부른다
+  useEffect(() => {
     if (!blinks) return
-    const timer = setInterval(draw, BLINK_REDRAW_MS)
+    const timer = setInterval(() => drawRef.current(), BLINK_REDRAW_MS)
     return () => clearInterval(timer)
-  }, [view, camera, audienceZone, performers, compact, size, ratio, artVersion, onArtLoad])
+  }, [blinks])
 
   return (
     <div ref={hostRef} className="relative h-full w-full">

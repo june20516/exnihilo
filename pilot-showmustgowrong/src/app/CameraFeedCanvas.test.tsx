@@ -201,6 +201,43 @@ describe('CameraFeedCanvas', () => {
     expect(drawsOf()).toBe(afterUnmount)
   })
 
+  it('view가 바뀌어도 깜박임 interval은 다시 만들지 않고 최신 view로 그리며, 깜박임이 없어지면 지운다', () => {
+    vi.useFakeTimers()
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval')
+    const calls: string[] = []
+    const { rerender } = renderFeed(withStage(2), calls)
+    const feed = (feedView: BroadcastView) => (
+      <CameraFeedCanvas
+        view={feedView}
+        camera={CAMERA}
+        audienceZone={TALK_SHOW.audienceZone}
+        performers={PERFORMERS}
+      />
+    )
+    for (let step = 1; step <= 3; step++) rerender(feed({ ...withStage(2), step: view.step + step }))
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1)
+    expect(clearIntervalSpy).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(1)
+
+    // interval은 마지막 view를 그린다: 출연자를 한 명만 남긴 view로 바꾸면 칠하는 사각형(fillRect)이 줄어든다
+    const drawnPerTick = () => {
+      calls.length = 0
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
+      return calls.filter((name) => name === 'fillRect').length
+    }
+    const withActors = drawnPerTick()
+    rerender(feed({ ...withStage(2), actors: withStage(2).actors.slice(0, 1) }))
+    expect(drawnPerTick()).toBeLessThan(withActors)
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1)
+
+    rerender(feed(withStage(0)))
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('2단계가 없으면 주기적으로 다시 그리지 않는다', () => {
     vi.useFakeTimers()
     const calls: string[] = []
