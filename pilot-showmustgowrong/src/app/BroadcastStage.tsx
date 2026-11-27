@@ -9,7 +9,7 @@ import { EventLog, TOP_BAND_HEIGHT, TopBand } from './Hud'
 import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
 import { GAUGE_LABELS } from './labels'
-import type { LogPerson } from './logSegments'
+import { sortPeopleLongestFirst, type LogPerson } from './logSegments'
 import { LAYOUT_GRIDS, layoutStorage, loadLayout, nextLayout, saveLayout, type LayoutMode } from './layout'
 import { OnAirColumn } from './OnAirColumn'
 import { TrendChart } from './TrendChart'
@@ -90,10 +90,12 @@ export function BroadcastStage({
   /** 줄 속 이름을 칠할 출연자: 정식 이름과 짧은 이름 */
   const logPeople = useMemo<LogPerson[]>(
     () =>
-      [...performers.values()].flatMap((performer) => [
-        { name: performer.name, color: performer.color },
-        { name: performer.shortName, color: performer.color },
-      ]),
+      sortPeopleLongestFirst(
+        [...performers.values()].flatMap((performer) => [
+          { name: performer.name, color: performer.color },
+          { name: performer.shortName, color: performer.color },
+        ]),
+      ),
     [performers],
   )
   const trendColors = useMemo(

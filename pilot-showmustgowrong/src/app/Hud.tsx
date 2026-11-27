@@ -1,7 +1,7 @@
 import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
 import { GAUGE_KINDS, type GaugeKind, type ShowDef } from '@/content/types'
 import type { BroadcastView, LogLine } from '@/sim/engine'
-import { useLayoutEffect, useRef } from 'react'
+import { memo, useLayoutEffect, useRef } from 'react'
 import { emotionStyle } from '@/render/emotionBadge'
 import { containsEvent, logIndent, logTextClass, logTier } from './logFormat'
 import { logSegments, type LogPerson } from './logSegments'
@@ -169,10 +169,12 @@ export function EventLog({ log, highlightedEventId, show, people = NO_PEOPLE }: 
   const listRef = useRef<HTMLOListElement>(null)
   const followingRef = useRef(true)
   const newestIndex = recent.at(-1)?.index ?? -1
+  // 마지막 줄의 ×N만 늘어도 줄 높이가 바뀌므로 반복 횟수도 따라가기 기준에 넣는다
+  const newestRepeat = recent.at(-1)?.repeat ?? 0
   useLayoutEffect(() => {
     const list = listRef.current
     if (list !== null && followingRef.current) list.scrollTop = list.scrollHeight
-  }, [newestIndex])
+  }, [newestIndex, newestRepeat])
   return (
     <section
       data-testid="event-log"
@@ -210,7 +212,27 @@ interface LogRowProps {
   highlighted: boolean
 }
 
-function LogRow({ line, show, people, highlighted }: LogRowProps) {
+/** 줄 내용·표시 조건이 같으면 다시 그리지 않는다(줄 객체는 프레임마다 새로 복사되어 온다) */
+function sameRow(before: LogRowProps, after: LogRowProps): boolean {
+  const a = before.line
+  const b = after.line
+  return (
+    a.index === b.index &&
+    a.text === b.text &&
+    a.step === b.step &&
+    a.kind === b.kind &&
+    a.emotion === b.emotion &&
+    a.stage === b.stage &&
+    a.depth === b.depth &&
+    a.repeat === b.repeat &&
+    a.leadIn === b.leadIn &&
+    before.highlighted === after.highlighted &&
+    before.show === after.show &&
+    before.people === after.people
+  )
+}
+
+const LogRow = memo(function LogRow({ line, show, people, highlighted }: LogRowProps) {
   const tier = logTier(line)
   const segments = logSegments(line, people)
   const heroColor = segments.find((segment) => segment.color !== null && !segment.dim)?.color ?? null
@@ -254,4 +276,4 @@ function LogRow({ line, show, people, highlighted }: LogRowProps) {
       )}
     </li>
   )
-}
+}, sameRow)

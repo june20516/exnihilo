@@ -20,7 +20,10 @@ const STAGE_LINES = [
 /** clock 축의 눈금 수(양 끝 포함) */
 const CLOCK_TICKS = 4
 const FALLBACK_COLOR = '#94A3B8'
-const LEGEND_STEP = (CHART_WIDTH - 8) / 5
+/** 범례 한 줄에 놓는 항목 수와 칸 너비. 넘치면 다음 줄로 감싼다 */
+const LEGEND_PER_ROW = 5
+const LEGEND_STEP = (CHART_WIDTH - 8) / LEGEND_PER_ROW
+const LEGEND_ROW_HEIGHT = 11
 
 export interface TrendChartProps {
   series: readonly TrendSeries[]
@@ -90,12 +93,13 @@ export function TrendChart({ series, colors, names, fromStep, toStep, axis, show
           { x: PLOT_LEFT, text: `-${windowSeconds}초`, anchor: 'start' },
           { x: PLOT_RIGHT, text: '지금', anchor: 'end' },
         ]
+  const chartHeight = CHART_HEIGHT + (Math.max(1, Math.ceil(series.length / LEGEND_PER_ROW)) - 1) * LEGEND_ROW_HEIGHT
   return (
     <svg
       data-testid="trend-chart"
-      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+      viewBox={`0 0 ${CHART_WIDTH} ${chartHeight}`}
       width={CHART_WIDTH}
-      height={CHART_HEIGHT}
+      height={chartHeight}
       className="block max-w-full select-none"
       role="img"
       aria-label="출연자별 터지기 직전 정도 추세"
@@ -144,7 +148,7 @@ export function TrendChart({ series, colors, names, fromStep, toStep, axis, show
         </text>
       ))}
       {series.map(({ actorId }, index) => (
-        <g key={actorId} transform={`translate(${4 + index * LEGEND_STEP} ${LEGEND_Y})`}>
+        <g key={actorId} transform={`translate(${4 + (index % LEGEND_PER_ROW) * LEGEND_STEP} ${LEGEND_Y + Math.floor(index / LEGEND_PER_ROW) * LEGEND_ROW_HEIGHT})`}>
           <rect y={-5} width={8} height={3} rx={1} fill={colors[actorId] ?? FALLBACK_COLOR} />
           <text x={11} y={0} fontSize={9} fill="#cbd5e1">
             {names[actorId] ?? actorId}

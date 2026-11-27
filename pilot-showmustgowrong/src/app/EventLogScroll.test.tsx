@@ -67,6 +67,16 @@ describe('EventLog 자동 스크롤', () => {
     expect(list.scrollTop).toBe(SCROLL_HEIGHT - CLIENT_HEIGHT - 9)
   })
 
+  it('마지막 줄의 반복 횟수만 늘어도 맨 아래 근처였다면 따라간다', () => {
+    const view = mount(3)
+    const list = listWithLayout()
+    scrollTo(list, SCROLL_HEIGHT - CLIENT_HEIGHT - 4)
+    const repeated = logOf(3)
+    repeated[2] = { ...repeated[2], repeat: 2 }
+    view.rerender(<EventLog log={repeated} highlightedEventId={null} show={TALK_SHOW} />)
+    expect(list.scrollTop).toBe(SCROLL_HEIGHT)
+  })
+
   it('다시 맨 아래로 내리면 따라가기를 다시 시작한다', () => {
     const view = mount(3)
     const list = listWithLayout()

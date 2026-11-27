@@ -14,8 +14,13 @@ export interface LogSegment {
   dim: boolean
 }
 
-/** 한 글자 이름 뒤에 올 수 있는 조사. "모습", "모두" 같은 낱말 속 글자와 구분한다 */
-const PARTICLES = ['가', '이', '는', '은', '를', '을', '의', '와', '과', '도', '에', '한테', '께', '로', '만']
+/**
+ * 한 글자 이름 바로 뒤에 올 수 있는 조사(긴 것 먼저)이고, 그 뒤에는 한글이 이어지지 않아야 한다.
+ * "모습", "모두", "모이다", "모은다"처럼 조사 글자로 시작하는 낱말을 이름으로 오인하지 않는다.
+ * 한계: 조사 뒤에 띄어쓰기 없이 한글이 붙는 문장("모가달려든다")은 이름으로 칠하지 않는다.
+ * 실제 로그 문구(content·narration)에는 이런 낱말이 없음을 확인했다(task-8 보고).
+ */
+const PARTICLE_AFTER_NAME = /^(에게서|에게|에서|한테|으로|이랑|가|이|는|은|를|을|의|와|과|도|에|께|로|만)(?![가-힣])/
 
 const HANGUL = /[가-힣]/
 
@@ -25,7 +30,7 @@ function isNameAt(text: string, start: number, name: string): boolean {
   if (start > 0 && HANGUL.test(text[start - 1])) return false
   if ([...name].length > 1) return true
   const rest = text.slice(start + name.length)
-  return rest === '' || !HANGUL.test(rest[0]) || PARTICLES.some((particle) => rest.startsWith(particle))
+  return rest === '' || !HANGUL.test(rest[0]) || PARTICLE_AFTER_NAME.test(rest)
 }
 
 /** 같은 색·흐림이 이어지는 조각을 하나로 합쳐 밀어 넣는다 */
@@ -36,8 +41,12 @@ function pushSegment(segments: LogSegment[], next: LogSegment): void {
   else segments.push(next)
 }
 
-function splitNames(text: string, people: readonly LogPerson[], dim: boolean): LogSegment[] {
-  const byLength = [...people].sort((a, b) => b.name.length - a.name.length)
+/** 이름이 긴 것부터 놓는다. logSegments가 받는 목록은 이 순서여야 하므로 사람 목록을 만들 때 한 번만 부른다 */
+export function sortPeopleLongestFirst(people: readonly LogPerson[]): LogPerson[] {
+  return [...people].sort((a, b) => b.name.length - a.name.length)
+}
+
+function splitNames(text: string, byLength: readonly LogPerson[], dim: boolean): LogSegment[] {
   const segments: LogSegment[] = []
   let cursor = 0
   while (cursor < text.length) {
@@ -54,8 +63,8 @@ function splitNames(text: string, people: readonly LogPerson[], dim: boolean): L
 }
 
 /**
- * 줄을 이름(출연자 색)과 나머지 글로 나눈다. 이름은 정식 이름과 짧은 이름 중 긴 것이 먼저 잡히고,
- * 이름 뒤 조사는 이름에 넣지 않는다. leadIn(이어받은 앞머리)에 속한 조각은 dim이다.
+ * 줄을 이름(출연자 색)과 나머지 글로 나눈다. people은 sortPeopleLongestFirst로 정렬된 목록이어야 하고
+ * (정식 이름과 짧은 이름 중 긴 것이 먼저 잡힌다), 이름 뒤 조사는 이름에 넣지 않는다. leadIn(이어받은 앞머리)에 속한 조각은 dim이다.
  */
 export function logSegments(line: LogLine, people: readonly LogPerson[]): LogSegment[] {
   const boundary = line.leadIn !== null && line.text.startsWith(line.leadIn) ? line.leadIn.length : 0

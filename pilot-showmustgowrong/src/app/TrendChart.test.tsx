@@ -56,6 +56,29 @@ describe('TrendChart', () => {
     expect(html.match(/stroke-dasharray/g)).toHaveLength(2)
   })
 
+  it('출연자가 6명이어도 범례 항목이 모두 그림 안에 있다', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+    const html = renderToStaticMarkup(
+      <TrendChart
+        series={ids.map((actorId) => ({ actorId, points: [] }))}
+        colors={{}}
+        names={Object.fromEntries(ids.map((id) => [id, `이름${id}`]))}
+        fromStep={0}
+        toStep={3600}
+        axis="relative"
+        show={TALK_SHOW}
+      />,
+    )
+    const [, width, height] = (/viewBox="0 0 (\d+) (\d+)"/.exec(html) ?? []).map(Number)
+    const legend = [...html.matchAll(/translate\(([\d.]+) ([\d.]+)\)/g)]
+    expect(legend).toHaveLength(6)
+    for (const [, x, y] of legend) {
+      // 항목 폭(약 46)과 글자 높이를 감안해 오른쪽·아래 끝이 그림 안이어야 한다
+      expect(Number(x) + 46).toBeLessThanOrEqual(width)
+      expect(Number(y)).toBeLessThanOrEqual(height)
+    }
+  })
+
   it('범례는 짧은 이름이고 relative 축은 -60초와 지금, clock 축은 극 중 시각이다', () => {
     const relative = render([{ actorId: 'rex', points: [] }])
     expect(relative).toContain('렉스')

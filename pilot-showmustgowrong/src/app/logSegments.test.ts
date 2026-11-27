@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LogLine } from '@/sim/engine'
 import { logTier } from './logFormat'
-import { logSegments } from './logSegments'
+import { logSegments as segmentsOf, sortPeopleLongestFirst, type LogPerson } from './logSegments'
 
 function line(overrides: Partial<LogLine>): LogLine {
   return {
@@ -23,13 +23,17 @@ function line(overrides: Partial<LogLine>): LogLine {
   }
 }
 
-const people = [
+const people = sortPeopleLongestFirst([
   { name: '렉스 캘러웨이', color: '#EF4444' },
   { name: '렉스', color: '#EF4444' },
   { name: '프리야', color: '#A855F7' },
   { name: '오카포', color: '#14B8A6' },
   { name: '모', color: '#F97316' },
-]
+])
+
+function logSegments(target: LogLine, list: LogPerson[]) {
+  return segmentsOf(target, list)
+}
 
 describe('logTier', () => {
   it('사고는 3단, 감정 단계 진입은 2단, 나머지는 1단이다', () => {
@@ -70,6 +74,13 @@ describe('logSegments', () => {
       { text: '모', color: '#F97316', dim: false },
       { text: '가 달려든다', color: null, dim: false },
     ])
+  })
+
+  it('조사 글자로 시작하는 낱말("모이다", "모은다")은 한 글자 이름으로 잡지 않는다', () => {
+    for (const text of ['관객이 모이다', '모이는 소리', '모은다']) {
+      expect(logSegments(line({ text }), people)).toEqual([{ text, color: null, dim: false }])
+    }
+    expect(logSegments(line({ text: '모에게 말한다' }), people)[0]).toEqual({ text: '모', color: '#F97316', dim: false })
   })
 
   it('이름이 없거나 사람 목록이 비어도 줄 전체가 한 조각이다', () => {
