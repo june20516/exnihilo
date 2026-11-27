@@ -542,3 +542,64 @@ test('조정값이 같으면 다시 하기가 페이지를 유지하고, 바꿨�
   await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('120')
   await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
 })
+
+test('세 배치 모두에서 송출 전환(1·2·3)과 클로즈업 드래그가 된다', async ({ page }) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  const label = page.getByTestId('on-air-label')
+  const targets = [
+    ['default', 'priya', '프리야'],
+    ['studio', 'okafor', '오카포'],
+    ['onair', 'mo', '모'],
+  ] as const
+  for (const [layout, actorId, actorName] of targets) {
+    await expect(page.getByRole('main')).toHaveAttribute('data-layout', layout)
+    for (const [key, camera] of [['1', 'wide'], ['2', 'close'], ['3', 'audienceCam']] as const) {
+      await page.keyboard.press(key)
+      await expect(page.getByTestId(`switcher-slot-${camera}`), `${layout} 키 ${key}`).toHaveAttribute(
+        'data-on-air',
+        'true',
+      )
+    }
+    await page.keyboard.press('2')
+    await dragCloseupTo(page, actorId)
+    await expect(label, `${layout} 클로즈업 드래그`).toContainText(`대상 ${actorName}`)
+    if (layout !== 'onair') {
+      // 배치가 바뀌어 스튜디오 크기가 달라지면 앵커가 새 값으로 다시 실릴 때까지 기다린 뒤 다음 배치에서 끈다
+      const anchorsBefore = await host.getAttribute('data-camera-anchors')
+      await page.keyboard.press('l')
+      await expect.poll(() => host.getAttribute('data-camera-anchors')).not.toBe(anchorsBefore)
+    }
+  }
+})
+
+test('개입 중 판단 카드에 감정 변화 칩이 보이고 Esc로 닫힌다', async ({ page }) => {
+  await openBroadcast(page)
+  await page.keyboard.press('Space')
+  const panel = page.getByTestId('intervention-panel')
+  await expect(panel).toBeVisible()
+  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'rex') })
+  const card = panel.getByTestId('target-card')
+  await expect(card).toBeVisible()
+  await expect(card.getByTestId('directive-chip').first()).toBeVisible()
+  await expectInViewport(page, 'target-card')
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+})
+
+test('방송이 끝나면 정산 화면에 뿌리 문장 또는 "큰 사고 없이 끝났다"와 연쇄·추세가 보인다', async ({ page }) => {
+  test.setTimeout(60_000)
+  // 방송을 실제 10초로 줄여 정산까지 빨리 간다(기존 다시 하기 테스트와 같은 방법)
+  await page.addInitScript(
+    ([key]) => window.localStorage.setItem(key, JSON.stringify({ BROADCAST_REAL_SECONDS: 10 })),
+    [TUNING_STORAGE_KEY] as const,
+  )
+  await openBroadcast(page)
+  const result = page.getByTestId('result-screen')
+  await expect(result).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByTestId('result-title')).toContainText(/방송 (완료|중단)/)
+  await expect(page.getByTestId('result-root-sentence').or(page.getByTestId('result-calm'))).toBeVisible()
+  await expect(page.getByTestId('result-stats')).toBeVisible()
+  await expect(page.getByTestId('trend-chart')).toBeVisible()
+  await expectInViewport(page, 'restart-button')
+})
