@@ -1,4 +1,3 @@
-/** 이름표 하나를 놓을 요청. x는 가운데, bottom은 글자 아래쪽(몸 바로 위) 좌표다. */
 /** 이름표 글자 크기 = 피드 높이 × 이 비율(상한·하한 안에서) */
 export const NAME_FONT_RATIO = 0.05
 export const MIN_NAME_FONT_PX = 10
@@ -14,6 +13,7 @@ export function feedNameFontSize(feedHeight: number): number {
   return Math.min(MAX_NAME_FONT_PX, Math.max(MIN_NAME_FONT_PX, feedHeight * NAME_FONT_RATIO))
 }
 
+/** 이름표 하나를 놓을 요청. x는 가운데, bottom은 글자 아래쪽(몸 바로 위) 좌표다. */
 export interface FeedLabelRequest {
   x: number
   bottom: number

@@ -1,10 +1,4 @@
-import {
-  useMemo,
-  useState,
-  type MouseEvent,
-  type PointerEvent,
-  type Ref,
-} from 'react'
+import { useMemo, useState, type MouseEvent, type PointerEvent, type Ref } from 'react'
 import { INTERVENTION_SPEED } from '@/content/balance'
 import type { PerformerDef } from '@/content/types'
 import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine'
