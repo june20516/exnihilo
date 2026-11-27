@@ -11,13 +11,33 @@ const ART_URLS: Readonly<Partial<Record<string, string>>> = import.meta.glob<str
   { eager: true, query: '?url', import: 'default' },
 )
 
+/** 엔진 포즈 전부. 출연자마다 이 포즈 그림이 모두 있어야 한다 */
+const ALL_POSES: readonly Pose[] = ['idle', 'laugh', 'angry', 'panic', 'flying', 'fallen']
+
+/** 출연자 id와 포즈의 그림 주소. 없으면 undefined. 그리기 루프처럼 throw하면 안 되는 곳에서 쓴다 */
+export function findPerformerArtUrl(performerId: string, pose: Pose): string | undefined {
+  return ART_URLS[`../assets/performers/${performerId}/${pose}.png`]
+}
+
 /** 출연자 id와 포즈의 그림 주소. 그림이 없는 출연자나 포즈면 throw한다. */
 export function performerArtUrl(performerId: string, pose: Pose): string {
-  const url = ART_URLS[`../assets/performers/${performerId}/${pose}.png`]
+  const url = findPerformerArtUrl(performerId, pose)
   if (url === undefined) {
     throw new Error(`출연자 그림이 없습니다: ${performerId}/${pose}`)
   }
   return url
+}
+
+/** 출연자들의 모든 포즈 그림이 있는지 검사한다. 빠진 것이 있으면 모두 적어 throw한다(렌더러 생성 때) */
+export function assertPerformerArt(performerIds: readonly string[]): void {
+  const missing = performerIds.flatMap((id) =>
+    ALL_POSES.filter((pose) => findPerformerArtUrl(id, pose) === undefined).map(
+      (pose) => `${id}/${pose}`,
+    ),
+  )
+  if (missing.length > 0) {
+    throw new Error(`출연자 그림이 없습니다: ${missing.join(', ')}`)
+  }
 }
 
 /** 모든 출연자 그림 주소. 렌더러가 시작할 때 한 번에 불러 둔다. */

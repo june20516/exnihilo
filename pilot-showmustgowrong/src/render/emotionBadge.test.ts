@@ -1,7 +1,7 @@
 import type { Stage } from '@/sim/emotion'
 import type { MoodView } from '@/sim/life'
 import { EMOTION_STYLE, badgeLook, blinkVisible, emotionStyle } from './emotionBadge'
-import { performerArtUrl } from './performerArt'
+import { assertPerformerArt, findPerformerArtUrl, performerArtUrl } from './performerArt'
 
 function mood(stage: Stage): MoodView {
   return {
@@ -62,5 +62,15 @@ describe('performerArtUrl', () => {
   it('있는 출연자와 포즈는 png 주소를 돌려준다', () => {
     expect(performerArtUrl('rex', 'fallen')).toMatch(/\.png/)
     expect(performerArtUrl('june', 'idle')).toMatch(/june\/idle\.png/)
+  })
+
+  it('그리기 루프용 조회는 그림이 없어도 throw하지 않고 undefined다', () => {
+    expect(findPerformerArtUrl('nobody', 'idle')).toBeUndefined()
+    expect(findPerformerArtUrl('mo', 'flying')).toMatch(/mo\/flying\.png/)
+  })
+
+  it('렌더러 생성 때 출연자 전원의 여섯 포즈를 검사하고 빠진 것을 모두 적어 throw한다', () => {
+    expect(() => assertPerformerArt(['rex', 'priya', 'okafor', 'mo', 'june'])).not.toThrow()
+    expect(() => assertPerformerArt(['rex', 'nobody'])).toThrow(/nobody\/idle.*nobody\/fallen/)
   })
 })

@@ -50,7 +50,7 @@ import {
   type Point,
 } from './geometry'
 import { pickHit, type HitShapes, type StudioHit } from './hitTest'
-import { allPerformerArtUrls } from './performerArt'
+import { allPerformerArtUrls, assertPerformerArt } from './performerArt'
 
 export type { StudioHit } from './hitTest'
 
@@ -242,6 +242,8 @@ export class StudioRenderer {
     performers: readonly PerformerDef[],
     signal?: AbortSignal,
   ): Promise<StudioRenderer> {
+    // 그림이 빠진 출연자가 있으면 그리기 도중이 아니라 여기서 바로 알린다.
+    assertPerformerArt(performers.map((performer) => performer.id))
     const width = host.clientWidth > 0 ? host.clientWidth : FALLBACK_WIDTH
     const height = host.clientHeight > 0 ? host.clientHeight : FALLBACK_HEIGHT
     const app = new Application()
@@ -253,7 +255,13 @@ export class StudioRenderer {
       autoDensity: true,
       resolution: window.devicePixelRatio || 1,
     })
-    const textures: ArtTextures = await Assets.load<Texture>(allPerformerArtUrls())
+    let textures: ArtTextures
+    try {
+      textures = await Assets.load<Texture>(allPerformerArtUrls())
+    } catch (error: unknown) {
+      app.destroy({ removeView: true }, { children: true })
+      throw error
+    }
     if (signal?.aborted) {
       app.destroy({ removeView: true }, { children: true })
       throw new DOMException('StudioRenderer 생성이 취소되었습니다.', 'AbortError')

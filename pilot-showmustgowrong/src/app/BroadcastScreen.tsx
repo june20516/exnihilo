@@ -74,7 +74,9 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const loop = useBroadcastLoop(setup)
   const { view, slowmo, interventionOpen, adPanelOpen, adBreak, send } = loop
   const { openIntervention, closeIntervention, cancelAd } = loop
-  const { show } = setup
+  // 렌더러 effect는 출연자 배열에만 기대고 setup 객체 전체에는 기대지 않는다. 배열은 라인업 상수를 그대로
+  // 가리켜 방송 중에 바뀌지 않으므로 렌더러와 캔버스가 다시 만들어지지 않는다.
+  const { show, performers, bench } = setup
   const rowRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLElement>(null)
@@ -103,7 +105,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     const observer = new ResizeObserver(() => {
       renderer?.resize(host.clientWidth, host.clientHeight)
     })
-    StudioRenderer.create(host, show, [...setup.performers, ...setup.bench], controller.signal).then(
+    StudioRenderer.create(host, show, [...performers, ...bench], controller.signal).then(
       (created) => {
         renderer = created
         rendererRef.current = created
@@ -120,7 +122,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       renderer?.destroy()
       rendererRef.current = null
     }
-  }, [show, setup, studioVisible])
+  }, [show, performers, bench, studioVisible])
 
   /** 판단 카드 오른쪽 위에서 스튜디오의 대상까지 선을 긋는다. 대상이 없으면 숨긴다. */
   const updateLink = useCallback((target: InterventionTarget | null): void => {

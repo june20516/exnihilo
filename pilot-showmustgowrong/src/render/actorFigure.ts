@@ -7,7 +7,7 @@ import { COLORS } from './colors'
 import { EmotionBadge } from './emotionBadge'
 import { depthKey, screenTilt, type Point } from './geometry'
 import type { BillboardHitShape } from './hitTest'
-import { performerArtUrl } from './performerArt'
+import { findPerformerArtUrl } from './performerArt'
 
 /** 불러 둔 출연자 그림. 키는 performerArtUrl의 주소다 */
 export type ArtTextures = Readonly<Partial<Record<string, Texture>>>
@@ -128,6 +128,73 @@ export function drawCloseupRing(
   )
 }
 
+/** 그림의 화면 자리. 좌표는 캔버스 논리 px다 */
+export interface FigureLayout {
+  /** 돌아간 그림의 화면 중심 */
+  center: Point
+  /** center에서 그림 거는 점(Sprite.position)까지 */
+  spriteOffset: Point
+  /** 돌아간 그림이 center에서 위·아래로 차지하는 반 폭. 이름표와 배지가 그림에 붙는다 */
+  extentY: number
+}
+
+/**
+ * 그림의 화면 자리. size는 화면에 보이는 그림 크기(px)다. 몸 중심에 걸면 center가 몸 중심이고,
+ * 발끝·바닥에 걸면 거는 점에서 회전 방향으로 반 키 올라간 곳이 center다.
+ */
+export function figureLayout(
+  body: Pick<ActorView, 'x' | 'y' | 'z' | 'up'>,
+  orientation: ArtOrientation,
+  size: { width: number; height: number },
+  project: (point: Vec3) => Point,
+): FigureLayout {
+  const { rotation } = orientation
+  const extentY =
+    (Math.abs(Math.cos(rotation)) * size.height + Math.abs(Math.sin(rotation)) * size.width) / 2
+  if (orientation.anchor === 'center') {
+    return { center: project(body), spriteOffset: { x: 0, y: 0 }, extentY }
+  }
+  const hang = project(
+    orientation.anchor === 'feet'
+      ? {
+          x: body.x - body.up.x * FOOT_REACH_METERS,
+          y: body.y - body.up.y * FOOT_REACH_METERS,
+          z: body.z - body.up.z * FOOT_REACH_METERS,
+        }
+      : { x: body.x, y: 0, z: body.z },
+  )
+  const center = {
+    x: hang.x + (Math.sin(rotation) * size.height) / 2,
+    y: hang.y - (Math.cos(rotation) * size.height) / 2,
+  }
+  return { center, spriteOffset: { x: hang.x - center.x, y: hang.y - center.y }, extentY }
+}
+
+/** 머리 위 표시의 자리와 이모트 */
+export interface OverheadLayout {
+  badgeVisible: boolean
+  /** 그림 위 끝에서 머리 위 표시 원점(배지 가운데)까지 올리는 거리(px) */
+  lift: number
+  /** 배지 가운데 기준 이모트 자리. 버릇 이모트가 없으면 null */
+  emote: { text: string; x: number; y: number } | null
+}
+
+/**
+ * 머리 위 배지와 이모트의 자리. 마음이 없어(mood null) 배지가 숨으면 배지 크기를 0으로 보아 이모트가
+ * 머리 바로 위에 붙는다. badge는 지금 그린 배지의 반지름과 아래 끝 거리다.
+ */
+export function overheadLayout(
+  actor: Pick<ActorView, 'mood' | 'habit'>,
+  badge: { radius: number; bottomExtent: number },
+): OverheadLayout {
+  const badgeVisible = actor.mood !== null
+  const radius = badgeVisible ? badge.radius : 0
+  const lift = BADGE_GAP + (badgeVisible ? badge.bottomExtent : 0)
+  if (actor.habit === null) return { badgeVisible, lift, emote: null }
+  const offset = Math.max(EMOTE_MIN_OFFSET_PX, radius * EMOTE_OFFSET_RATIO)
+  return { badgeVisible, lift, emote: { text: actor.habit.emote, x: offset, y: -offset } }
+}
+
 /** 출연자 한 명의 그림을 놓을 때 렌더러가 넘기는 것 */
 export interface FigureContext {
   project(point: Vec3): Point
@@ -177,41 +244,24 @@ export class ActorFigure {
     this.overhead.visible = visible && !actor.walkedOut
     if (!visible) return null
 
-    const texture = context.textures[performerArtUrl(actor.id, actor.pose)]
+    // 그림이 있는지는 렌더러 생성 때 검사한다(assertPerformerArt). 여기서는 throw하지 않고 지난 그림을 둔다.
+    const url = findPerformerArtUrl(actor.id, actor.pose)
+    const texture = url === undefined ? undefined : context.textures[url]
     if (texture !== undefined && this.sprite.texture !== texture) this.sprite.texture = texture
     const orientation = artOrientation(actor.pose, screenTilt(actor.up))
     const pixelScale = artDisplayScale(context.scale)
     this.sprite.scale.set(orientation.mirrored ? -pixelScale : pixelScale, pixelScale)
     this.sprite.rotation = orientation.rotation
+    this.sprite.anchor.set(0.5, orientation.anchor === 'center' ? 0.5 : 1)
     const width = this.sprite.texture.width * pixelScale
     const height = this.sprite.texture.height * pixelScale
-
-    // 그림의 화면 중심. 몸 중심에 걸면 그대로, 발끝·바닥에 걸면 거는 점에서 회전 방향으로 반 키 위다.
-    const rotation = orientation.rotation
-    let center: Point
-    if (orientation.anchor === 'center') {
-      this.sprite.anchor.set(0.5, 0.5)
-      center = context.project(actor)
-      this.sprite.position.set(0, 0)
-    } else {
-      this.sprite.anchor.set(0.5, 1)
-      const hang = context.project(
-        orientation.anchor === 'feet'
-          ? {
-              x: actor.x - actor.up.x * FOOT_REACH_METERS,
-              y: actor.y - actor.up.y * FOOT_REACH_METERS,
-              z: actor.z - actor.up.z * FOOT_REACH_METERS,
-            }
-          : { x: actor.x, y: 0, z: actor.z },
-      )
-      center = {
-        x: hang.x + (Math.sin(rotation) * height) / 2,
-        y: hang.y - (Math.cos(rotation) * height) / 2,
-      }
-      this.sprite.position.set(hang.x - center.x, hang.y - center.y)
-    }
-    // 돌아간 그림이 화면에서 위·아래로 차지하는 반 폭. 이름표와 배지가 그림에 붙는다.
-    const extentY = (Math.abs(Math.cos(rotation)) * height + Math.abs(Math.sin(rotation)) * width) / 2
+    const { center, spriteOffset, extentY } = figureLayout(
+      actor,
+      orientation,
+      { width, height },
+      context.project,
+    )
+    this.sprite.position.set(spriteOffset.x, spriteOffset.y)
 
     const depth = depthKey(actor)
     this.body.position.set(center.x, center.y)
@@ -222,14 +272,21 @@ export class ActorFigure {
     this.nameTag.position.set(0, extentY + NAME_GAP)
 
     this.overhead.alpha = dim
-    this.drawOverhead(actor)
-    this.overhead.position.set(center.x, center.y - extentY - BADGE_GAP - this.badge.bottomExtent)
+    if (actor.mood !== null) this.badge.update(actor.mood)
+    const overhead = overheadLayout(actor, this.badge)
+    this.badge.root.visible = overhead.badgeVisible
+    this.emote.visible = overhead.emote !== null
+    if (overhead.emote !== null) {
+      if (this.emote.text !== overhead.emote.text) this.emote.text = overhead.emote.text
+      this.emote.position.set(overhead.emote.x, overhead.emote.y)
+    }
+    this.overhead.position.set(center.x, center.y - extentY - overhead.lift)
 
     if (actor.walkedOut) return null
     return {
       id: actor.id,
       center,
-      tilt: rotation,
+      tilt: orientation.rotation,
       halfWidth: width / 2 + HIT_PADDING_PX,
       halfHeight: height / 2 + HIT_PADDING_PX,
       depth,
@@ -262,19 +319,5 @@ export class ActorFigure {
         .fill(COLORS.cameraOnAirStroke)
     }
     this.nameText.position.set(left + NAME_PADDING_X + dotSpace, height / 2)
-  }
-
-  /** 대표 감정 배지(마음이 없으면 숨김)와, 버릇을 한 지 얼마 안 됐으면 배지 오른쪽 위의 이모트 */
-  private drawOverhead(actor: ActorView): void {
-    const mood = actor.mood
-    this.badge.root.visible = mood !== null
-    if (mood !== null) this.badge.update(mood)
-
-    const habit = actor.habit
-    this.emote.visible = habit !== null
-    if (habit === null) return
-    if (this.emote.text !== habit.emote) this.emote.text = habit.emote
-    const offset = Math.max(EMOTE_MIN_OFFSET_PX, this.badge.radius * EMOTE_OFFSET_RATIO)
-    this.emote.position.set(offset, -offset)
   }
 }
