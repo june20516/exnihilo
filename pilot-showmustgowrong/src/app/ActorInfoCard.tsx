@@ -1,10 +1,10 @@
 import { TOLERANCE_COUNT } from '@/content/balance'
-import { COMMON_EMOTIONS, type PerformerDef } from '@/content/types'
+import type { PerformerDef } from '@/content/types'
 import { emotionStyle } from '@/render/emotionBadge'
 import { performerArtUrl } from '@/render/performerArt'
 import type { ActorView } from '@/sim/engineTypes'
 import type { EmotionView } from '@/sim/life'
-import { topReasons } from './emotionDisplay'
+import { isCommon, moodLabel, topReasons } from './emotionDisplay'
 
 /** 정보 카드 폭(px). 자리는 호출자가 placeCard로 정한다 */
 export const ACTOR_CARD_WIDTH = 300
@@ -16,12 +16,8 @@ interface ActorInfoCardProps {
   nameOf: (id: string) => string
 }
 
-function isCommon(emotion: EmotionView): boolean {
-  return (COMMON_EMOTIONS as readonly string[]).includes(emotion.id)
-}
-
 /** 감정 막대 하나: 값만큼 칠하고 1·2단계 문턱에 눈금을 긋는다. 2단계를 넘으면 빛난다 */
-function EmotionBar({ emotion, personal }: { emotion: EmotionView; personal: boolean }) {
+export function EmotionBar({ emotion, personal }: { emotion: EmotionView; personal: boolean }) {
   const { color } = emotionStyle(emotion.id)
   const glow = emotion.stage >= 2
   const fill = Math.max(0, Math.min(100, emotion.value))
@@ -69,12 +65,7 @@ export function ActorInfoCard({ actor, performer, nameOf }: ActorInfoCardProps) 
   const leading = actor.emotions.find((emotion) => emotion.id === actor.mood?.emotion)
   const reasons = leading === undefined ? [] : topReasons(leading, nameOf)
   const toleranceTotal = TOLERANCE_COUNT[performer.tolerance]
-  const moodText =
-    actor.mood === null
-      ? null
-      : actor.mood.stageName === null || actor.mood.stageName === actor.mood.name
-        ? actor.mood.name
-        : `${actor.mood.name} · ${actor.mood.stageName}`
+  const moodText = moodLabel(actor.mood)
 
   return (
     <section

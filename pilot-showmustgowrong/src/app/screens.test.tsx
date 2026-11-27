@@ -279,6 +279,39 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toContain('내성 1 소모 · 누적 피로 +1')
   })
 
+  it('판단 카드에 대상 탭(출연자 색), 지시 카드마다 번호·이름·예상·칩, 엇나갈 확률이 보인다', () => {
+    const html = render({
+      controls: { ...CONTROLS, slowmo: 'intervention', interventionOpen: true },
+      selectedTarget: { kind: 'performer', id: 'okafor' },
+    })
+    expect(html).toMatch(/data-testid="target-rex"[^>]*style="[^"]*color:#EF4444/)
+    expect(html).toMatch(/data-testid="target-okafor"[^>]*style="[^"]*color:#14B8A6/)
+    expect(html).toContain('1.')
+    expect(html).toContain('진정하세요')
+    expect(html).toContain('짜증 ▼ 크게')
+    expect(html).toContain('data-testid="emotion-bar-irritation"')
+    expect(html).toContain('data-testid="misfire-chance"')
+    expect(html).toContain('data-testid="directive-chip"')
+  })
+
+  it('카메라 감독 카드는 감정 막대 없이 지시만 보인다', () => {
+    const html = render({
+      controls: { ...CONTROLS, slowmo: 'intervention', interventionOpen: true },
+      selectedTarget: { kind: 'staff', id: 'cameraOperator' },
+    })
+    expect(html).toContain('data-testid="target-card"')
+    expect(html).not.toContain('data-testid="emotion-bar-')
+    expect(html).not.toContain('data-testid="directive-chip"')
+  })
+
+  it('개입 중 광고 버튼은 disabled, 개입 버튼은 "개입 닫기"와 Esc', () => {
+    const html = render({
+      controls: { ...CONTROLS, slowmo: 'intervention', interventionOpen: true },
+    })
+    expect(html).toMatch(/<button[^>]*data-testid="ad-button"[^>]*disabled/)
+    expect(html).toMatch(/data-testid="intervene-button"[\s\S]*?개입 닫기[\s\S]*?Esc/)
+  })
+
   it('ON AIR 모니터는 버튼이 아니고, 카메라 칸 3개는 송출 중인 칸만 표시가 다르다', () => {
     const html = render()
     expect(html).toMatch(/<section[^>]*data-testid="program-monitor"[^>]*data-on-air="true"/)

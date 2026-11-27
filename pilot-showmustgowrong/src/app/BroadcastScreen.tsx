@@ -182,6 +182,12 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     publishActorAnchors(view)
   }, [view, slowmo, linkedTarget, updateLink, publishActorAnchors])
 
+  // 개입 중 고른 출연자만 스튜디오에서 밝게 남기고(스태프나 아무도 안 골랐으면 모두 또렷하게), 끝나면 되돌린다
+  const focusedActorId = interventionOpen && selectedTarget?.kind === 'performer' ? selectedTarget.id : null
+  useEffect(() => {
+    rendererRef.current?.setFocus(focusedActorId)
+  }, [focusedActorId])
+
   const beginIntervention = useCallback(() => {
     setSelectedTarget(null)
     hoverKeyRef.current = null

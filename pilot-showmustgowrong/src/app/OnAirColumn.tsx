@@ -1,4 +1,4 @@
-import type { PointerEvent, ReactNode } from 'react'
+import type { CSSProperties, PointerEvent, ReactNode } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastView } from '@/sim/engine'
 import type { CameraAimMode } from '@/sim/engineTypes'
@@ -18,6 +18,8 @@ interface OnAirColumnProps {
   previews: 'row' | 'column'
   /** 송출 화면이 칸 높이를 다 채우는가(송출 화면 크게). 아니면 16:9 */
   monitorFills: boolean
+  /** 개입 중 모니터·미리보기·안내를 흐리게 하는 필터. 개입·광고 버튼 칸은 흐리지 않는다 */
+  dimStyle?: CSSProperties
 }
 
 /** 조준 상태가 대상 이름 뒤에 붙이는 설명. 대상을 따라가는 중이면 붙이지 않는다. */
@@ -59,6 +61,7 @@ export function OnAirColumn({
   actions,
   previews,
   monitorFills,
+  dimStyle,
 }: OnAirColumnProps) {
   /** 추적 카메라면 화면을 눌러 끌기를 시작하는 핸들러. 아니면 undefined */
   const aimHandler = (camera: CameraDef) =>
@@ -75,7 +78,7 @@ export function OnAirColumn({
         data-on-air="true"
         aria-label="송출 중인 카메라"
         onPointerDown={aimHandler(onAir)}
-        style={{ gridArea: 'monitor' }}
+        style={{ gridArea: 'monitor', ...dimStyle }}
         className="flex min-h-0 min-w-0 flex-col gap-1.5 rounded-xl border-2 border-red-500 bg-slate-900 p-2 text-left shadow-[0_0_14px_rgba(239,68,68,0.35)]"
       >
         <span className="flex items-center justify-between gap-2">
@@ -107,7 +110,7 @@ export function OnAirColumn({
       </section>
       <div
         data-testid="switcher-slots"
-        style={{ gridArea: 'slots' }}
+        style={{ gridArea: 'slots', ...dimStyle }}
         className={`flex min-w-0 gap-1.5 ${stacked ? 'flex-col' : ''}`}
       >
         {show.cameras.map((camera, index) => {
@@ -174,7 +177,7 @@ export function OnAirColumn({
         })}
       </div>
       <p
-        style={{ gridArea: 'help' }}
+        style={{ gridArea: 'help', ...dimStyle }}
         className="min-h-0 self-end overflow-hidden rounded-lg bg-slate-900/60 px-2 py-1.5 text-[11px] leading-4 text-slate-400"
       >
         아래 카메라 칸을 누르거나 1·2·3: 카메라 전환(칸 자리는 고정)

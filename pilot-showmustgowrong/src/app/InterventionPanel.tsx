@@ -17,8 +17,8 @@ interface InterventionPanelProps {
 }
 
 /**
- * 개입 중 왼쪽 열(사고 로그 자리). 위에 대상 칩, 대상을 고르면 그 아래에 판단 카드.
- * 남은 선택 시간은 스튜디오 위 SLOW 배지에 크게 보인다.
+ * 개입 중 왼쪽 칸(추세 그래프와 로그 자리)을 덮는 판단 카드. 위에 대상 탭(출연자 색 글자), 대상을 고르면
+ * 그 아래에 판단 카드. 남은 선택 시간은 스튜디오 위 SLOW 배지에 크게 보인다.
  */
 export function InterventionPanel({
   view,
@@ -57,10 +57,14 @@ export function InterventionPanel({
                 data-testid={`target-${option.target.id}`}
                 aria-pressed={isSelected}
                 onClick={() => onSelect(option.target)}
-                className={`rounded-md border-2 px-2 py-0.5 text-xs font-bold ${
+                style={{
+                  color: option.color ?? '#E2E8F0',
+                  borderColor: isSelected ? (option.color ?? '#FCD34D') : undefined,
+                }}
+                className={`rounded-md border-2 px-2 py-0.5 text-xs font-black ${
                   isSelected
-                    ? 'border-amber-300 bg-amber-400 text-slate-950'
-                    : 'border-slate-600 bg-slate-800 text-slate-200 hover:border-amber-300'
+                    ? 'bg-slate-950'
+                    : 'border-slate-600 bg-slate-800 hover:border-amber-300'
                 }`}
               >
                 {option.shortName}

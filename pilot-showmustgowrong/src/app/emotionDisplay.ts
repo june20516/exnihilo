@@ -1,7 +1,7 @@
 import { tuned } from '@/content/tuning'
-import type { MoodShift } from '@/content/types'
+import { COMMON_EMOTIONS, type MoodShift } from '@/content/types'
 import type { ActorView } from '@/sim/engineTypes'
-import type { EmotionView } from '@/sim/life'
+import type { EmotionView, MoodView } from '@/sim/life'
 import { reasonNoun } from '@/sim/narration'
 
 /**
@@ -66,4 +66,15 @@ export function topReasons(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, count)
     .map((reason) => ({ text: reasonNoun(reason, nameOf), amount: Math.round(reason.amount) }))
+}
+
+/** 대표 감정 문구: "짜증 · 짜증 남". 단계 이름이 없거나 감정 이름과 같으면 감정 이름만. 감정이 없으면 null */
+export function moodLabel(mood: MoodView | null): string | null {
+  if (mood === null) return null
+  return mood.stageName === null || mood.stageName === mood.name ? mood.name : `${mood.name} · ${mood.stageName}`
+}
+
+/** 공용 감정(막대 위쪽 묶음)인지. 아니면 개인 감정 */
+export function isCommon(emotion: EmotionView): boolean {
+  return (COMMON_EMOTIONS as readonly string[]).includes(emotion.id)
 }

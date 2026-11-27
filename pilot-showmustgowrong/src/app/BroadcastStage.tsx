@@ -53,6 +53,9 @@ export interface BroadcastStageProps {
   studio?: StudioBindings
 }
 
+/** 개입 중 판단 카드 밖(위 띠와 오른쪽 열)을 흐리게 하는 필터 */
+const DIM_STYLE = { filter: 'brightness(0.6) saturate(0.6)' } as const
+
 /** 송출 쪽 grid 행: 모니터(위), 미리보기, 조작 안내(남는 높이), 개입·광고 버튼(아래) */
 const STAGE_GRID_ROWS = 'auto auto minmax(0, 1fr) auto'
 
@@ -131,13 +134,15 @@ export function BroadcastStage({
       className="flex h-screen w-screen flex-col overflow-hidden bg-[#0b1120] text-white"
     >
       {view !== null ? (
-        <TopBand
-          view={view}
-          show={show}
-          alertGauge={alertGauge}
-          layout={layout}
-          onLayoutChange={changeLayout}
-        />
+        <div className="shrink-0" style={interventionOpen ? DIM_STYLE : undefined}>
+          <TopBand
+            view={view}
+            show={show}
+            alertGauge={alertGauge}
+            layout={layout}
+            onLayoutChange={changeLayout}
+          />
+        </div>
       ) : (
         <div className="shrink-0" style={{ height: TOP_BAND_HEIGHT }} />
       )}
@@ -234,6 +239,7 @@ export function BroadcastStage({
             onAimDragStart={studio?.onAimDragStart}
             previews={grid.previews}
             monitorFills={grid.mainArea === 'monitor'}
+            dimStyle={interventionOpen ? DIM_STYLE : undefined}
             actions={
               <BroadcastButtons
                 view={view}
@@ -351,13 +357,13 @@ function BroadcastButtons({ view, controls, onBeginIntervention }: BroadcastButt
         className="flex h-16 flex-1 flex-col items-center justify-center rounded-xl border-2 border-red-300 bg-red-600 font-black shadow-[0_4px_0_#7f1d1d] hover:bg-red-500 active:translate-y-1 active:shadow-none disabled:opacity-40"
       >
         <span className="text-lg">{interventionOpen ? '개입 닫기' : '개입'}</span>
-        <kbd className="text-[11px] font-normal opacity-80">Space</kbd>
+        <kbd className="text-[11px] font-normal opacity-80">{interventionOpen ? 'Esc' : 'Space'}</kbd>
       </button>
       <button
         type="button"
         data-testid="ad-button"
         data-ads-left={view.adsLeft}
-        disabled={view.adsLeft === 0 || adBreak || adPanelOpen}
+        disabled={view.adsLeft === 0 || adBreak || adPanelOpen || interventionOpen}
         onClick={controls.startAd}
         className="flex h-16 flex-1 flex-col items-center justify-center rounded-xl border-2 border-amber-200 bg-amber-400 font-black text-slate-950 shadow-[0_4px_0_#92400e] hover:bg-amber-300 active:translate-y-1 active:shadow-none disabled:opacity-40"
       >
@@ -379,7 +385,7 @@ function InterventionBadge({ secondsLeft, purpose }: InterventionBadgeProps) {
   return (
     <div
       data-testid="slowmo-badge"
-      className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 rounded-full border-[3px] border-amber-300 bg-slate-950/85 py-1 pl-1.5 pr-5"
+      className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border-[3px] border-amber-300 bg-slate-950/85 py-1 pl-1.5 pr-5"
     >
       <span className="rounded-full bg-red-600 px-3 py-1 text-lg font-black">
         SLOW ×1/{Math.round(1 / INTERVENTION_SPEED)}
