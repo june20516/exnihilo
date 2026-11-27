@@ -1,3 +1,4 @@
+import { fixtureColor } from '@/content/fixtureColor'
 import { describe, expect, it } from 'vitest'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import type { ActionDef, BurstAction, EmotionDef, PerformerDef } from '@/content/types'
@@ -18,6 +19,7 @@ const MO_DEF: PerformerDef = {
   id: 'mo',
   name: '모',
   shortName: '모',
+  color: fixtureColor('mo'),
   role: '역할',
   tendency: '성향',
   presence: 1,

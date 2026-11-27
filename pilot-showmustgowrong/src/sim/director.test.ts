@@ -1,3 +1,4 @@
+import { fixtureColor } from '@/content/fixtureColor'
 import { describe, expect, it } from 'vitest'
 import {
   FATIGUE_MISFIRE_PER_POINT,
@@ -32,6 +33,7 @@ function performer(
     id,
     name: id,
     shortName: id,
+    color: fixtureColor(id),
     role: '역할',
     tendency: '성향',
     presence: 1,

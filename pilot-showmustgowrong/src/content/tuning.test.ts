@@ -61,6 +61,10 @@ const OTHER_KEYS = [
   'TAKEOVER_BODY_SECONDS',
   'AUTO_SHOT_BODY_SECONDS',
   'AUTO_MIN_HOLD_BODY_SECONDS',
+  'EMOTE_BODY_SECONDS',
+  'TREND_WINDOW_BODY_SECONDS',
+  'SHIFT_SIZE_SOME',
+  'SHIFT_SIZE_BIG',
 ] as const
 
 type SituationKind = Situation['kind']
@@ -181,6 +185,8 @@ describe('게임 조정 목록', () => {
 
   it('0이면 고장 나는 항목은 하한이 간격 한 칸이고, 나머지는 0(음수 기본값이면 기본값×4)이다', () => {
     for (const def of TUNABLES) {
+      // 화면 그룹은 하한이 0이 아닌 범위를 직접 적는다(화면 그룹 테스트가 값을 확인한다)
+      if (def.group === '화면') continue
       if (POSITIVE_KEYS.includes(def.key)) expect(def.min, def.key).toBe(def.step)
       else expect(def.min, def.key).toBe(Math.min(0, def.defaultValue * 4))
     }
@@ -222,6 +228,32 @@ describe('게임 조정 목록', () => {
     ['최소 유지 > 컷 길이', { AUTO_MIN_HOLD_BODY_SECONDS: shotSeconds + 0.5 }, false],
     ['컷 길이를 최소 유지 아래로', { AUTO_SHOT_BODY_SECONDS: 1 }, false],
   ])('자동 PD 관계: %s', (_name, changes: Record<string, number>, valid) => {
+    const defaults = Object.fromEntries(TUNABLES.map((def) => [def.key, def.defaultValue]))
+    expect(violatedConstraints({ ...defaults, ...changes }, TUNING_CONSTRAINTS).length === 0).toBe(valid)
+  })
+
+  it('화면 그룹 4개 항목 기본값', () => {
+    const keys = ['EMOTE_BODY_SECONDS', 'TREND_WINDOW_BODY_SECONDS', 'SHIFT_SIZE_SOME', 'SHIFT_SIZE_BIG']
+    const screenKeys = TUNABLES.filter((def) => def.group === '화면').map((def) => def.key)
+    expect(screenKeys).toEqual(keys)
+    expect(keys.map((key) => tuned(key))).toEqual([2, 60, 20, 30])
+    const ranges = Object.fromEntries(
+      TUNABLES.filter((def) => def.group === '화면').map((def) => [def.key, [def.min, def.max, def.step]]),
+    )
+    expect(ranges).toEqual({
+      EMOTE_BODY_SECONDS: [0.5, 5, 0.5],
+      TREND_WINDOW_BODY_SECONDS: [20, 180, 10],
+      SHIFT_SIZE_SOME: [5, 60, 5],
+      SHIFT_SIZE_BIG: [5, 80, 5],
+    })
+  })
+
+  it.each([
+    ['기본값', {}, true],
+    ['일부 = 크게', { SHIFT_SIZE_SOME: 30 }, false],
+    ['일부 > 크게', { SHIFT_SIZE_SOME: 35 }, false],
+    ['크게를 일부 이하로', { SHIFT_SIZE_BIG: 20 }, false],
+  ])('SHIFT_SIZE_SOME < SHIFT_SIZE_BIG 관계: %s', (_name, changes: Record<string, number>, valid) => {
     const defaults = Object.fromEntries(TUNABLES.map((def) => [def.key, def.defaultValue]))
     expect(violatedConstraints({ ...defaults, ...changes }, TUNING_CONSTRAINTS).length === 0).toBe(valid)
   })
@@ -304,8 +336,9 @@ describe('조정값 극단', () => {
     vi.resetModules()
     globalThis.__EXNIHILO_TUNING__ = Object.fromEntries(TUNABLES.map((def) => [def.key, def.min]))
     const { TUNING } = await import('@/content/tuning')
-    // 문턱은 모두 0이면 관계를 어겨 기본값으로 돌아간다. 그 밖에는 버려진 값이 없다
-    expect(TUNING.rejected.every((item) => item.reason === 'conflict' && item.key.startsWith('threshold.'))).toBe(true)
+    // 문턱은 모두 0이면, 감정 변화 경계는 둘 다 5면 관계를 어겨 기본값으로 돌아간다. 그 밖에는 버려진 값이 없다
+    const conflictKey = (key: string) => key.startsWith('threshold.') || key.startsWith('SHIFT_SIZE_')
+    expect(TUNING.rejected.every((item) => item.reason === 'conflict' && conflictKey(item.key))).toBe(true)
     const { Broadcast } = await import('@/sim/engine')
     const { LINEUP } = await import('@/content/lineup')
     const { TALK_SHOW } = await import('@/content/talkShow')

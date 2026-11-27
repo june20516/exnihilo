@@ -61,6 +61,40 @@ describe('토크쇼 콘텐츠', () => {
     expect(validateShow(TALK_SHOW, allPerformers, LINEUP.staff, LINEUP.equipment)).toEqual([])
   })
 
+  it('기본 라인업과 벤치 출연자 색은 spec 값', () => {
+    const colorsById = Object.fromEntries(allPerformers.map((performer) => [performer.id, performer.color]))
+    expect(colorsById).toEqual({
+      rex: '#EF4444',
+      priya: '#A855F7',
+      okafor: '#14B8A6',
+      mo: '#F97316',
+      june: '#22C55E',
+    })
+  })
+
+  it('모든 버릇에 이모트가 있고 검사를 통과한다', () => {
+    for (const performer of allPerformers) {
+      for (const habit of performer.mind?.habits ?? []) {
+        expect(habit.emote, `${performer.id}.${habit.id}`).not.toBe('')
+      }
+    }
+    expect(validateShow(TALK_SHOW, allPerformers, LINEUP.staff, LINEUP.equipment).filter((e) => e.includes('이모트'))).toEqual([])
+  })
+
+  it('지시 expect에 ▲ 또는 ▼가 있으면 오류(감정 변화는 moodShifts 칩으로만 보인다)', () => {
+    const directives: { id: string; expect: string }[] = [
+      ...allPerformers.flatMap((performer) => performer.directives),
+      ...LINEUP.staff.flatMap((member) => member.directives),
+    ]
+    expect(directives.length).toBeGreaterThan(0)
+    for (const directive of directives) expect(directive.expect, directive.id).not.toMatch(/[▲▼]/)
+  })
+
+  it('오카포 진정하세요의 expect는 "자리에서 숨을 고른다"', () => {
+    const okafor = allPerformers.find((performer) => performer.id === 'okafor')
+    expect(okafor?.directives.find((directive) => directive.id === 'calmDown')?.expect).toBe('자리에서 숨을 고른다')
+  })
+
   it('모든 출연자와 스태프가 지시를 2개 이상 가진다', () => {
     for (const performer of allPerformers) {
       expect(performer.directives.length, performer.id).toBeGreaterThanOrEqual(2)
@@ -328,7 +362,7 @@ describe('라인업 감정·버릇·반사 반응 옮기기', () => {
     const calm = performerById('okafor').directives.find((directive) => directive.id === 'calmDown')
     expect(calm).toMatchObject({
       label: '진정하세요',
-      expect: '짜증 ▼ 크게',
+      expect: '자리에서 숨을 고른다',
       moodShifts: [{ emotion: 'irritation', amount: -40 }],
     })
     expect(calm?.action.emits).toEqual([])

@@ -90,6 +90,8 @@ export interface PerformerDef {
   id: string
   name: string
   shortName: string
+  /** 화면에서 이 출연자를 가리키는 색(#RRGGBB). 출연자끼리 겹치지 않는다 */
+  color: string
   /** 연쇄 역할 한 단어(예: "MC") */
   role: string
   /** 무엇을 받으면 무엇을 일으키는지 한 줄 */
@@ -279,6 +281,8 @@ export interface HabitDef {
   recall: string
   /** '코 파기' — 기척의 label, 쌓임·원인 받기 줄의 명사 */
   noun: string
+  /** 버릇이 일어날 때 출연자 머리 위에 잠시 뜨는 이모지(그래핌 1개) */
+  emote: string
   pose: Pose
   move?: MoveDef
   stir?: { kind: StirKind; target: HabitTarget }

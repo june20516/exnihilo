@@ -1,3 +1,4 @@
+import { fixtureColor } from '@/content/fixtureColor'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   AD_GAUGE_RELIEF,
@@ -115,6 +116,7 @@ const CHARGE = directive('charge', {
 const performer = (overrides: Partial<PerformerDef> & { id: string }): PerformerDef => ({
   name: overrides.id,
   shortName: overrides.id,
+  color: fixtureColor(overrides.id),
   role: '역할',
   tendency: '성향',
   presence: 1,

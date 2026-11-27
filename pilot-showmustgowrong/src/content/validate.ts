@@ -192,10 +192,20 @@ function checkSensitivities(mind: MindDef, owner: string): string[] {
   return errors
 }
 
+const GRAPHEME_SEGMENTER = new Intl.Segmenter('ko', { granularity: 'grapheme' })
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/
+
+function countGraphemes(text: string): number {
+  return [...GRAPHEME_SEGMENTER.segment(text)].length
+}
+
 function checkHabit(habit: HabitDef, knownTags: ReadonlySet<string>, owner: string): string[] {
   const errors: string[] = []
   for (const field of ['line', 'recall', 'noun'] as const) {
     if (isBlank(habit[field])) errors.push(`빈 버릇 문구 오류: ${field} ${habit.id} (${owner})`)
+  }
+  if (countGraphemes(habit.emote) !== 1) {
+    errors.push(`버릇 이모트 오류: "${habit.emote}"는 그래핌 1개여야 함 (${habit.id}, ${owner})`)
   }
   if (!(habit.weight > 0)) errors.push(`버릇 가중치 오류: ${habit.weight} (${habit.id}, ${owner})`)
   if (habit.respondsTo) {
@@ -346,6 +356,13 @@ export function validateShow(
       }
     }
     for (const target of reactionTargets(reactions)) checkTarget(target, owner)
+  }
+
+  for (const performer of performers) {
+    if (!HEX_COLOR.test(performer.color)) errors.push(`출연자 색 오류: ${performer.color} (${performer.id})`)
+  }
+  for (const color of findDuplicates(performers.map((p) => p.color.toUpperCase()))) {
+    errors.push(`출연자 색 중복 오류: ${color}`)
   }
 
   for (const performer of performers) {

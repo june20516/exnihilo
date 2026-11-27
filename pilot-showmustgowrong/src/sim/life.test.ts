@@ -1,3 +1,4 @@
+import { fixtureColor } from '@/content/fixtureColor'
 import { describe, expect, it } from 'vitest'
 import {
   BIG_BURST_GRACE_BODY_SECONDS,
@@ -86,6 +87,7 @@ function performer(id: string, mind?: MindDef): PerformerDef {
     id,
     name: id,
     shortName: id,
+    color: fixtureColor(id),
     role: '테스트',
     tendency: '',
     presence: 1,
@@ -105,6 +107,7 @@ function habit(id: string, overrides: Partial<HabitDef> = {}): HabitDef {
     line: `${id}를 한다`,
     recall: `${id}를 하던`,
     noun: id,
+    emote: '🙂',
     pose: 'idle',
     weight: 1,
     ...overrides,
