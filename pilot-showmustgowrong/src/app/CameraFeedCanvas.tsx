@@ -1,30 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
+import { CAPSULE, LIGHT_HALF_EXTENTS, SET_WALL_HALF_EXTENTS } from '@/content/balance'
+import type { BackdropKind, CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import { REFERENCE_ART_HEIGHT_PX } from '@/render/actorFigure'
+import { crowdDots, feedBackdropLayout, type FeedBackdropLayout } from '@/render/backdrop'
 import { COLORS } from '@/render/colors'
-import { cameraFeed, type FeedItem, type FeedView } from '@/render/cameraFeed'
+import { cameraFeed, type EquipmentKind, type FeedItem, type FeedView } from '@/render/cameraFeed'
 import { blinkVisible, badgeLook, emotionStyle } from '@/render/emotionBadge'
-import { feedArtImage, isArtReady } from '@/render/feedArt'
+import { feedArtImage, feedBackdropImage, isArtReady } from '@/render/feedArt'
 import { feedNameFontSize, layoutFeedLabels } from '@/render/feedLabels'
 
-/** 피드 픽셀 상수 */
-const HORIZON_RATIO = 0.35
-const FLOOR_LINE_RATIO = 0.75
-const BODY_HEIGHT_RATIO = 0.3
+/**
+ * 피드 픽셀 상수. 높이 비율은 배경 그림이 놓인 높이(cover) 대비다.
+ * 몸 높이 0.36: 와이드(size 약 0.75)에서 키가 그림 높이의 약 0.27이라, 무대 그림의 벽(바닥선 0.615에서
+ * 천장 띠 약 0.1까지, 0.5)의 반쯤 된다. 0.3이면 창 벽 앞 출연자가 장난감처럼 작아 보였다.
+ */
+const BODY_HEIGHT_RATIO = 0.36
+/** 배경 그림 위에 까는 어두운 덮개(검정 15%). 밝은 창 야경 앞에서도 출연자 외곽선과 이름표가 묻히지 않게 한다 */
+const BACKDROP_DIM = 'rgba(0, 0, 0, 0.15)'
 /** 그림이 없거나 아직 불러오는 중일 때 대신 그리는 사각형의 가로/세로 */
 const PLACEHOLDER_ASPECT = 0.4
 const HIGHLIGHT_WIDTH = 3
 const OUTLINE_WIDTH = 1.5
 const EQUIPMENT_SIZE_RATIO = 0.18
-const AUDIENCE_DOTS = 40
-const AUDIENCE_DOT_RADIUS_RATIO = 0.012
-const AUDIENCE_SPREAD_RATIO = 0.2
-/** 관객 점을 퍼뜨리는 황금각(라디안) */
-const GOLDEN_ANGLE = 2.399963
-/** 관객 점 무리의 중심이 지평선에서 내려오는 높이(캔버스 높이 비율) */
-const AUDIENCE_DROP_RATIO = 0.1
-/** 관객 점 무리의 세로 납작함(가로 퍼짐 대비) */
-const AUDIENCE_FLATTEN = 0.4
+/**
+ * 바닥에 놓였을 때의 몸·장비 중심 높이(m). heightOffset은 중심 높이라, 이만큼을 빼야 서 있는
+ * 출연자와 바닥의 세트 벽이 발 기준선에 닿는다(스튜디오 그림자의 lift와 같은 기준).
+ */
+const STANDING_CENTER_METERS = CAPSULE.halfHeight + CAPSULE.radius
+const EQUIPMENT_REST_CENTER_METERS: Readonly<Record<EquipmentKind, number>> = {
+  hangingLight: LIGHT_HALF_EXTENTS.hy,
+  setWall: SET_WALL_HALF_EXTENTS.hy,
+}
 /** 이름표와 몸 사이 간격(px) */
 const LABEL_GAP_PX = 2
 const FONT_FAMILY = 'sans-serif'
@@ -70,6 +76,7 @@ interface PendingLabel {
 /** 그릴 때마다 바뀌는 입력 */
 interface DrawInput {
   items: FeedItem[]
+  backdrop: BackdropKind
   width: number
   height: number
   /** 실제 시간(performance.now). 깜박임에 쓴다 */
@@ -150,6 +157,7 @@ export function CameraFeedCanvas({
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
       drawFeed(context, performers, {
         items,
+        backdrop: camera.backdrop,
         width: size.width,
         height: size.height,
         realMs: performance.now(),
@@ -185,9 +193,40 @@ function drawFeed(
   input: DrawInput,
 ): void {
   const { items, width, height } = input
-  const horizonY = height * HORIZON_RATIO
-  const floorY = height * FLOOR_LINE_RATIO
+  const layout = feedBackdropLayout(input.backdrop, width, height)
   context.clearRect(0, 0, width, height)
+  drawBackdrop(context, layout, input)
+
+  const labels: PendingLabel[] = []
+  for (const item of items) {
+    const x = ((item.screenX + 1) / 2) * width
+    if (item.kind === 'audience') {
+      labels.push(drawAudience(context, item, x, layout, width))
+    } else if (item.kind === 'equipment') {
+      labels.push(drawEquipment(context, item, x, layout))
+    } else {
+      labels.push(drawActor(context, item, x, layout, performers, input.onArtLoad))
+    }
+  }
+  drawLabels(context, labels, width, height, input.realMs)
+}
+
+/** 배경 그림을 cover로 깔고 살짝 어둡게 덮는다. 불러오기 전이면 같은 수평선으로 단색 벽·바닥을 칠한다 */
+function drawBackdrop(
+  context: CanvasRenderingContext2D,
+  layout: FeedBackdropLayout,
+  input: DrawInput,
+): void {
+  const { width, height } = input
+  const image = feedBackdropImage(input.backdrop, input.onArtLoad)
+  if (image !== null && isArtReady(image)) {
+    const { x, y, width: drawWidth, height: drawHeight } = layout.image
+    context.drawImage(image, x, y, drawWidth, drawHeight)
+    context.fillStyle = BACKDROP_DIM
+    context.fillRect(0, 0, width, height)
+    return
+  }
+  const horizonY = layout.horizonY
   context.fillStyle = hex(COLORS.backWall)
   context.fillRect(0, 0, width, horizonY)
   context.fillStyle = hex(COLORS.floor)
@@ -198,19 +237,6 @@ function drawFeed(
   context.moveTo(0, horizonY)
   context.lineTo(width, horizonY)
   context.stroke()
-
-  const labels: PendingLabel[] = []
-  for (const item of items) {
-    const x = ((item.screenX + 1) / 2) * width
-    if (item.kind === 'audience') {
-      labels.push(drawAudience(context, item, x, horizonY, width, height))
-    } else if (item.kind === 'equipment') {
-      labels.push(drawEquipment(context, item, x, floorY, height))
-    } else {
-      labels.push(drawActor(context, item, x, floorY, height, performers, input.onArtLoad))
-    }
-  }
-  drawLabels(context, labels, width, height, input.realMs)
 }
 
 /** 출연자 그림을 앞모습으로 그린다. 누운 포즈(날아감·쓰러짐) 그림은 원래 가로 그림이라 그대로 놓는다. */
@@ -218,13 +244,13 @@ function drawActor(
   context: CanvasRenderingContext2D,
   item: FeedItem,
   x: number,
-  floorY: number,
-  height: number,
+  layout: FeedBackdropLayout,
   performers: ReadonlyMap<string, PerformerDef>,
   onArtLoad: () => void,
 ): PendingLabel {
-  const bodyHeight = height * BODY_HEIGHT_RATIO * item.size
-  const bottom = floorY - item.heightOffset * height * BODY_HEIGHT_RATIO
+  const unit = layout.image.height * BODY_HEIGHT_RATIO
+  const bodyHeight = unit * item.size
+  const bottom = layout.footY - liftAboveRest(item, STANDING_CENTER_METERS) * unit
   const image = feedArtImage(item.id, item.pose ?? 'idle', onArtLoad)
   const borderColor = performers.get(item.id)?.color ?? NEUTRAL_BORDER
   // 그림이 없거나 아직 불러오는 중이면 출연자 색 사각형으로 대신한다
@@ -255,6 +281,11 @@ function drawActor(
   }
 }
 
+/** 바닥에 놓인 상태(중심 높이 restCenter m)보다 더 뜬 높이(m) × size. 누운 몸처럼 낮으면 0 */
+function liftAboveRest(item: FeedItem, restCenter: number): number {
+  return Math.max(0, item.heightOffset - restCenter * item.size)
+}
+
 /** 대표 감정 단계에 맞는 이름표 아이콘. 0단계나 마음이 없으면 null */
 function stageIcon(item: FeedItem): StageIcon | null {
   if (item.mood === null) return null
@@ -273,11 +304,11 @@ function drawEquipment(
   context: CanvasRenderingContext2D,
   item: FeedItem,
   x: number,
-  floorY: number,
-  height: number,
+  layout: FeedBackdropLayout,
 ): PendingLabel {
-  const side = height * EQUIPMENT_SIZE_RATIO * item.size
-  const bottom = floorY - item.heightOffset * height * BODY_HEIGHT_RATIO
+  const side = layout.image.height * EQUIPMENT_SIZE_RATIO * item.size
+  const rest = item.equipmentKind === null ? 0 : EQUIPMENT_REST_CENTER_METERS[item.equipmentKind]
+  const bottom = layout.footY - liftAboveRest(item, rest) * layout.image.height * BODY_HEIGHT_RATIO
   context.fillStyle = hex(item.equipmentKind === 'hangingLight' ? COLORS.light : COLORS.setWall)
   context.fillRect(x - side / 2, bottom - side, side, side)
   context.lineWidth = OUTLINE_WIDTH
@@ -296,30 +327,20 @@ function drawAudience(
   context: CanvasRenderingContext2D,
   item: FeedItem,
   x: number,
-  horizonY: number,
+  layout: FeedBackdropLayout,
   width: number,
-  height: number,
 ): PendingLabel {
-  const spread = width * AUDIENCE_SPREAD_RATIO * item.size
-  const radius = height * AUDIENCE_DOT_RADIUS_RATIO * item.size
+  const crowd = crowdDots(x, item.size, width, layout)
   context.fillStyle = hex(COLORS.audienceZoneLine)
-  for (let index = 0; index < AUDIENCE_DOTS; index += 1) {
-    // 결정적인 점 무리: 황금각으로 퍼뜨린다
-    const ratio = index / AUDIENCE_DOTS
-    const angle = index * GOLDEN_ANGLE
-    const dotX = x + Math.cos(angle) * spread * Math.sqrt(ratio)
-    const dotY =
-      horizonY +
-      height * AUDIENCE_DROP_RATIO +
-      Math.sin(angle) * spread * AUDIENCE_FLATTEN * Math.sqrt(ratio)
+  for (const dot of crowd.dots) {
     context.beginPath()
-    context.arc(dotX, dotY, radius, 0, Math.PI * 2)
+    context.arc(dot.x, dot.y, crowd.radius, 0, Math.PI * 2)
     context.fill()
   }
   return {
     text: item.label,
     x,
-    top: horizonY + height * AUDIENCE_DROP_RATIO - spread * AUDIENCE_FLATTEN,
+    top: crowd.top,
     borderColor: NEUTRAL_BORDER,
     icon: null,
   }

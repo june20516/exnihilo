@@ -9,15 +9,16 @@ import { CameraFeedCanvas } from './CameraFeedCanvas'
 const PERFORMERS = new Map(LINEUP.performers.map((performer) => [performer.id, performer]))
 const CAMERA = TALK_SHOW.cameras[0]
 
-/** 2D 컨텍스트 대역. 어떤 메서드든 부르면 기록하고, measureText는 폭을 준다 */
-function fakeContext(calls: string[] = []) {
+/** 2D 컨텍스트 대역. 어떤 메서드든 부르면 기록하고, measureText는 폭을 준다. drawImage의 그림은 drawn에 모은다 */
+function fakeContext(calls: string[] = [], drawn: unknown[] = []) {
   const context = new Proxy(
     {},
     {
       get: (_target, name: string) => {
         if (name === 'measureText') return () => ({ width: 20 })
-        return (..._args: unknown[]) => {
+        return (...args: unknown[]) => {
           calls.push(name)
+          if (name === 'drawImage') drawn.push(args[0])
         }
       },
       set: () => true,
@@ -128,6 +129,54 @@ describe('CameraFeedCanvas', () => {
     expect(calls).toContain('clearRect')
     expect(screen.getByRole('img')).toBe(canvas)
     expect(canvas.style.width).toBe('84px')
+  })
+
+  /** 카메라 하나를 그린 뒤 기록한 호출과 drawImage 그림 */
+  function renderCamera(cameraId: string) {
+    const calls: string[] = []
+    const drawn: unknown[] = []
+    const { context } = fakeContext(calls, drawn)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never)
+    const camera = TALK_SHOW.cameras.find((candidate) => candidate.id === cameraId)
+    if (camera === undefined) throw new Error(`카메라 없음: ${cameraId}`)
+    render(
+      <CameraFeedCanvas
+        view={view}
+        camera={camera}
+        audienceZone={TALK_SHOW.audienceZone}
+        performers={PERFORMERS}
+      />,
+    )
+    resize(472, 265)
+    return { calls, drawn }
+  }
+
+  it('배경 그림을 불러오기 전에는 단색으로 칠하고 그림 없이도 오류 없이 그린다', () => {
+    // jsdom은 그림을 실제로 불러오지 않아 naturalWidth가 0이다(불러오는 중과 같다)
+    for (const cameraId of ['wide', 'audienceCam']) {
+      const { calls } = renderCamera(cameraId)
+      expect(calls).toContain('fillRect')
+      expect(calls).not.toContain('drawImage')
+      cleanup()
+    }
+  })
+
+  it('배경 그림을 불러왔으면 카메라 배경 종류에 맞는 그림을 가장 먼저 그린다', () => {
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(1376)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(768)
+    const cases: Array<[string, string]> = [
+      ['wide', 'feed-stage'],
+      ['close', 'feed-stage'],
+      ['audienceCam', 'feed-audience'],
+    ]
+    for (const [cameraId, file] of cases) {
+      const { drawn } = renderCamera(cameraId)
+      const first = drawn[0]
+      expect(first, cameraId).toBeInstanceOf(HTMLImageElement)
+      expect((first as HTMLImageElement).src, cameraId).toContain(file)
+      cleanup()
+    }
   })
 
   it('2단계 출연자가 있으면 시간이 흐를 때 다시 그리고, 언마운트하면 interval을 정리한다', () => {

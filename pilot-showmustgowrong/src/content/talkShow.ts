@@ -29,6 +29,7 @@ export const TALK_SHOW: ShowDef = {
       fovDegrees: 80,
       range: 10,
       shotIntensity: 1,
+      backdrop: 'stage',
     },
     // 앞쪽 왼편 어깨높이에서 출연자 한 명을 따라간다. 기본 방향은 첫 home spot(4.5, 4)이고,
     // 좁은 화각이라 옆 home spot(7, 4)은 약 22° 떨어져 빠진다. 사거리는 가장 먼 대기석(15, 6)까지
@@ -42,6 +43,7 @@ export const TALK_SHOW: ShowDef = {
       range: 13,
       shotIntensity: 2,
       tracking: true,
+      backdrop: 'stage',
     },
     // 관객석 앞에서 관객석을 본다. 가장 가까운 home spot(4.5, 4)도 약 29° 떨어져 빠진다(화각 ±25°).
     {
@@ -52,6 +54,7 @@ export const TALK_SHOW: ShowDef = {
       fovDegrees: 50,
       range: 6.5,
       shotIntensity: 1,
+      backdrop: 'audience',
     },
   ],
   homeSpots: [

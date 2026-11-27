@@ -149,6 +149,10 @@ export interface EquipmentDef {
   darknessZone?: { x: number; z: number; radius: number }
 }
 
+/** 카메라 화면에 까는 배경 그림 종류. stage: 무대 정면, audience: 관객석 정면 */
+export const BACKDROP_KINDS = ['stage', 'audience'] as const
+export type BackdropKind = (typeof BACKDROP_KINDS)[number]
+
 export interface CameraDef {
   id: string
   label: string
@@ -160,6 +164,8 @@ export interface CameraDef {
   shotIntensity: Intensity
   /** 대상 출연자를 따라 고개를 돌리는 카메라(클로즈업) */
   tracking?: boolean
+  /** 카메라 화면 배경 그림. 화면 표시에만 쓰고 엔진은 읽지 않는다 */
+  backdrop: BackdropKind
 }
 
 export interface CornerDef {

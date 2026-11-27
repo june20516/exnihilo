@@ -6,6 +6,7 @@ import type {
   ActionDef,
   BurstAction,
   BurstDef,
+  CameraDef,
   EmotionDef,
   EquipmentDef,
   HabitDef,
@@ -74,6 +75,7 @@ const show: ShowDef = {
       range: 12,
       shotIntensity: 1,
       tracking: true,
+      backdrop: 'stage',
     },
   ],
   homeSpots: [
@@ -325,6 +327,18 @@ describe('validateShow', () => {
     expect(errors).toContain('자동 컷 오류: incidentCamera cam2가 추적 카메라가 아님')
     const empty = { ...show, autoCut: { ...show.autoCut, rotation: [] } }
     expect(validateShow(empty, performers, [makeStaff()], equipment)).toContain('자동 컷 오류: rotation이 비어 있음')
+  })
+
+  it('알 수 없는 카메라 배경을 보고한다', () => {
+    // 데이터에서 잘못 들어온 값을 흉내 내려고 타입을 넓혀 넣는다
+    const unknownBackdrop = { ...show.cameras[0], backdrop: 'moon' } as unknown as CameraDef
+    const errors = validateShow(
+      { ...show, cameras: [unknownBackdrop] },
+      performers,
+      [makeStaff()],
+      equipment,
+    )
+    expect(errors).toContain('알 수 없는 카메라 배경: moon (cam1)')
   })
 
   it('카메라 중복 id를 보고한다', () => {

@@ -11,6 +11,7 @@ const CLOSE: CameraDef = {
   fovDegrees: 24,
   range: 8,
   shotIntensity: 2,
+  backdrop: 'stage',
   tracking: true,
 }
 
@@ -22,6 +23,7 @@ const SIDE: CameraDef = {
   fovDegrees: 40,
   range: 8,
   shotIntensity: 1,
+  backdrop: 'stage',
 }
 
 const staffOn = (cameraId: string, recovery?: StaffDef['recovery']): StaffDef => ({

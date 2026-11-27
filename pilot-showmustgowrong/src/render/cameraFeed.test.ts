@@ -15,6 +15,7 @@ const CAMERA: CameraDef = {
   fovDegrees: 60,
   range: 20,
   shotIntensity: 1,
+  backdrop: 'stage',
 }
 
 const AUDIENCE_ZONE = { minX: 10, maxX: 14, minZ: -2, maxZ: 2 }

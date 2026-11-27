@@ -4,6 +4,7 @@ import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import { TEMPLATE_TOKEN } from './templateTokens'
 import { TUNABLES } from './tuning'
 import {
+  BACKDROP_KINDS,
   COMMON_EMOTIONS,
   type ActionDef,
   type EmotionDef,
@@ -327,6 +328,12 @@ export function validateShow(
   // 대상·조건 태그는 이 출연자 하나가 아니라 쇼 전체 출연자 태그의 합집합에서 찾는다.
   const knownTags = new Set(performers.flatMap((p) => p.tags))
   const knownCameraIds = new Set(show.cameras.map((c) => c.id))
+  const knownBackdrops: ReadonlySet<string> = new Set(BACKDROP_KINDS)
+  for (const camera of show.cameras) {
+    if (!knownBackdrops.has(camera.backdrop)) {
+      errors.push(`알 수 없는 카메라 배경: ${camera.backdrop} (${camera.id})`)
+    }
+  }
 
   const { autoCut } = show
   if (autoCut.rotation.length === 0) errors.push('자동 컷 오류: rotation이 비어 있음')

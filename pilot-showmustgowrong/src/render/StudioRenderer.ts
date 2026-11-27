@@ -35,9 +35,9 @@ import {
   type ArtTextures,
   type TrackMark,
 } from './actorFigure'
+import { studioBackdropUrls } from './backdropArt'
 import { COLORS } from './colors'
 import {
-  ISO_VIEW_HEIGHT,
   cameraFanFloorPoints,
   unprojectFloor,
   clipToFloor,
@@ -51,6 +51,7 @@ import {
 } from './geometry'
 import { pickHit, type HitShapes, type StudioHit } from './hitTest'
 import { allPerformerArtUrls, assertPerformerArt } from './performerArt'
+import { StudioBackdrop, type StudioBackdropTextures } from './studioBackdrop'
 
 export type { StudioHit } from './hitTest'
 
@@ -63,12 +64,8 @@ const FALLBACK_HEIGHT = 540
 const FIT_PADDING = 16
 const FONT_FAMILY = 'sans-serif'
 
-// 바닥
-const TILE_METERS = 1
-const TILE_LINE_WIDTH = 1
+// 바닥. 바닥·벽 그림은 studioBackdrop.ts가 깐다
 const FLOOR_EDGE_WIDTH = 2
-const BACK_WALL_ALPHA = 0.9
-const AUDIENCE_FILL_ALPHA = 0.55
 const SPOT_RADIUS_METERS = 0.35
 const SPOT_ALPHA = 0.5
 const DARKNESS_ALPHA = 0.6
@@ -185,6 +182,7 @@ export class StudioRenderer {
   private readonly app: Application
   private readonly show: ShowDef
   private readonly world = new Container()
+  private readonly backdrop: StudioBackdrop
   private readonly floorStatic = new Graphics()
   private readonly floorDynamic = new Graphics()
   private readonly bodies = new Container()
@@ -217,12 +215,14 @@ export class StudioRenderer {
     show: ShowDef,
     performers: readonly PerformerDef[],
     textures: ArtTextures,
+    backdropTextures: StudioBackdropTextures,
     width: number,
     height: number,
   ) {
     this.app = app
     this.show = show
     this.textures = textures
+    this.backdrop = new StudioBackdrop(backdropTextures)
     this.performerColors = new Map(performers.map((performer) => [performer.id, performer.color]))
     this.logicalWidth = width
     this.logicalHeight = height
@@ -234,7 +234,7 @@ export class StudioRenderer {
    * 초기화(await)가 끝나기 전에 화면이 사라질 수 있으므로(React StrictMode의 이중 마운트 등)
    * AbortSignal을 받는다. 초기화 뒤 이미 abort됐다면 만들던 Pixi 앱을 바로 정리하고
    * `AbortError` DOMException으로 reject한다. 호출 쪽은 이 오류를 무시하면 된다.
-   * performers는 무대와 대기석 출연자 전부다(이름표 색). 출연자 그림 30장은 여기서 미리 불러 둔다.
+   * performers는 무대와 대기석 출연자 전부다(이름표 색). 출연자 그림 30장과 스튜디오 면 그림 3장은 여기서 한 번 불러 둔다.
    */
   static async create(
     host: HTMLElement,
@@ -244,6 +244,7 @@ export class StudioRenderer {
   ): Promise<StudioRenderer> {
     // 그림이 빠진 출연자가 있으면 그리기 도중이 아니라 여기서 바로 알린다.
     assertPerformerArt(performers.map((performer) => performer.id))
+    const backdropUrls = studioBackdropUrls()
     const width = host.clientWidth > 0 ? host.clientWidth : FALLBACK_WIDTH
     const height = host.clientHeight > 0 ? host.clientHeight : FALLBACK_HEIGHT
     const app = new Application()
@@ -256,8 +257,18 @@ export class StudioRenderer {
       resolution: window.devicePixelRatio || 1,
     })
     let textures: ArtTextures
+    let backdropTextures: StudioBackdropTextures
     try {
-      textures = await Assets.load<Texture>(allPerformerArtUrls())
+      const [performerTextures, planeTextures] = await Promise.all([
+        Assets.load<Texture>(allPerformerArtUrls()),
+        Assets.load<Texture>(Object.values(backdropUrls)),
+      ])
+      textures = performerTextures
+      backdropTextures = {
+        floor: planeTextures[backdropUrls.floor],
+        backWall: planeTextures[backdropUrls.backWall],
+        sideWall: planeTextures[backdropUrls.sideWall],
+      }
     } catch (error: unknown) {
       app.destroy({ removeView: true }, { children: true })
       throw error
@@ -266,7 +277,15 @@ export class StudioRenderer {
       app.destroy({ removeView: true }, { children: true })
       throw new DOMException('StudioRenderer 생성이 취소되었습니다.', 'AbortError')
     }
-    const renderer = new StudioRenderer(app, show, performers, textures, width, height)
+    const renderer = new StudioRenderer(
+      app,
+      show,
+      performers,
+      textures,
+      backdropTextures,
+      width,
+      height,
+    )
     host.appendChild(app.canvas)
     renderer.buildScene()
     return renderer
@@ -375,7 +394,13 @@ export class StudioRenderer {
     this.autoFilter.saturate(AUTO_SATURATION, false)
     this.bodies.sortableChildren = true
     this.overlays.addChild(this.overlayMarks)
-    this.world.addChild(this.floorStatic, this.floorDynamic, this.bodies, this.overlays)
+    this.world.addChild(
+      this.backdrop.container,
+      this.floorStatic,
+      this.floorDynamic,
+      this.bodies,
+      this.overlays,
+    )
     this.app.stage.addChild(this.world, this.vignette)
     // 2단계 배지의 깜박임은 방송 속도와 관계없이 실제 시간으로 돈다(spec 4.1).
     this.app.ticker.add(() => {
@@ -399,39 +424,13 @@ export class StudioRenderer {
     ]
   }
 
-  /** 바뀌지 않는 바닥: 뒤 벽 두 면, 바닥 타일, 관객석, home spot, 대기석, 출구. */
+  /**
+   * 바뀌지 않는 바닥: 바닥·벽 그림 자리, 바닥 테두리, 관객석 테두리, home spot, 대기석, 출구.
+   * 바닥 그림에 나무 판자 결이 있어 1m 격자선은 긋지 않는다. 관객석은 그림의 붉은 카펫이 보여 주므로 테두리만 긋는다.
+   */
   private drawFloorStatic(): void {
+    this.backdrop.layout(this.transform)
     const floor = this.floorStatic.clear()
-    const top = ISO_VIEW_HEIGHT
-    // 뒤 벽(z=0 면과 x=0 면)
-    floor
-      .poly([
-        this.project({ x: 0, y: 0, z: 0 }),
-        this.project({ x: STUDIO_WIDTH, y: 0, z: 0 }),
-        this.project({ x: STUDIO_WIDTH, y: top, z: 0 }),
-        this.project({ x: 0, y: top, z: 0 }),
-      ])
-      .fill({ color: COLORS.backWall, alpha: BACK_WALL_ALPHA })
-      .poly([
-        this.project({ x: 0, y: 0, z: 0 }),
-        this.project({ x: 0, y: 0, z: STUDIO_DEPTH }),
-        this.project({ x: 0, y: top, z: STUDIO_DEPTH }),
-        this.project({ x: 0, y: top, z: 0 }),
-      ])
-      .fill({ color: COLORS.backWall, alpha: BACK_WALL_ALPHA * 0.8 })
-
-    floor.poly(this.floorPolygon(0, STUDIO_WIDTH, 0, STUDIO_DEPTH)).fill(COLORS.floor)
-    for (let x = TILE_METERS; x < STUDIO_WIDTH; x += TILE_METERS) {
-      const a = this.project({ x, y: 0, z: 0 })
-      const b = this.project({ x, y: 0, z: STUDIO_DEPTH })
-      floor.moveTo(a.x, a.y).lineTo(b.x, b.y)
-    }
-    for (let z = TILE_METERS; z < STUDIO_DEPTH; z += TILE_METERS) {
-      const a = this.project({ x: 0, y: 0, z })
-      const b = this.project({ x: STUDIO_WIDTH, y: 0, z })
-      floor.moveTo(a.x, a.y).lineTo(b.x, b.y)
-    }
-    floor.stroke({ color: COLORS.floorTile, width: TILE_LINE_WIDTH })
     floor
       .poly(this.floorPolygon(0, STUDIO_WIDTH, 0, STUDIO_DEPTH))
       .stroke({ color: COLORS.floorEdge, width: FLOOR_EDGE_WIDTH })
@@ -443,11 +442,7 @@ export class StudioRenderer {
       audienceZone.minZ,
       audienceZone.maxZ,
     )
-    floor
-      .poly(audience)
-      .fill({ color: COLORS.audienceZone, alpha: AUDIENCE_FILL_ALPHA })
-      .poly(audience)
-      .stroke({ color: COLORS.audienceZoneLine, width: FLOOR_EDGE_WIDTH })
+    floor.poly(audience).stroke({ color: COLORS.audienceZoneLine, width: FLOOR_EDGE_WIDTH })
 
     const spot = floorEllipseRadii(SPOT_RADIUS_METERS, this.transform.scale)
     for (const home of homeSpots) {

@@ -1,4 +1,5 @@
-import type { Pose } from '@/content/types'
+import type { BackdropKind, Pose } from '@/content/types'
+import { findFeedBackdropUrl } from './backdropArt'
 import { findPerformerArtUrl } from './performerArt'
 
 /** 주소별로 한 번만 만든 그림. 카메라 화면이 매 프레임 새로 만들지 않게 한다 */
@@ -16,7 +17,17 @@ export function feedArtImage(
   onLoad: () => void,
 ): HTMLImageElement | null {
   const url = findPerformerArtUrl(performerId, pose)
-  if (url === undefined) return null
+  return url === undefined ? null : cachedImage(url, onLoad)
+}
+
+/** 카메라 화면 배경 그림. 불러오기·다시 그리기 규칙은 feedArtImage와 같다 */
+export function feedBackdropImage(kind: BackdropKind, onLoad: () => void): HTMLImageElement | null {
+  const url = findFeedBackdropUrl(kind)
+  return url === undefined ? null : cachedImage(url, onLoad)
+}
+
+/** url의 그림을 한 번만 만들고, 불러오는 중이면 onLoad를 대기 목록에 넣는다 */
+function cachedImage(url: string, onLoad: () => void): HTMLImageElement {
   let image = images.get(url)
   if (image === undefined) {
     image = new Image()

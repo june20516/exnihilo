@@ -42,6 +42,7 @@ const camera = (overrides: Partial<CameraDef> & { id: string }): CameraDef => ({
   fovDegrees: 60,
   range: 10,
   shotIntensity: 1,
+  backdrop: 'stage',
   ...overrides,
 })
 

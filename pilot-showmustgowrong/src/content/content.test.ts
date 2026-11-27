@@ -173,6 +173,12 @@ describe('토크쇼 콘텐츠', () => {
       expect(frames('wide', audienceCenter)).toBe(false)
     })
 
+    it('와이드·클로즈업은 무대 배경, 관객석 카메라는 관객석 배경을 쓴다', () => {
+      expect(camera('wide').backdrop).toBe('stage')
+      expect(camera('close').backdrop).toBe('stage')
+      expect(camera('audienceCam').backdrop).toBe('audience')
+    })
+
     it('클로즈업은 추적 카메라이고 화각 24°, 기본 방향으로 첫 home spot을 잡는다', () => {
       expect(camera('close')).toMatchObject({ tracking: true, fovDegrees: 24, shotIntensity: 2 })
       expect(frames('close', homeSpots[0])).toBe(true)

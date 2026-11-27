@@ -2,10 +2,8 @@
 export const COLORS = {
   background: 0x14141c,
   floor: 0x3a3340,
-  floorTile: 0x4a4252,
   floorEdge: 0x6b6074,
   backWall: 0x241f2c,
-  audienceZone: 0x2a3a52,
   audienceZoneLine: 0x4d6a94,
   exit: 0x3f8f5f,
   homeSpot: 0xd8c27a,
