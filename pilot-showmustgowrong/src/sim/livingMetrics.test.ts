@@ -26,6 +26,7 @@ function line(step: number, kind: LogKind = 'habit', repeat = 1): LogLine {
     depth: 0,
     eventId: null,
     lastEventId: null,
+    leadIn: null,
     x: 0,
     y: 0,
     z: 0,

@@ -64,6 +64,8 @@ export interface ActorView {
   misfireChance: number
   /** 지금 지시하면 이어받을 사고. 없거나 이탈했으면 null */
   takeover: TakeoverView | null
+  /** 마지막 버릇의 이모트. 시작 스텝부터 EMOTE_BODY_SECONDS 동안만 있고, 이탈했으면 null */
+  habit: { emote: string; startedStep: number } | null
 }
 
 export interface EquipmentView {
@@ -124,6 +126,8 @@ export interface LogLine {
   eventId: number | null
   /** 묶인 줄이 가진 마지막 사건의 id. 묶이지 않았으면 eventId와 같다. 첫~마지막 id 범위로 강조한다. */
   lastEventId: number | null
+  /** 이어받은 사고 줄의 앞머리("프리야의 킥킥거림에 이어 "). text는 이 앞머리로 시작한다. 그 밖은 null */
+  leadIn: string | null
   x: number
   y: number
   z: number
@@ -198,6 +202,8 @@ export interface BroadcastView {
 }
 
 export interface ChainLine {
+  /** 그 줄 사건의 주인공(사건 source)이 출연자(라인업·벤치)면 그 id, 장비·관객 등이면 null */
+  actorId: string | null
   step: number
   text: string
   depth: number

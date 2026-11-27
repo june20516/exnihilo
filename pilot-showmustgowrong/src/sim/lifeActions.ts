@@ -16,6 +16,8 @@ export interface LineInput {
   eventId: number | null
   position: Vec3
   emotion?: EmotionId | null
+  /** 이어받은 사고 줄의 앞머리. text가 이것으로 시작한다. 기본 null */
+  leadIn?: string | null
 }
 
 /** silent면 행동 줄과 현상 줄을 남기지 않는다(버릇·터짐이 자기 줄을 따로 남긴다, L3) */

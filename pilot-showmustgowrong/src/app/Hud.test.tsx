@@ -16,6 +16,7 @@ function line(overrides: Partial<LogLine>): LogLine {
     depth: 1,
     eventId: null,
     lastEventId: null,
+    leadIn: null,
     x: 0,
     y: 0,
     z: 0,

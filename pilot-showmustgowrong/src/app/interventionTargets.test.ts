@@ -25,6 +25,7 @@ function actor(id: string, overrides: Partial<ActorView> = {}): ActorView {
     emotions: [],
     misfireChance: 0,
     takeover: null,
+    habit: null,
     ...overrides,
   }
 }

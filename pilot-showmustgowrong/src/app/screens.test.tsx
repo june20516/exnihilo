@@ -17,9 +17,9 @@ import type { BroadcastResult } from './useBroadcastLoop'
 const HALTED: BroadcastResult = {
   summary: { peakViewers: 612.5, averageViewers: 540, eventCount: 30, maxChainDepth: 3, rootLine: null },
   longestChain: [
-    { step: 300, text: '모가 렉스에게 달려든다', depth: 1 },
-    { step: 302, text: '렉스가 넘어진다', depth: 2 },
-    { step: 305, text: '렉스가 모에게 욕을 퍼붓는다', depth: 3 },
+    { actorId: 'mo', step: 300, text: '모가 렉스에게 달려든다', depth: 1 },
+    { actorId: 'rex', step: 302, text: '렉스가 넘어진다', depth: 2 },
+    { actorId: 'rex', step: 305, text: '렉스가 모에게 욕을 퍼붓는다', depth: 3 },
   ],
   haltedBy: 'language',
   interventionsIssued: 2,
@@ -65,6 +65,7 @@ describe('ResultScreen 긴 연쇄', () => {
       step: 300 + index,
       text: `연쇄 문장 ${index + 1}번`,
       depth: index + 1,
+      actorId: null,
     })),
   }
 
@@ -97,7 +98,7 @@ describe('ResultScreen 긴 문장', () => {
     const html = renderToStaticMarkup(
       <ResultScreen
         show={TALK_SHOW}
-        result={{ ...HALTED, longestChain: [{ step: 300, text: LONG_TEXT, depth: 1 }] }}
+        result={{ ...HALTED, longestChain: [{ actorId: null, step: 300, text: LONG_TEXT, depth: 1 }] }}
         onRestart={noop}
       />,
     )

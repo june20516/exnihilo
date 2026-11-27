@@ -129,6 +129,8 @@ interface Actor {
   lastResponseStep: number | null
   pendingResponse: PhenomenonEvent | null
   lastHabit: { habit: HabitDef; step: number } | null
+  /** 화면 이모트용 마지막 버릇. 회상 문장용 lastHabit과 따로 두어 회상 규칙이 지우지 않는다. */
+  lastEmote: { emote: string; step: number } | null
 }
 
 /** tick 한 번 동안 출연자 한 명의 상태와 맥락을 묶은 것 */
@@ -212,6 +214,7 @@ export class StudioLife {
       lastResponseStep: null,
       pendingResponse: null,
       lastHabit: null,
+      lastEmote: null,
     })
   }
 
@@ -284,6 +287,12 @@ export class StudioLife {
     const last = this.actors.get(actorId)?.lastHabit
     if (!last || step - last.step > this.recallSteps) return null
     return last.habit
+  }
+
+  /** 그 출연자가 마지막으로 한 버릇의 이모트와 시작 스텝. 기록이 없으면 null */
+  lastEmote(actorId: string): { emote: string; startedStep: number } | null {
+    const last = this.actors.get(actorId)?.lastEmote
+    return last ? { emote: last.emote, startedStep: last.step } : null
   }
 
   /** 대표 감정: 단계가 가장 높은 것, 같으면 다음 문턱에 가장 가까운 것, 그것도 같으면 정의 순서 */
@@ -491,6 +500,7 @@ export class StudioLife {
   ): LifeOutput {
     actor.habitUsedAt.set(habit.id, step)
     actor.lastHabit = { habit, step }
+    actor.lastEmote = { emote: habit.emote, step }
     return {
       type: 'habit',
       actorId,
