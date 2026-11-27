@@ -103,7 +103,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     const observer = new ResizeObserver(() => {
       renderer?.resize(host.clientWidth, host.clientHeight)
     })
-    StudioRenderer.create(host, show, controller.signal).then(
+    StudioRenderer.create(host, show, [...setup.performers, ...setup.bench], controller.signal).then(
       (created) => {
         renderer = created
         rendererRef.current = created
@@ -120,7 +120,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       renderer?.destroy()
       rendererRef.current = null
     }
-  }, [show, studioVisible])
+  }, [show, setup, studioVisible])
 
   /** 판단 카드 오른쪽 위에서 스튜디오의 대상까지 선을 긋는다. 대상이 없으면 숨긴다. */
   const updateLink = useCallback((target: InterventionTarget | null): void => {

@@ -26,14 +26,15 @@ export const COLORS = {
   aimPreview: 0xffc83d,
   actorOutline: 0x000000,
   nameText: 0xffffff,
-  moodTrack: 0x2a2a33,
-  moodFill: 0xf2c94c,
+  /** 감정 배지 2단계(곧 터짐)의 꽉 찬 고리 */
   moodDanger: 0xe5252a,
-  toleranceDot: 0xf2e08a,
-  toleranceDotEmpty: 0x4a4a55,
-  burstTag: 0xe5252a,
-  burstText: 0xffffff,
+  /** 감정 배지 원 바탕과 단계 이름 외곽선 */
+  badgeDisc: 0x14141c,
+  /** 출연자 이름표 바탕. 테두리는 출연자 색이다 */
+  nameTagBack: 0x14141c,
   trackingIcon: 0xffd23f,
+  /** 스튜디오 발밑의 클로즈업 대상 점선 고리 */
+  closeupRing: 0xffd23f,
   staffBody: 0x4a7bd0,
   staffHead: 0xf0c8a0,
   startledBubble: 0xffd23f,
