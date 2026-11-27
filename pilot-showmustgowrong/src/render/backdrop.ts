@@ -19,15 +19,36 @@ export interface FeedBackdropSpec {
   crowdBottom: number
 }
 
+/** 배경 그림 위 가로선의 원본 픽셀 y(그림 높이 FEED_BACKDROP_SOURCE.height 기준) */
+type FeedBackdropPixels = { readonly [line in keyof FeedBackdropSpec]: number }
+
 /**
- * 원본 픽셀로 잰 값(가운데 세로 띠).
- * - stage: 뒷벽 아래선 y≈470(0.615). 발 기준선은 그보다 아래 나무 바닥 위(y≈615)라 출연자가 무대 바닥에 선다.
- *   관객석은 무대 카메라에 보통 잡히지 않지만 잡히면 바닥 띠(0.65~0.85)에 둔다.
- * - audience: 좌석 영역 y≈300~576(0.39~0.75). 그 아래(y≈600~)는 바닥이라 발 기준선을 거기에 둔다.
+ * 가로선의 원본 픽셀 y. 측정은 가운데 세로 띠의 색이 바뀌는 행이다(art-source/backgrounds/README.md).
+ * - stage: 측정 — 뒷벽과 나무 바닥이 만나는 선 y 472(470은 벽색, 475는 바닥색).
+ *   고른 값 — 발 기준선 614는 벽선 아래 나무 바닥 위라 출연자가 무대 바닥에 선다.
+ *   관객석은 무대 카메라에 보통 잡히지 않지만 잡히면 바닥 띠 499~653에 둔다.
+ * - audience: 측정 — 좌석 영역 y 300(맨 윗줄 등받이 위)~576(맨 앞줄 방석 아래).
+ *   고른 값 — 수평선은 좌석 윗선, 발 기준선 691은 좌석 아래 바닥이다.
  */
+const FEED_BACKDROP_PIXELS: Readonly<Record<BackdropKind, FeedBackdropPixels>> = {
+  stage: { horizon: 472, foot: 614, crowdTop: 499, crowdBottom: 653 },
+  audience: { horizon: 300, foot: 691, crowdTop: 300, crowdBottom: 576 },
+}
+
+function toRatios(pixels: FeedBackdropPixels): FeedBackdropSpec {
+  const ratio = (y: number) => y / FEED_BACKDROP_SOURCE.height
+  return {
+    horizon: ratio(pixels.horizon),
+    foot: ratio(pixels.foot),
+    crowdTop: ratio(pixels.crowdTop),
+    crowdBottom: ratio(pixels.crowdBottom),
+  }
+}
+
+/** 배경별 가로선 비율. FEED_BACKDROP_PIXELS를 그림 높이로 나눈 값이다 */
 export const FEED_BACKDROPS: Readonly<Record<BackdropKind, FeedBackdropSpec>> = {
-  stage: { horizon: 0.615, foot: 0.8, crowdTop: 0.65, crowdBottom: 0.85 },
-  audience: { horizon: 0.39, foot: 0.9, crowdTop: 0.39, crowdBottom: 0.75 },
+  stage: toRatios(FEED_BACKDROP_PIXELS.stage),
+  audience: toRatios(FEED_BACKDROP_PIXELS.audience),
 }
 
 export interface Rect {

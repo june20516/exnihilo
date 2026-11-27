@@ -259,6 +259,7 @@ export class StudioRenderer {
     let textures: ArtTextures
     let backdropTextures: StudioBackdropTextures
     try {
+      // 한쪽이 실패하면 다른 쪽 로드는 끝까지 돌지만 결과를 쓰지 않고 앱을 정리한 뒤 오류를 그대로 던진다
       const [performerTextures, planeTextures] = await Promise.all([
         Assets.load<Texture>(allPerformerArtUrls()),
         Assets.load<Texture>(Object.values(backdropUrls)),

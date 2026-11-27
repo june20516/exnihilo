@@ -5,7 +5,7 @@ import type { StudioPlaneId } from './backdrop'
 
 /**
  * 배경 그림 주소 표. 키는 '../assets/backgrounds/<파일>.jpg'다.
- * 원본은 art-source/backgrounds/에 있고 자르기·압축 명령은 Task 7b 보고서에 있다.
+ * 원본, 원본별 용도, 자른 범위, 가공 명령, 측정값은 art-source/backgrounds/README.md에 있다.
  */
 const BACKDROP_URLS: Readonly<Partial<Record<string, string>>> = import.meta.glob<string>(
   '../assets/backgrounds/*.jpg',

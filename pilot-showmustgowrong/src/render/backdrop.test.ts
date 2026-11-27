@@ -61,18 +61,28 @@ describe('FEED_BACKDROPS', () => {
       const spec = FEED_BACKDROPS[kind]
       expect(spec.horizon, kind).toBeLessThan(spec.foot)
       expect(spec.crowdTop, kind).toBeLessThan(spec.crowdBottom)
-      expect(spec.foot, kind).toBeLessThanOrEqual(1)
     }
   })
 
-  it('무대 그림은 출연자 발이 벽 아래선보다 아래(바닥 위)에 온다', () => {
-    expect(FEED_BACKDROPS.stage.horizon).toBeCloseTo(0.615, 2)
-    expect(FEED_BACKDROPS.stage.foot).toBeGreaterThan(FEED_BACKDROPS.stage.horizon)
+  it('무대 그림은 출연자 발과 관객 띠가 벽 아래선보다 아래(바닥 위)에 온다', () => {
+    const stage = FEED_BACKDROPS.stage
+    expect(stage.foot).toBeGreaterThan(stage.horizon)
+    expect(stage.crowdTop).toBeGreaterThan(stage.horizon)
   })
 
-  it('관객석 그림의 관객 영역은 좌석 영역(39%~75%)이다', () => {
-    expect(FEED_BACKDROPS.audience.crowdTop).toBeCloseTo(0.39, 2)
-    expect(FEED_BACKDROPS.audience.crowdBottom).toBeCloseTo(0.75, 2)
+  it('관객석 그림은 좌석 영역이 수평선에서 시작해 발 기준선(바닥)보다 위에서 끝난다', () => {
+    const audience = FEED_BACKDROPS.audience
+    expect(audience.crowdTop).toBeGreaterThanOrEqual(audience.horizon)
+    expect(audience.crowdBottom).toBeLessThan(audience.foot)
+  })
+
+  it('모든 선이 그림 안(0~1)에 있다', () => {
+    for (const kind of BACKDROP_KINDS) {
+      for (const value of Object.values(FEED_BACKDROPS[kind])) {
+        expect(value, kind).toBeGreaterThan(0)
+        expect(value, kind).toBeLessThan(1)
+      }
+    }
   })
 })
 
