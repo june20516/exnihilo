@@ -13,6 +13,7 @@ import { clientToCanvas } from '@/render/geometry'
 import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine'
 import { BroadcastStage, type StudioBindings } from './BroadcastStage'
 import { ErrorScreen } from './ErrorScreen'
+import type { ActorCardAnchor } from './ActorCardLayer'
 import { resolveHoverTip, type HoverAnchor, type HoverTipState } from './hoverTipContent'
 import type { InterventionTarget } from './interventionTargets'
 import { SWITCHER_KEYS } from './labels'
@@ -22,6 +23,7 @@ import { ResultScreen } from './ResultScreen'
 import { useStudioClick, type StudioClickState } from './studioClick'
 import { useAimDrag } from './useAimDrag'
 import { useBroadcastLoop } from './useBroadcastLoop'
+import { usePinnedDismiss } from './usePinnedDismiss'
 
 interface BroadcastScreenProps {
   setup: BroadcastSetup
@@ -332,11 +334,21 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     },
   }
 
-  const tipAnchor = pinnedAnchor ?? hoverAnchor
+  // 고정한 카드의 출연자가 이탈하면 고정은 없는 것으로 친다(카드가 닫히고 호버가 다시 카드를 정한다)
+  const pinnedActorGone =
+    pinnedAnchor?.hit.kind === 'actor' &&
+    view?.actors.find((actor) => actor.id === pinnedAnchor.hit.id)?.walkedOut === true
+  const livePinned = pinnedActorGone ? null : pinnedAnchor
+  usePinnedDismiss(livePinned !== null, hostRef, clearInfo)
+
+  // 고정한 자리가 있으면 호버는 카드를 바꾸지 않는다. 출연자는 정보 카드, 스태프·장비·현상은 말풍선이다.
+  const tipAnchor = interventionOpen ? null : (livePinned ?? hoverAnchor)
+  const actorCard: ActorCardAnchor | null =
+    tipAnchor?.hit.kind === 'actor'
+      ? { actorId: tipAnchor.hit.id, x: tipAnchor.x, y: tipAnchor.y }
+      : null
   const hoverTip: HoverTipState | null =
-    tipAnchor === null || view === null || interventionOpen
-      ? null
-      : resolveHoverTip(tipAnchor, view, setup)
+    tipAnchor === null || view === null ? null : resolveHoverTip(tipAnchor, view, setup)
 
   const onDirect = (input: BroadcastInput): void => {
     send(input)
@@ -359,6 +371,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       trend={trend}
       selectedTarget={selectedTarget}
       hoverTip={hoverTip}
+      actorCard={actorCard}
       onSelectTarget={setSelectedTarget}
       onDirect={onDirect}
       onBeginIntervention={beginIntervention}

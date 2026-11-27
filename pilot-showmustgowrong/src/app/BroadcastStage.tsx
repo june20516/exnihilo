@@ -2,9 +2,10 @@ import { useMemo, useState, type MouseEvent, type PointerEvent, type Ref } from 
 import { INTERVENTION_SPEED, STEP_SECONDS, TREND_WINDOW_BODY_SECONDS } from '@/content/balance'
 import type { PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine'
+import { ActorCardLayer, type ActorCardAnchor } from './ActorCardLayer'
 import { AdPanel } from './AdPanel'
 import { HoverTip } from './HoverTip'
-import type { HoverTipState } from './hoverTipContent'
+import { sourceName, type HoverTipState } from './hoverTipContent'
 import { EventLog, TOP_BAND_HEIGHT, TopBand } from './Hud'
 import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
@@ -44,6 +45,8 @@ export interface BroadcastStageProps {
   trend: TrendRecorder
   selectedTarget: InterventionTarget | null
   hoverTip: HoverTipState | null
+  /** 정보 카드를 띄울 출연자와 자리. 없으면 카드도, 나머지 화면을 흐리게 하는 덮개도 없다 */
+  actorCard: ActorCardAnchor | null
   onSelectTarget(target: InterventionTarget): void
   onDirect(input: BroadcastInput): void
   onBeginIntervention(): void
@@ -73,6 +76,7 @@ export function BroadcastStage({
   trend,
   selectedTarget,
   hoverTip,
+  actorCard,
   onSelectTarget,
   onDirect,
   onBeginIntervention,
@@ -115,6 +119,9 @@ export function BroadcastStage({
   }
   useLayoutHotkey(() => changeLayout(nextLayout(layout)))
   const grid = LAYOUT_GRIDS[layout]
+  const cardActor = actorCard === null ? undefined : view?.actors.find((actor) => actor.id === actorCard.actorId)
+  const cardPerformer = actorCard === null ? undefined : performers.get(actorCard.actorId)
+  const cardShown = actorCard !== null && cardActor !== undefined && cardPerformer !== undefined
   const highlightedEventId = slowmo === 'auto' ? (view?.autoSlowmo?.eventId ?? null) : null
   const alertGauge = slowmo === 'auto' ? (view?.autoSlowmo?.gauge ?? null) : null
 
@@ -143,6 +150,13 @@ export function BroadcastStage({
           gridTemplateAreas: grid.areas,
         }}
       >
+        {/* 카드가 떠 있는 동안 스튜디오 패널(z-13) 밖을 살짝 흐리게 한다. 클릭은 막지 않는다 */}
+        {cardShown && (
+          <div
+            data-testid="card-dim"
+            className="pointer-events-none fixed inset-0 z-[12] bg-black/30"
+          />
+        )}
         <div style={{ gridArea: 'log' }} className="flex min-h-0 flex-col gap-2">
           {view !== null &&
             (interventionOpen ? (
@@ -185,7 +199,7 @@ export function BroadcastStage({
           style={{ gridArea: 'studio' }}
           className={`relative min-h-0 min-w-0 rounded-xl border-2 border-slate-800 bg-[#14141c] ${
             grid.mainArea === 'studio' ? '' : 'aspect-video'
-          }`}
+          } ${cardShown ? 'z-[13]' : ''}`}
         >
           <div
             ref={studio?.hostRef}
@@ -202,6 +216,14 @@ export function BroadcastStage({
             </div>
           )}
           {hoverTip !== null && <HoverTip tip={hoverTip} />}
+          {cardShown && (
+            <ActorCardLayer
+              anchor={actorCard}
+              actor={cardActor}
+              performer={cardPerformer}
+              nameOf={(id) => sourceName(id, { ...setup, show })}
+            />
+          )}
         </div>
         {view !== null && (
           <OnAirColumn

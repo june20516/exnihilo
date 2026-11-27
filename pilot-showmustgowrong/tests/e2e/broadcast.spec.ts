@@ -339,18 +339,40 @@ test('클로즈업 미리보기 화면에서 출연자에게 끌어도 대상이
   await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
 })
 
-test('출연자를 클릭하면 클로즈업은 그대로 두고 성향과 스탯 설명을 고정해 띄운다', async ({
-  page,
-}) => {
+test('출연자를 클릭하면 클로즈업은 그대로 두고 정보 카드를 고정해 띄운다', async ({ page }) => {
   await openBroadcast(page)
   const host = page.getByTestId('studio-host')
   await host.click({ position: await actorAnchor(page, 'mo') })
-  const tip = page.getByTestId('hover-tip')
-  await expect(tip).toContainText('레슬러')
-  await expect(tip).toContainText('존재감 2')
+  const card = page.getByTestId('actor-card')
+  await expect(card).toContainText('레슬러')
+  await expect(card).toContainText('왜 저러나')
+  await expect(page.getByTestId('card-dim')).toBeAttached()
   await expect(page.getByTestId('switcher-slot-close').getByTestId('preview-target')).toContainText(
     '대상 렉스',
   )
+  // 마우스가 다른 곳에 가도 고정된 카드는 남고, Esc로 닫힌다
+  await page.mouse.move(5, 5)
+  await expect(card).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card).toBeHidden()
+  await expect(page.getByTestId('card-dim')).toHaveCount(0)
+})
+
+test('정보 카드는 스튜디오 패널 안에 놓이고 다른 곳을 누르면 닫힌다', async ({ page }) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  await host.click({ position: await actorAnchor(page, 'okafor') })
+  const card = page.getByTestId('actor-card')
+  await expect(card).toBeVisible()
+  const panel = await page.getByTestId('studio').boundingBox()
+  const box = await card.boundingBox()
+  if (panel === null || box === null) throw new Error('패널이나 카드가 보이지 않습니다')
+  expect(box.x).toBeGreaterThanOrEqual(panel.x)
+  expect(box.y).toBeGreaterThanOrEqual(panel.y)
+  expect(box.x + box.width).toBeLessThanOrEqual(panel.x + panel.width)
+  expect(box.y + box.height).toBeLessThanOrEqual(panel.y + panel.height)
+  await page.getByTestId('trend-panel').click()
+  await expect(card).toBeHidden()
 })
 
 test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 카메라를 끌어 추적이 돌아온다", async ({

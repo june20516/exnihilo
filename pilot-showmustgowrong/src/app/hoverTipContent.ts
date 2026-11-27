@@ -1,6 +1,6 @@
 import type { StudioHit } from '@/render/StudioRenderer'
 import type { BroadcastSetup, BroadcastView } from '@/sim/engine'
-import { PHENOMENON_LABELS, WEIGHT_LABELS, cameraName, formatIntensity } from './labels'
+import { PHENOMENON_LABELS, cameraName, formatIntensity } from './labels'
 
 /** 호버 설명 내용(spec 8.2 4단계) */
 export interface HoverTipContent {
@@ -31,7 +31,7 @@ type HoverSetup = Pick<BroadcastSetup, 'performers' | 'bench' | 'staff' | 'equip
 type HoverView = Pick<BroadcastView, 'equipment' | 'recentPhenomena' | 'actors' | 'staff'>
 
 /** 현상의 원인·대상 id를 화면 이름(출연자·스태프는 짧은 이름, 장비는 이름)으로 바꾼다. */
-function sourceName(id: string, setup: HoverSetup): string {
+export function sourceName(id: string, setup: HoverSetup): string {
   const performer = [...setup.performers, ...setup.bench].find((candidate) => candidate.id === id)
   if (performer !== undefined) return performer.shortName
   const member = setup.staff.find((candidate) => candidate.id === id)
@@ -45,21 +45,6 @@ function sourceName(id: string, setup: HoverSetup): string {
 function causeLine(sourceId: string, targetId: string | null, setup: HoverSetup): string {
   const cause = `원인: ${sourceName(sourceId, setup)}`
   return targetId === null ? cause : `${cause} → 대상: ${sourceName(targetId, setup)}`
-}
-
-/** 출연자의 이름·역할, 성향, 스탯, 할 수 있는 지시. view에 없으면 null. */
-function actorContent(id: string, view: HoverView, setup: HoverSetup): HoverTipContent | null {
-  const actor = view.actors.find((candidate) => candidate.id === id)
-  const def = [...setup.performers, ...setup.bench].find((candidate) => candidate.id === id)
-  if (actor === undefined || def === undefined) return null
-  return {
-    title: `${def.name} · ${def.role}`,
-    lines: [
-      def.tendency,
-      `존재감 ${def.presence} · 남은 내성 ${actor.directivesLeft} · 체급 ${WEIGHT_LABELS[def.weight]}`,
-      `지시: ${def.directives.map((directive) => directive.label).join(' / ')}`,
-    ],
-  }
 }
 
 /** 스태프의 이름·역할, 성향, 담당 카메라. 정의가 없으면 null. */
@@ -77,13 +62,12 @@ function staffContent(id: string, setup: HoverSetup): HoverTipContent | null {
   }
 }
 
-/** 마우스 아래 출연자·스태프·장비·최근 현상의 설명. 빈 곳이면 null. */
+/** 마우스 아래 스태프·장비·최근 현상의 설명. 출연자는 정보 카드(ActorInfoCard)가 맡으므로 null. 빈 곳이면 null. */
 export function hoverTipContent(
   hit: StudioHit | null,
   view: HoverView,
   setup: HoverSetup,
 ): HoverTipContent | null {
-  if (hit?.kind === 'actor') return actorContent(hit.id, view, setup)
   if (hit?.kind === 'staff') return staffContent(hit.id, setup)
   const { equipment } = setup
   if (hit?.kind === 'equipment') {
