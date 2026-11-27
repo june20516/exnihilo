@@ -1,4 +1,3 @@
-import { fixtureColor } from '@/content/fixtureColor'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   LIFE_TICK_BODY_SECONDS,
@@ -18,6 +17,7 @@ import type {
   ReactionDef,
   SensitivityDef,
 } from '@/content/types'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { describeRootEvent, withSubject } from './describe'
 import {
   Broadcast,

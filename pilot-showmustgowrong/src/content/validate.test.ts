@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TunableDef } from '@/kit/tuning/tuning'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { COMMON_EMOTION_DEFS } from './emotions'
-import { fixtureColor } from './fixtureColor'
 import type {
   ActionDef,
   BurstAction,

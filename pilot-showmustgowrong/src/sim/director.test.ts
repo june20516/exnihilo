@@ -1,4 +1,3 @@
-import { fixtureColor } from '@/content/fixtureColor'
 import { describe, expect, it } from 'vitest'
 import {
   FATIGUE_MISFIRE_PER_POINT,
@@ -7,6 +6,7 @@ import {
 } from '@/content/balance'
 import type { ActionDef, MoodShift, PerformerDef, StaffDef } from '@/content/types'
 import { createRng, type RngState } from '@/kit/rng'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { Director, type DirectiveOutcome } from './director'
 
 const SHOUT: ActionDef = {

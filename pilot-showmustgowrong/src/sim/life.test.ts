@@ -1,4 +1,3 @@
-import { fixtureColor } from '@/content/fixtureColor'
 import { describe, expect, it } from 'vitest'
 import {
   BIG_BURST_GRACE_BODY_SECONDS,
@@ -26,6 +25,7 @@ import type {
   PerformerDef,
   ShowDef,
 } from '@/content/types'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import {
   StudioLife,
   type LifeContext,

@@ -73,11 +73,6 @@ describe('토크쇼 콘텐츠', () => {
   })
 
   it('모든 버릇에 이모트가 있고 검사를 통과한다', () => {
-    for (const performer of allPerformers) {
-      for (const habit of performer.mind?.habits ?? []) {
-        expect(habit.emote, `${performer.id}.${habit.id}`).not.toBe('')
-      }
-    }
     expect(validateShow(TALK_SHOW, allPerformers, LINEUP.staff, LINEUP.equipment).filter((e) => e.includes('이모트'))).toEqual([])
   })
 

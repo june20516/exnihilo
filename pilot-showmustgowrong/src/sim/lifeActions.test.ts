@@ -1,7 +1,7 @@
-import { fixtureColor } from '@/content/fixtureColor'
 import { describe, expect, it } from 'vitest'
 import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import type { ActionDef, BurstAction, EmotionDef, PerformerDef } from '@/content/types'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import type { CastMember } from './cast'
 import type { Reason } from './emotion'
 import type { LifeOutput } from './life'

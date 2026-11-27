@@ -1,4 +1,3 @@
-import { fixtureColor } from '@/content/fixtureColor'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   AD_GAUGE_RELIEF,
@@ -28,6 +27,7 @@ import type {
   ShowDef,
   StaffDef,
 } from '@/content/types'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { STANDING_Y } from './cast'
 import { Broadcast, replay, type BroadcastInput, type BroadcastSetup } from './engine'
 import type { PhenomenonEvent } from './phenomena'
