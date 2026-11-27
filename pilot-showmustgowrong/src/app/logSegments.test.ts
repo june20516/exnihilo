@@ -83,6 +83,15 @@ describe('logSegments', () => {
     expect(logSegments(line({ text: '모에게 말한다' }), people)[0]).toEqual({ text: '모', color: '#F97316', dim: false })
   })
 
+  it('겹친 조사("모에게는", "모한테도", "모에서는", "모가요")는 이름으로 칠하고 "모이는"은 칠하지 않는다', () => {
+    for (const text of ['모에게는 말한다', '모한테도 말한다', '모에서는 난다', '모로는 간다', '모가요 말한다']) {
+      expect(logSegments(line({ text }), people)[0]).toEqual({ text: '모', color: '#F97316', dim: false })
+    }
+    expect(logSegments(line({ text: '모이는 소리' }), people)).toEqual([
+      { text: '모이는 소리', color: null, dim: false },
+    ])
+  })
+
   it('이름이 없거나 사람 목록이 비어도 줄 전체가 한 조각이다', () => {
     expect(logSegments(line({ text: '정적이 흐른다' }), [])).toEqual([
       { text: '정적이 흐른다', color: null, dim: false },
