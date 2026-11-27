@@ -14,6 +14,7 @@ import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine
 import { BroadcastStage, type StudioBindings } from './BroadcastStage'
 import { ErrorScreen } from './ErrorScreen'
 import type { ActorCardAnchor } from './ActorCardLayer'
+import type { BodyBox } from './cardPlacement'
 import { resolveHoverTip, type HoverAnchor, type HoverTipState } from './hoverTipContent'
 import type { InterventionTarget } from './interventionTargets'
 import { SWITCHER_KEYS } from './labels'
@@ -75,7 +76,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   /** 출연자·스태프를 클릭해 고정한 정보 설명. 있으면 호버 설명 대신 보인다. */
   const [pinnedAnchor, setPinnedAnchor] = useState<HoverAnchor | null>(null)
   /** 마지막 클릭 자리(스튜디오 CSS 좌표). 고정 설명을 그 자리에 띄운다. */
-  const lastClickRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const lastClickRef = useRef<{ x: number; y: number; body?: BodyBox }>({ x: 0, y: 0 })
 
   // 렌더러 생명주기. StrictMode 이중 마운트에서는 AbortController로 앞의 생성을 취소한다.
   // 스튜디오 영역 크기가 바뀌면 캔버스를 그 크기로 맞춘다(fitIso로 꽉 채움).
@@ -142,7 +143,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
 
   /**
    * 출연자 몸 중심의 화면 좌표(스튜디오 영역 기준 CSS px)를 host의 data-actor-anchors에 JSON으로 싣는다.
-   * e2e가 투영 좌표를 하드코딩하지 않고 읽어 클릭할 수 있게 하는 공개 표면이다.
+   * e2e가 투영 좌표를 하드코딩하지 않고 읽어 클릭할 수 있게 하는 공개 표면이다(몸 상자 반 크기는 data-actor-half-sizes).
    */
   const publishActorAnchors = useCallback((current: BroadcastView): void => {
     const renderer = rendererRef.current
@@ -151,11 +152,15 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     const scaleX = host.clientWidth / renderer.size.width
     const scaleY = host.clientHeight / renderer.size.height
     const anchors: Record<string, [number, number]> = {}
+    const halfSizes: Record<string, [number, number]> = {}
     for (const actor of current.actors) {
       const point = renderer.anchorOf('actor', actor.id)
       if (point !== null) anchors[actor.id] = [point.x * scaleX, point.y * scaleY]
+      const half = renderer.actorHalfSize(actor.id)
+      if (half !== null) halfSizes[actor.id] = [half.halfWidth * scaleX, half.halfHeight * scaleY]
     }
     host.dataset.actorAnchors = JSON.stringify(anchors)
+    host.dataset.actorHalfSizes = JSON.stringify(halfSizes)
     const cameraAnchors: Record<string, [number, number]> = {}
     for (const camera of show.cameras) {
       const point = renderer.cameraAnchor(camera.id)
@@ -283,12 +288,17 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     const point = clientToCanvas(event.clientX, event.clientY, rect, renderer.size)
     const hit = renderer.hitTest(point.x, point.y)
     // 출연자는 마우스 자리가 아니라 몸 중심에 카드를 붙여, 카드가 그 출연자를 덮지 않게 한다
-    const body = hit?.kind === 'actor' ? renderer.anchorOf('actor', hit.id) : null
+    const center = hit?.kind === 'actor' ? renderer.anchorOf('actor', hit.id) : null
+    const half = hit?.kind === 'actor' ? renderer.actorHalfSize(hit.id) : null
+    const scaleX = rect.width / renderer.size.width
+    const scaleY = rect.height / renderer.size.height
     return {
       hit,
       canvas: point,
-      x: body === null ? event.clientX - rect.left : (body.x * rect.width) / renderer.size.width,
-      y: body === null ? event.clientY - rect.top : (body.y * rect.height) / renderer.size.height,
+      x: center === null ? event.clientX - rect.left : center.x * scaleX,
+      y: center === null ? event.clientY - rect.top : center.y * scaleY,
+      body:
+        half === null ? undefined : { halfWidth: half.halfWidth * scaleX, halfHeight: half.halfHeight * scaleY },
     }
   }
 
@@ -301,7 +311,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       if (aimDrag.consumeClick()) return
       const found = studioHitAt(event)
       if (found === null) return
-      lastClickRef.current = { x: found.x, y: found.y }
+      lastClickRef.current = { x: found.x, y: found.y, body: found.body }
       clickStudio(found.hit)
     },
     onPointerDown: (event) => {
@@ -330,7 +340,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       const key = hit === null ? null : `${hit.kind}:${hit.id}`
       if (key === hoverKeyRef.current) return
       hoverKeyRef.current = key
-      setHoverAnchor(hit === null || found === null ? null : { hit, x: found.x, y: found.y })
+      setHoverAnchor(hit === null || found === null ? null : { hit, x: found.x, y: found.y, body: found.body })
     },
     onMouseLeave: () => {
       hoverKeyRef.current = null
@@ -346,7 +356,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   const tipAnchor = interventionOpen ? null : (livePinned ?? hoverAnchor)
   const actorCard: ActorCardAnchor | null =
     tipAnchor?.hit.kind === 'actor'
-      ? { actorId: tipAnchor.hit.id, x: tipAnchor.x, y: tipAnchor.y }
+      ? { actorId: tipAnchor.hit.id, x: tipAnchor.x, y: tipAnchor.y, body: tipAnchor.body }
       : null
   const hoverTip: HoverTipState | null =
     tipAnchor === null || view === null ? null : resolveHoverTip(tipAnchor, view, setup)

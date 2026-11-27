@@ -132,4 +132,13 @@ describe('카드가 출연자 몸 상자를 덮지 않는다', () => {
     const inViewport = { left: placement.left + origin.x, top: placement.top + origin.y }
     expect(overlaps(inViewport, CARD_200, { x: anchor.x + origin.x, y: anchor.y + origin.y })).toBe(false)
   })
+
+  it('몸 상자가 인자로 들어가 배치를 바꾼다(큰 몸 상자는 같은 앵커에서 카드를 더 멀리 둔다)', () => {
+    const anchor = { x: 100, y: 100 }
+    const bounds = { width: 800, height: 600 }
+    const small = placeCard(anchor, CARD_200, bounds, 12, { halfWidth: 7, halfHeight: 10 })
+    const large = placeCard(anchor, CARD_200, bounds, 12, { halfWidth: 30, halfHeight: 50 })
+    expect(small.left).toBe(100 + 7 + 12)
+    expect(large.left).toBe(100 + 30 + 12)
+  })
 })

@@ -363,6 +363,15 @@ export class StudioRenderer {
     return { x: (staff.left + staff.right) / 2, y: (staff.top + staff.bottom) / 2 }
   }
 
+  /**
+   * 마지막 draw에서 그린 출연자 그림의 반폭·반높이(캔버스 논리 좌표, 히트 여유 포함). 화면에 없으면 null.
+   * 정보 카드가 출연자를 덮지 않게 몸 상자로 쓴다. 확대 비율에 따라 달라지는 실제 그림 크기다.
+   */
+  actorHalfSize(id: string): { halfWidth: number; halfHeight: number } | null {
+    const shape = this.hits.actors.find((candidate) => candidate.id === id)
+    return shape === undefined ? null : { halfWidth: shape.halfWidth, halfHeight: shape.halfHeight }
+  }
+
   resize(width: number, height: number): void {
     if (this.destroyed || width <= 0 || height <= 0) return
     if (width === this.logicalWidth && height === this.logicalHeight) return

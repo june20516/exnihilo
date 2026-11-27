@@ -19,7 +19,11 @@ interface Placement {
   top: number
 }
 
-/** 출연자 몸 중심(앵커) 둘레의 몸 상자 반 크기(CSS px). 카드는 이 상자를 덮지 않게 놓는다 */
+/**
+ * 출연자 몸 상자를 렌더러에서 얻지 못할 때만 쓰는 폴백(CSS px, 반 크기). 실제 그림 크기는 확대 비율에 따라
+ * 달라지므로(스튜디오 축소판 약 7, 기본 약 20, 스튜디오 크게 약 30 배) 평소에는 StudioRenderer.actorHalfSize를 쓴다.
+ * 이 값은 기본 배치에서 출연자 그림이 대략 이 정도 크기로 보이는 점을 눈으로 맞춘 것이다.
+ */
 export const ACTOR_BODY_BOX: BodyBox = { halfWidth: 30, halfHeight: 50 }
 
 /** 몸 상자와 카드 사이 간격(px) */

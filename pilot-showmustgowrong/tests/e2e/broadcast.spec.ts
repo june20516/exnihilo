@@ -379,11 +379,13 @@ test('가장자리에 가까운 출연자의 정보 카드도 패널 안에 있�
   await openBroadcast(page)
   const host = page.getByTestId('studio-host')
   const card = page.getByTestId('actor-card')
-  // 출연자 몸 중심 둘레의 몸 상자 반 크기(cardPlacement.ts의 ACTOR_BODY_BOX와 같다)
-  const halfWidth = 30
-  const halfHeight = 50
   for (const actorId of ['rex', 'priya', 'okafor', 'mo']) {
     const anchor = await actorAnchor(page, actorId)
+    // 앱이 카드 배치에 쓰는 출연자 그림 기반 몸 상자 반 크기(host의 data-actor-half-sizes)
+    const halfSizes: Record<string, [number, number]> = JSON.parse(
+      (await host.getAttribute('data-actor-half-sizes')) ?? '{}',
+    )
+    const [halfWidth, halfHeight] = halfSizes[actorId]
     await host.click({ position: anchor })
     await expect(card).toBeVisible()
     const panel = await page.getByTestId('studio').boundingBox()

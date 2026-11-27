@@ -2,13 +2,15 @@ import { useLayoutEffect, useRef } from 'react'
 import type { PerformerDef } from '@/content/types'
 import type { ActorView } from '@/sim/engineTypes'
 import { ActorInfoCard } from './ActorInfoCard'
-import { ACTOR_BODY_BOX, CARD_GAP, placeCardInPanel } from './cardPlacement'
+import { ACTOR_BODY_BOX, CARD_GAP, placeCardInPanel, type BodyBox } from './cardPlacement'
 
 /** 카드를 띄울 출연자와 자리(스튜디오 패널 안쪽 CSS 좌표) */
 export interface ActorCardAnchor {
   actorId: string
   x: number
   y: number
+  /** 출연자 그림 크기 기반 몸 상자. 렌더러에서 얻지 못하면 없다(기본 몸 상자 사용) */
+  body?: BodyBox
 }
 
 interface ActorCardLayerProps {
@@ -39,7 +41,7 @@ export function ActorCardLayer({ anchor, actor, performer, nameOf }: ActorCardLa
       { width: window.innerWidth, height: window.innerHeight },
       { x: rect.left + panel.clientLeft, y: rect.top + panel.clientTop },
       CARD_GAP,
-      ACTOR_BODY_BOX,
+      anchor.body ?? ACTOR_BODY_BOX,
     )
     // 자리는 렌더를 거치지 않고 바로 쓴다(재측정마다 setState하지 않는다)
     layer.style.left = `${next.left}px`

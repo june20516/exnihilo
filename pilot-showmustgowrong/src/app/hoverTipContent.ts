@@ -1,3 +1,4 @@
+import type { BodyBox } from './cardPlacement'
 import type { StudioHit } from '@/render/StudioRenderer'
 import type { BroadcastSetup, BroadcastView } from '@/sim/engine'
 import { PHENOMENON_LABELS, cameraName, formatIntensity } from './labels'
@@ -19,6 +20,8 @@ export interface HoverAnchor {
   hit: StudioHit
   x: number
   y: number
+  /** 출연자 히트일 때 그림 크기 기반 몸 상자(CSS px). 없으면 카드가 기본 몸 상자를 쓴다 */
+  body?: BodyBox
 }
 
 /** 현상의 원인·대상 id 가운데 출연자·장비·스태프가 아닌 것의 이름 */
