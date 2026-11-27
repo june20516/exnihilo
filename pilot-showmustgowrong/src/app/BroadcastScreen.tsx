@@ -376,9 +376,17 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     return <ErrorScreen kind={loop.error.kind} message={loop.error.message} />
   }
   if (rendererError !== null) return <ErrorScreen kind="create" message={rendererError} />
-  if (loop.result !== null) return (
-      <ResultScreen result={loop.result} trend={trend.all()} show={show} onRestart={onRestart} />
+  if (loop.result !== null) {
+    return (
+      <ResultScreen
+        result={loop.result}
+        trend={trend.all()}
+        show={show}
+        performers={[...performers, ...bench]}
+        onRestart={onRestart}
+      />
     )
+  }
 
   return (
     <BroadcastStage
