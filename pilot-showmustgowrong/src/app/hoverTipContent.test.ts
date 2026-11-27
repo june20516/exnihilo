@@ -110,7 +110,7 @@ describe('hoverTipContent', () => {
     const [operator] = LINEUP.staff
     expect(hoverTipContent({ kind: 'staff', id: operator.id }, VIEW, SETUP)).toEqual({
       title: `${operator.name} · ${operator.role}`,
-      lines: [operator.tendency, '담당 CAM 2 클로즈업'],
+      lines: [operator.tendency, '담당 카메라 2 클로즈업'],
     })
   })
 

@@ -50,6 +50,11 @@ export interface BroadcastStageProps {
   onSelectTarget(target: InterventionTarget): void
   onDirect(input: BroadcastInput): void
   onBeginIntervention(): void
+  /**
+   * 배치가 바뀐 뒤(L 키·배치 버튼). 정보 카드와 호버 설명의 자리는 띄운 순간의 스튜디오 크기로 굳으므로
+   * 컨테이너가 이때 카드를 닫는다.
+   */
+  onLayoutChanged(mode: LayoutMode): void
   studio?: StudioBindings
 }
 
@@ -83,6 +88,7 @@ export function BroadcastStage({
   onSelectTarget,
   onDirect,
   onBeginIntervention,
+  onLayoutChanged,
   studio,
 }: BroadcastStageProps) {
   const { show } = setup
@@ -119,6 +125,7 @@ export function BroadcastStage({
   const changeLayout = (mode: LayoutMode): void => {
     setLayout(mode)
     saveLayout(layoutStore, mode)
+    onLayoutChanged(mode)
   }
   useLayoutHotkey(() => changeLayout(nextLayout(layout)))
   const grid = LAYOUT_GRIDS[layout]

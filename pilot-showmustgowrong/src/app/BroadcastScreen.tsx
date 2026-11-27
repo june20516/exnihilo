@@ -258,6 +258,12 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     setPinnedAnchor({ hit, ...lastClickRef.current })
   }, [])
   const clearInfo = useCallback(() => setPinnedAnchor(null), [])
+  /** 카드 자리(x, y, 몸 상자)는 띄운 순간의 스튜디오 크기로 굳으므로 배치가 바뀌면 고정·호버 카드를 모두 닫는다 */
+  const dismissCards = useCallback(() => {
+    hoverKeyRef.current = null
+    setHoverAnchor(null)
+    clearInfo()
+  }, [clearInfo])
   const clickStudio = useStudioClick(clickState, {
     selectTarget: selectFromStudio,
     showInfo,
@@ -400,6 +406,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       onSelectTarget={setSelectedTarget}
       onDirect={onDirect}
       onBeginIntervention={beginIntervention}
+      onLayoutChanged={dismissCards}
       studio={studio}
     />
   )

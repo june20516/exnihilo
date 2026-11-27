@@ -100,7 +100,7 @@ describe('interventionTargets', () => {
     expect(operator.directives.map((directive) => directive.expect)).toEqual(
       def.directives.map((directive) => directive.expect),
     )
-    expect(operator.cameraLabel).toBe('CAM 2 클로즈업')
+    expect(operator.cameraLabel).toBe('카메라 2 클로즈업')
     expect(operator.misfireChance).toBe(0.15)
     expect(operator.cost).toBe('스태프 피로 +1')
   })

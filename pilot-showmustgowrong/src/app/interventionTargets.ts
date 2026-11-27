@@ -36,7 +36,7 @@ export interface TargetOption {
   color: string | null
   /** 연쇄 역할(출연자) 또는 맡은 일(스태프) 한 단어 */
   role: string
-  /** 스태프가 맡은 카메라("CAM 2 클로즈업"). 출연자는 null */
+  /** 스태프가 맡은 카메라("카메라 2 클로즈업"). 출연자는 null */
   cameraLabel: string | null
   /** 무엇을 받으면 무엇을 일으키는지 한 줄 */
   tendency: string

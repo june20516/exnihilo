@@ -9,7 +9,7 @@ import { Broadcast, type BroadcastSetup, type BroadcastView } from '@/sim/engine
 import { AdPanel } from './AdPanel'
 import { BroadcastStage, type BroadcastStageProps, type StageControls } from './BroadcastStage'
 import { ErrorScreen } from './ErrorScreen'
-import { LAYOUT_STORAGE_KEY } from './layout'
+import { LAYOUT_STORAGE_KEY, type LayoutMode } from './layout'
 import { TrendRecorder } from './trendRecorder'
 import { ResultScreen } from './ResultScreen'
 import type { BroadcastResult } from './useBroadcastLoop'
@@ -260,6 +260,7 @@ describe('BroadcastStage 생방송 화면', () => {
         onSelectTarget={noop}
         onDirect={noop}
         onBeginIntervention={noop}
+        onLayoutChanged={noop}
         {...overrides}
       />,
     )
@@ -283,7 +284,7 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toContain('data-testid="viewers-trend"')
     expect(html).toContain('data-testid="broadcast-time"')
     expect(html).toMatch(/data-testid="corner"[^>]*>[^<]*오프닝 1\/3/)
-    expect(html).toMatch(/data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · 대상 렉스/)
+    expect(html).toMatch(/data-testid="on-air-label"[^>]*>[^<]*카메라 2 클로즈업 · 대상 렉스/)
     expect(count(html, /data-testid="camera-preview"/g)).toBe(3)
     expect(html).toContain('data-testid="intervene-button"')
     expect(html).toContain('data-testid="ad-button"')
@@ -299,7 +300,7 @@ describe('BroadcastStage 생방송 화면', () => {
     const label = '대상 렉스 · 지시로 고정 (카메라를 출연자에게 끌면 추적)'
     const onAir = render({ view: { ...directed, onAirCameraId: 'close' } })
     expect(onAir).toMatch(
-      new RegExp(`data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · ${escapeRegExp(label)}`),
+      new RegExp(`data-testid="on-air-label"[^>]*>[^<]*카메라 2 클로즈업 · ${escapeRegExp(label)}`),
     )
     expect(onAir).toMatch(/data-testid="on-air-label" data-aim-mode="directed"/)
 
@@ -315,7 +316,7 @@ describe('BroadcastStage 생방송 화면', () => {
         cameraAimModes: { ...directed.cameraAimModes, close: 'tracking' },
       },
     })
-    expect(tracking).toMatch(/data-testid="on-air-label"[^>]*>[^<]*CAM 2 클로즈업 · 대상 렉스</)
+    expect(tracking).toMatch(/data-testid="on-air-label"[^>]*>[^<]*카메라 2 클로즈업 · 대상 렉스</)
     expect(tracking).not.toContain('지시로 고정')
   })
 
@@ -414,7 +415,7 @@ describe('BroadcastStage 생방송 화면', () => {
       selectedTarget: { kind: 'staff', id: 'cameraOperator' },
     })
     const operator = LINEUP.staff[0]
-    expect(html).toContain('담당 CAM 2 클로즈업')
+    expect(html).toContain('담당 카메라 2 클로즈업')
     expect(html).toContain(operator.role)
     expect(html).toContain(operator.tendency)
     for (const directive of operator.directives) expect(html).toContain(directive.expect)
@@ -450,7 +451,7 @@ describe('BroadcastStage 생방송 화면', () => {
     })
     afterAll(() => getContextSpy.mockRestore())
 
-    function mountStage() {
+    function mountStage(onLayoutChanged: (mode: LayoutMode) => void = noop) {
       return mount(
         <BroadcastStage
           view={baseView}
@@ -463,6 +464,7 @@ describe('BroadcastStage 생방송 화면', () => {
           onSelectTarget={noop}
           onDirect={noop}
           onBeginIntervention={noop}
+          onLayoutChanged={onLayoutChanged}
         />,
       )
     }
@@ -485,6 +487,19 @@ describe('BroadcastStage 생방송 화면', () => {
       pressL({ key: 'ㅣ' })
       expect(layout()).toBe('default')
       expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('default')
+    })
+
+    it('L이나 배치 버튼으로 배치를 바꾸면 onLayoutChanged로 새 배치를 알린다(컨테이너가 카드를 닫는다)', () => {
+      const onLayoutChanged = vi.fn()
+      mountStage(onLayoutChanged)
+      pressL()
+      expect(onLayoutChanged).toHaveBeenLastCalledWith('studio')
+      fireEvent.click(screen.getByRole('button', { name: '송출 화면 크게' }))
+      expect(onLayoutChanged).toHaveBeenLastCalledWith('onair')
+      expect(onLayoutChanged).toHaveBeenCalledTimes(2)
+      // 무시되는 L(입력 조합키)은 알리지 않는다
+      pressL({ ctrlKey: true })
+      expect(onLayoutChanged).toHaveBeenCalledTimes(2)
     })
 
     it('입력 칸에서 L은 무시된다', () => {

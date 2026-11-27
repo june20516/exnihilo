@@ -112,15 +112,26 @@ test('송출이 바뀌어도 카메라 칸은 같은 자리에 있다', async ({
   expect(await slotIndexes()).toEqual(['0', '1', '2'])
 })
 
+/** 요소가 한 줄인가(높이가 줄 높이를 넘지 않는다) */
+async function expectOneLine(page: Page, testId: string, message: string): Promise<void> {
+  const { height, lineHeight } = await page.getByTestId(testId).evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+  }))
+  expect(height, `${message}: ${testId}가 여러 줄입니다`).toBeLessThanOrEqual(lineHeight + 0.5)
+}
+
 test('미리보기를 누르면 그 카메라가 송출되고 ON AIR 이름표가 바뀐다', async ({ page }) => {
   await openBroadcast(page)
   const label = page.getByTestId('on-air-label')
-  await expect(label).toContainText('CAM 1 무대 와이드')
+  await expect(label).toContainText('카메라 1 무대 와이드')
+  await expectOneLine(page, 'on-air-label', '카메라 1')
   await page.getByTestId('switcher-slot-close').click()
-  await expect(label).toContainText('CAM 2 클로즈업')
+  await expect(label).toContainText('카메라 2 클로즈업')
+  await expectOneLine(page, 'on-air-label', '카메라 2')
   await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
   await page.getByTestId('switcher-slot-audienceCam').click()
-  await expect(label).toContainText('CAM 3 관객석')
+  await expect(label).toContainText('카메라 3 관객석')
 })
 
 /**
@@ -403,6 +414,93 @@ test('가장자리에 가까운 출연자의 정보 카드도 패널 안에 있�
     expect(overlapWidth > 0 && overlapHeight > 0, `${actorId} 카드가 출연자를 덮습니다`).toBe(false)
     await page.keyboard.press('Escape')
     await expect(card).toBeHidden()
+  }
+})
+
+test('스튜디오 크게에서도 정보 카드는 패널 안에 있고 그 출연자를 덮지 않으며, 송출 화면 크게에서는 화면 안에 있다', async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  const card = page.getByTestId('actor-card')
+  await page.getByRole('button', { name: '스튜디오 크게' }).click()
+  await expect(page.getByRole('main')).toHaveAttribute('data-layout', 'studio')
+  for (const actorId of ['rex', 'mo']) {
+    // 배치가 바뀌어 스튜디오가 커지면 앵커가 새 배율로 다시 실린다. 실린 뒤의 값을 읽는다
+    await expect.poll(async () => (await host.boundingBox())?.width ?? 0).toBeGreaterThan(600)
+    const anchor = await actorAnchor(page, actorId)
+    const halfSizes: Record<string, [number, number]> = JSON.parse(
+      (await host.getAttribute('data-actor-half-sizes')) ?? '{}',
+    )
+    const [halfWidth, halfHeight] = halfSizes[actorId]
+    await host.click({ position: anchor })
+    await expect(card).toBeVisible()
+    const panel = await page.getByTestId('studio').boundingBox()
+    const hostBox = await host.boundingBox()
+    const box = await card.boundingBox()
+    if (panel === null || hostBox === null || box === null) throw new Error('패널이나 카드가 보이지 않습니다')
+    expect(box.x, actorId).toBeGreaterThanOrEqual(panel.x)
+    expect(box.y, actorId).toBeGreaterThanOrEqual(panel.y)
+    expect(box.x + box.width, actorId).toBeLessThanOrEqual(panel.x + panel.width)
+    expect(box.y + box.height, actorId).toBeLessThanOrEqual(panel.y + panel.height)
+    const centerX = hostBox.x + anchor.x
+    const centerY = hostBox.y + anchor.y
+    const overlapWidth = Math.min(box.x + box.width, centerX + halfWidth) - Math.max(box.x, centerX - halfWidth)
+    const overlapHeight = Math.min(box.y + box.height, centerY + halfHeight) - Math.max(box.y, centerY - halfHeight)
+    expect(overlapWidth > 0 && overlapHeight > 0, `${actorId} 카드가 출연자를 덮습니다`).toBe(false)
+    await page.keyboard.press('Escape')
+    await expect(card).toBeHidden()
+  }
+
+  // 송출 화면 크게의 스튜디오 축소판에서는 카드가 패널보다 크므로 화면(뷰포트) 안에 있는지만 본다
+  await page.getByRole('button', { name: '송출 화면 크게' }).click()
+  await expect(page.getByRole('main')).toHaveAttribute('data-layout', 'onair')
+  await expect.poll(async () => (await host.boundingBox())?.width ?? 1000).toBeLessThan(300)
+  await host.click({ position: await actorAnchor(page, 'okafor') })
+  await expect(card).toBeVisible()
+  await expectInViewport(page, 'actor-card')
+})
+
+test('정보 카드를 고정한 뒤 L로 배치를 바꾸면 카드가 닫힌다', async ({ page }) => {
+  await openBroadcast(page)
+  await page.getByTestId('studio-host').click({ position: await actorAnchor(page, 'mo') })
+  const card = page.getByTestId('actor-card')
+  await expect(card).toBeVisible()
+  await page.keyboard.press('l')
+  await expect(page.getByRole('main')).toHaveAttribute('data-layout', 'studio')
+  await expect(card).toHaveCount(0)
+  await expect(page.getByTestId('card-dim')).toHaveCount(0)
+})
+
+/** 위 띠의 극 중 시각("21:03 / 21:30")을 방송 시작부터의 분으로 */
+async function showClockMinutes(page: Page): Promise<number> {
+  const text = (await page.getByTestId('broadcast-time').textContent()) ?? ''
+  const match = /(\d+):(\d+)/.exec(text)
+  if (match === null) throw new Error(`극 중 시각을 읽지 못했습니다: ${text}`)
+  return Number(match[1]) * 60 + Number(match[2])
+}
+
+test('L로 배치를 바꿔도 송출 카메라와 클로즈업 대상이 그대로이고 극 중 시각이 되돌아가지 않는다', async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  const label = page.getByTestId('on-air-label')
+  await page.keyboard.press('2')
+  await dragCloseupTo(page, 'priya')
+  await expect(label).toContainText('카메라 2 클로즈업 · 대상 프리야')
+  for (const layout of ['studio', 'onair', 'default'] as const) {
+    const minutesBefore = await showClockMinutes(page)
+    const anchorsBefore = await host.getAttribute('data-camera-anchors')
+    await page.keyboard.press('l')
+    await expect(page.getByRole('main')).toHaveAttribute('data-layout', layout)
+    // 스튜디오가 새 크기로 다시 그려진 뒤에 본다
+    await expect.poll(() => host.getAttribute('data-camera-anchors')).not.toBe(anchorsBefore)
+    await expect(page.getByTestId('switcher-slot-close'), layout).toHaveAttribute('data-on-air', 'true')
+    await expect(label, layout).toContainText('카메라 2 클로즈업 · 대상 프리야')
+    // 스튜디오 크게의 작은 송출 모니터(제목 칸 약 165px)는 3음절 대상 이름이면 두 줄이 된다(CAM 표기 때도 같음, 보고서 우려)
+    if (layout !== 'studio') await expectOneLine(page, 'on-air-label', layout)
+    expect(await showClockMinutes(page), layout).toBeGreaterThanOrEqual(minutesBefore)
   }
 })
 
