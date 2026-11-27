@@ -231,11 +231,10 @@ interface BuiltPerformer {
 
 function buildPerformer(id: PerformerId): BuiltPerformer {
   const map = readPoseMap(id)
-  const sheetOf = loadSheet
   const resolve = (ref: PoseRef): { sheet: SheetId; component: number; fitWidthPx?: number } =>
     typeof ref === 'number' ? { sheet: id, component: ref } : ref
   const boxOf = (sheet: SheetId, component: number): Box => {
-    const box = sheetOf(sheet).boxes[component - 1]
+    const box = loadSheet(sheet).boxes[component - 1]
     if (!box) throw new Error(`${sheet} 시트에 요소 ${component}번이 없습니다`)
     return box
   }
@@ -246,17 +245,17 @@ function buildPerformer(id: PerformerId): BuiltPerformer {
   const poses = POSES.map((pose): BuiltPose => {
     const { sheet, component, fitWidthPx } = resolve(map[pose])
     const box = boxOf(sheet, component)
-    const image = cutPose(sheetOf(sheet).cleared, box, scale, fitWidthPx)
+    const image = cutPose(loadSheet(sheet).cleared, box, scale, fitWidthPx)
     writePng(join(OUTPUT_DIR, id, `${pose}.png`), image)
     return { pose, sheet, component, image, fringe: whiteFringeRatio(image) }
   })
 
   const usedKeys = new Set(poses.map((p) => `${p.sheet}#${p.component}`))
   const unused = [...new Set(poses.map((p) => p.sheet))].flatMap((sheet) =>
-    sheetOf(sheet).boxes.flatMap((box, index) =>
+    loadSheet(sheet).boxes.flatMap((box, index) =>
       usedKeys.has(`${sheet}#${index + 1}`)
         ? []
-        : [{ sheet, component: index + 1, image: cropScaled(sheetOf(sheet).cleared, box, sheet === id ? scale : UNUSED_OTHER_SHEET_SCALE) }],
+        : [{ sheet, component: index + 1, image: cropScaled(loadSheet(sheet).cleared, box, sheet === id ? scale : UNUSED_OTHER_SHEET_SCALE) }],
     ),
   )
   return { id, scale, poses, unused }

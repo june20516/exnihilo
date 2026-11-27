@@ -285,8 +285,10 @@ function alphaOrZero(img: PNG, x: number, y: number): number {
   return img.data[(y * img.width + x) * 4 + 3]
 }
 
-/** 투명(이미지 밖 포함)과 맞닿은 불투명 픽셀의 알파를 3x3 이웃 평균으로 낮춰 계단 가장자리를 부드럽게 한다. */
-// 이미지 밖은 투명으로 본다: 꼭 맞게 오린 그림의 바깥 가장자리 픽셀도 경계로 취급해 알파를 낮춘다.
+/**
+ * 투명(이미지 밖 포함)과 맞닿은 불투명 픽셀의 알파를 3x3 이웃 평균으로 낮춰 계단 가장자리를 부드럽게 한다.
+ * 이미지 밖은 투명으로 본다: 꼭 맞게 오린 그림의 바깥 가장자리 픽셀도 경계로 취급해 알파를 낮춘다.
+ */
 function blendEdge(img: PNG): PNG {
   const out = new PNG({ width: img.width, height: img.height })
   img.data.copy(out.data)
