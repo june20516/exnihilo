@@ -51,6 +51,7 @@ import {
 } from './geometry'
 import { pickHit, type HitShapes, type StudioHit } from './hitTest'
 import { allPerformerArtUrls, assertPerformerArt } from './performerArt'
+import { saturationPlan } from './saturationPlan'
 import { StudioBackdrop, type StudioBackdropTextures } from './studioBackdrop'
 
 export type { StudioHit } from './hitTest'
@@ -191,6 +192,8 @@ export class StudioRenderer {
   private readonly vignette = new Graphics()
   private readonly interventionFilter = new ColorMatrixFilter()
   private readonly autoFilter = new ColorMatrixFilter()
+  /** 레이어마다 지금 걸어 둔 채도 필터. 같으면 다시 걸지 않는다 */
+  private readonly appliedFilters = new WeakMap<Container, ColorMatrixFilter | null>()
   private readonly actorFigures = new Map<string, ActorFigure>()
   private readonly staffSprites = new Map<string, StaffSprite>()
   private readonly equipmentShapes = new Map<string, Graphics>()
@@ -306,6 +309,8 @@ export class StudioRenderer {
     this.drawStaff(view.staff)
     this.drawPhenomenonMarks(view)
     this.applyMode(mode)
+    // 출연자 그림은 처음 보일 때 만들어지므로 레이어 목록은 매 draw 다시 본다
+    this.applySaturation()
   }
 
   /**
@@ -387,7 +392,7 @@ export class StudioRenderer {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
-    this.world.filters = null
+    for (const layer of [this.world, ...this.saturationLayers()]) layer.filters = null
     this.interventionFilter.destroy()
     this.autoFilter.destroy()
     this.app.destroy({ removeView: true }, { children: true })
@@ -490,15 +495,44 @@ export class StudioRenderer {
     this.vignette.visible = this.mode !== 'live'
   }
 
-  /** 개입은 강하게, 자동 슬로모션은 약하게 채도를 빼고 가장자리를 어둡게 한다. */
+  /** 개입은 강하게, 자동 슬로모션은 약하게 가장자리를 어둡게 한다(채도는 applySaturation). */
   private applyMode(mode: StudioMode): void {
     if (mode === this.mode) return
     this.mode = mode
     this.vignette.visible = mode !== 'live'
     this.vignette.alpha = mode === 'auto' ? AUTO_VIGNETTE_ALPHA : 1
-    if (mode === 'intervention') this.world.filters = [this.interventionFilter]
-    else if (mode === 'auto') this.world.filters = [this.autoFilter]
-    else this.world.filters = null
+  }
+
+  /**
+   * 개입은 강하게, 자동 슬로모션은 약하게 채도를 뺀다. 개입 중 고른 출연자(초점)의 몸과 머리 위 표시는
+   * 필터 밖에 두어 밝게 남긴다(B2 spec 7절, saturationPlan).
+   */
+  private applySaturation(): void {
+    const filter =
+      this.mode === 'intervention' ? this.interventionFilter : this.mode === 'auto' ? this.autoFilter : null
+    const focused = this.focusActorId === null ? undefined : this.actorFigures.get(this.focusActorId)
+    const kept = focused === undefined ? [] : [focused.body, focused.overhead]
+    const plan = saturationPlan(filter !== null, this.saturationLayers(), kept)
+    this.setFilter(this.world, plan.world ? filter : null)
+    for (const layer of plan.filtered) this.setFilter(layer, filter)
+    for (const layer of plan.unfiltered) this.setFilter(layer, null)
+  }
+
+  /** world 안에서 채도 필터를 따로 걸 수 있는 레이어: 배경, 바닥, 몸·장비·스태프 하나하나, 머리 위 표시 하나하나 */
+  private saturationLayers(): Container[] {
+    return [
+      this.backdrop.container,
+      this.floorStatic,
+      this.floorDynamic,
+      ...this.bodies.children,
+      ...this.overlays.children,
+    ]
+  }
+
+  private setFilter(target: Container, filter: ColorMatrixFilter | null): void {
+    if ((this.appliedFilters.get(target) ?? null) === filter) return
+    this.appliedFilters.set(target, filter)
+    target.filters = filter === null ? null : [filter]
   }
 
   // ── 바닥 표시 ─────────────────────────────────────────────
