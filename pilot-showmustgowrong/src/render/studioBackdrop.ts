@@ -5,8 +5,8 @@ import type { IsoTransform } from './geometry'
 /** 옆벽(x=0 면)을 뒷벽보다 조금 어둡게 해 두 면이 구분되게 한다(조명이 오른쪽 앞에서 온다고 본다) */
 export const SIDE_WALL_TINT = 0xb8b8c8
 
-/** 그리는 순서(뒤에서 앞): 벽 두 면 다음 바닥 */
-const PLANE_ORDER: readonly StudioPlaneId[] = ['backWall', 'sideWall', 'floor']
+/** 그리는 순서(뒤에서 앞): 벽 두 면 다음 바닥. container.children도 이 순서다 */
+export const PLANE_ORDER: readonly StudioPlaneId[] = ['backWall', 'sideWall', 'floor']
 
 /** 면마다 붙일 그림 텍스처 */
 export type StudioBackdropTextures = Readonly<Record<StudioPlaneId, Texture>>
@@ -26,13 +26,6 @@ export class StudioBackdrop {
       if (id === 'sideWall') sprite.tint = SIDE_WALL_TINT
       this.container.addChild(sprite)
     }
-  }
-
-  /** 면의 Sprite. 생성자가 모든 면을 만들므로 항상 있다 */
-  sprite(id: StudioPlaneId): Sprite {
-    const sprite = this.sprites.get(id)
-    if (sprite === undefined) throw new Error(`스튜디오 배경 면이 없습니다: ${id}`)
-    return sprite
   }
 
   layout(transform: IsoTransform): void {
