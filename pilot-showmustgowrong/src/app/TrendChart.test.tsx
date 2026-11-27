@@ -56,11 +56,29 @@ describe('TrendChart', () => {
     expect(html.match(/stroke-dasharray/g)).toHaveLength(2)
   })
 
+  it('값이 하나도 없는 시리즈(무대에 오른 적 없는 대기 출연자)는 범례에서 빠진다', () => {
+    const html = render([
+      { actorId: 'rex', points: [{ step: 0, value: 10 }] },
+      { actorId: 'mo', points: [{ step: 0, value: null }, { step: 900, value: null }] },
+    ])
+    expect(html).toContain('>렉스<')
+    expect(html).not.toContain('>모<')
+  })
+
+  it('중간에 투입된 출연자는 앞 구간이 null이어도 값이 생겼으니 범례에 나온다', () => {
+    const html = render([
+      { actorId: 'rex', points: [{ step: 0, value: 10 }] },
+      { actorId: 'mo', points: [{ step: 0, value: null }, { step: 900, value: 30 }] },
+    ])
+    expect(html).toContain('>렉스<')
+    expect(html).toContain('>모<')
+  })
+
   it('출연자가 6명이어도 범례 항목이 모두 그림 안에 있다', () => {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f']
     const html = renderToStaticMarkup(
       <TrendChart
-        series={ids.map((actorId) => ({ actorId, points: [] }))}
+        series={ids.map((actorId) => ({ actorId, points: [{ step: 0, value: 10 }] }))}
         colors={{}}
         names={Object.fromEntries(ids.map((id) => [id, `이름${id}`]))}
         fromStep={0}
@@ -80,10 +98,10 @@ describe('TrendChart', () => {
   })
 
   it('범례는 짧은 이름이고 relative 축은 -60초와 지금, clock 축은 극 중 시각이다', () => {
-    const relative = render([{ actorId: 'rex', points: [] }])
+    const relative = render([{ actorId: 'rex', points: [{ step: 0, value: 10 }] }])
     expect(relative).toContain('렉스')
     expect(relative).toContain('-60초')
     expect(relative).toContain('지금')
-    expect(render([{ actorId: 'rex', points: [] }], 'clock')).toMatch(/\d\d:\d\d/)
+    expect(render([{ actorId: 'rex', points: [{ step: 0, value: 10 }] }], 'clock')).toMatch(/\d\d:\d\d/)
   })
 })

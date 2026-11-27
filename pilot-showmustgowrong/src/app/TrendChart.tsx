@@ -93,7 +93,10 @@ export function TrendChart({ series, colors, names, fromStep, toStep, axis, show
           { x: PLOT_LEFT, text: `-${windowSeconds}초`, anchor: 'start' },
           { x: PLOT_RIGHT, text: '지금', anchor: 'end' },
         ]
-  const chartHeight = CHART_HEIGHT + (Math.max(1, Math.ceil(series.length / LEGEND_PER_ROW)) - 1) * LEGEND_ROW_HEIGHT
+  // 무대에 오른 적 없는 출연자(값이 하나도 없는 시리즈)는 선이 없으니 범례에도 넣지 않는다
+  const legendSeries = series.filter(({ points }) => points.some(({ value }) => value !== null))
+  const chartHeight =
+    CHART_HEIGHT + (Math.max(1, Math.ceil(legendSeries.length / LEGEND_PER_ROW)) - 1) * LEGEND_ROW_HEIGHT
   return (
     <svg
       data-testid="trend-chart"
@@ -147,7 +150,7 @@ export function TrendChart({ series, colors, names, fromStep, toStep, axis, show
           {text}
         </text>
       ))}
-      {series.map(({ actorId }, index) => (
+      {legendSeries.map(({ actorId }, index) => (
         <g key={actorId} transform={`translate(${4 + (index % LEGEND_PER_ROW) * LEGEND_STEP} ${LEGEND_Y + Math.floor(index / LEGEND_PER_ROW) * LEGEND_ROW_HEIGHT})`}>
           <rect y={-5} width={8} height={3} rx={1} fill={colors[actorId] ?? FALLBACK_COLOR} />
           <text x={11} y={0} fontSize={9} fill="#cbd5e1">

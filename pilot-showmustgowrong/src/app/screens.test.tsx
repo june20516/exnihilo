@@ -160,6 +160,21 @@ describe('ResultScreen', () => {
     expect(text.getAttribute('title')).toBe(longText)
   })
 
+  it('뿌리 문장은 길어도 말줄임 없이 줄바꿈으로 전부 보여 주고 가장 큰 글자를 유지한다', () => {
+    const longRoot =
+      '프리야의 킥킥거림을 참던 오카포가 무너지는 세트 벽에게 "정확한 표현이 아닙니다" 하고 끼어든다'
+    mount(
+      <ResultScreen
+        {...NOOP_RESULT_PROPS}
+        result={{ ...ROOTED, summary: { ...ROOTED.summary, rootLine: { step: 1100, text: longRoot } } }}
+      />,
+    )
+    const sentence = screen.getByTestId('result-root-sentence')
+    expect(sentence.textContent).toBe(`21:03 ${longRoot}`)
+    expect(sentence.className).not.toMatch(/truncate|line-clamp|text-ellipsis/)
+    expect(textSizeRank(sentence)).toBeGreaterThan(textSizeRank(screen.getByTestId('result-title')))
+  })
+
   it('터짐 추세는 clock 축으로 방송 전체(21:00부터 21:30)를 그린다', () => {
     const trend = [{ actorId: 'rex', points: [{ step: 0, value: 10 }, { step: 30, value: 20 }] }]
     mount(<ResultScreen {...NOOP_RESULT_PROPS} trend={trend} result={ROOTED} />)

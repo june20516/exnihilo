@@ -102,8 +102,7 @@ function RootCard({ rootLine, show }: { rootLine: BroadcastResult['summary']['ro
       <p className="text-sm font-bold text-red-300">모든 건 여기서 시작됐다</p>
       <p
         data-testid="result-root-sentence"
-        title={rootLine.text}
-        className="truncate text-5xl font-bold text-amber-200"
+        className="break-keep text-5xl font-bold leading-tight text-amber-200"
       >
         {`${formatShowClock(rootLine.step, show)} ${rootLine.text}`}
       </p>
