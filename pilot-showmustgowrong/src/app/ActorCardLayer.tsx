@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import type { PerformerDef } from '@/content/types'
 import type { ActorView } from '@/sim/engineTypes'
 import { ActorInfoCard } from './ActorInfoCard'
-import { placeCardInPanel } from './cardPlacement'
+import { ACTOR_BODY_BOX, CARD_GAP, placeCardInPanel } from './cardPlacement'
 
 /** 카드를 띄울 출연자와 자리(스튜디오 패널 안쪽 CSS 좌표) */
 export interface ActorCardAnchor {
@@ -25,6 +25,8 @@ interface ActorCardLayerProps {
 export function ActorCardLayer({ anchor, actor, performer, nameOf }: ActorCardLayerProps) {
   const layerRef = useRef<HTMLDivElement>(null)
 
+  // 의존성 배열이 없어 렌더마다 돈다. 방송 화면은 프레임마다 다시 그려지지만 이 effect는 크기 두 개와
+  // 사각형 하나를 읽고 style 세 줄을 쓰는 정도라 프레임당 비용이 무시할 만하다(setState가 없어 렌더가 더 늘지 않는다).
   useLayoutEffect(() => {
     const layer = layerRef.current
     const panel = layer?.offsetParent
@@ -36,6 +38,8 @@ export function ActorCardLayer({ anchor, actor, performer, nameOf }: ActorCardLa
       { width: panel.clientWidth, height: panel.clientHeight },
       { width: window.innerWidth, height: window.innerHeight },
       { x: rect.left + panel.clientLeft, y: rect.top + panel.clientTop },
+      CARD_GAP,
+      ACTOR_BODY_BOX,
     )
     // 자리는 렌더를 거치지 않고 바로 쓴다(재측정마다 setState하지 않는다)
     layer.style.left = `${next.left}px`

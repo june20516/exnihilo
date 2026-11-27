@@ -1,4 +1,4 @@
-import { placeCard, placeCardInPanel } from './cardPlacement'
+import { placeCard, placeCardInPanel, type BodyBox } from './cardPlacement'
 
 const CARD = { width: 300, height: 260 }
 const BOUNDS = { width: 470, height: 600 }
@@ -49,5 +49,87 @@ describe('placeCardInPanel', () => {
     expect(origin.x + left + CARD.width).toBeLessThanOrEqual(VIEWPORT.width)
     expect(origin.y + top).toBeGreaterThanOrEqual(0)
     expect(origin.y + top + CARD.height).toBeLessThanOrEqual(VIEWPORT.height)
+  })
+})
+
+describe('카드가 출연자 몸 상자를 덮지 않는다', () => {
+  const BODY: BodyBox = { halfWidth: 30, halfHeight: 50 }
+  const NARROW = { width: 490, height: 656 }
+  const CARD_200 = { width: 300, height: 200 }
+
+  function overlaps(
+    placement: { left: number; top: number },
+    card: { width: number; height: number },
+    anchor: { x: number; y: number },
+  ): boolean {
+    return (
+      placement.left < anchor.x + BODY.halfWidth &&
+      placement.left + card.width > anchor.x - BODY.halfWidth &&
+      placement.top < anchor.y + BODY.halfHeight &&
+      placement.top + card.height > anchor.y - BODY.halfHeight
+    )
+  }
+
+  it('좁은 패널(약 490폭)의 렉스 자리(오른쪽·왼쪽이 안 맞음)는 아래에 둔다', () => {
+    const anchor = { x: 199, y: 288 }
+    const placement = placeCard(anchor, CARD_200, NARROW, 12, BODY)
+    expect(placement.top).toBe(288 + 50 + 12)
+    expect(overlaps(placement, CARD_200, anchor)).toBe(false)
+  })
+
+  it('아래도 안 맞으면 위에 둔다', () => {
+    const anchor = { x: 199, y: 600 }
+    const placement = placeCard(anchor, CARD_200, NARROW, 12, BODY)
+    expect(placement.top).toBe(600 - 50 - 12 - 200)
+    expect(overlaps(placement, CARD_200, anchor)).toBe(false)
+  })
+
+  it('좁은 패널의 모든 앵커에서 패널 안에 있고 몸 상자와 겹치지 않는다(세로가 넉넉할 때)', () => {
+    for (const x of [0, 100, 245, 390, 490]) {
+      for (const y of [0, 150, 328, 500, 656]) {
+        const anchor = { x, y }
+        const placement = placeCard(anchor, CARD_200, NARROW, 12, BODY)
+        expect(placement.left).toBeGreaterThanOrEqual(0)
+        expect(placement.top).toBeGreaterThanOrEqual(0)
+        expect(placement.left + CARD_200.width).toBeLessThanOrEqual(NARROW.width)
+        expect(placement.top + CARD_200.height).toBeLessThanOrEqual(NARROW.height)
+        expect(overlaps(placement, CARD_200, anchor), `앵커 ${x},${y}`).toBe(false)
+      }
+    }
+  })
+
+  it('네 모서리 앵커도 겹치지 않는다', () => {
+    const bounds = { width: 800, height: 600 }
+    for (const anchor of [
+      { x: 0, y: 0 },
+      { x: 800, y: 0 },
+      { x: 0, y: 600 },
+      { x: 800, y: 600 },
+    ]) {
+      const placement = placeCard(anchor, CARD_200, bounds, 12, BODY)
+      expect(placement.left).toBeGreaterThanOrEqual(0)
+      expect(placement.left + CARD_200.width).toBeLessThanOrEqual(bounds.width)
+      expect(placement.top + CARD_200.height).toBeLessThanOrEqual(bounds.height)
+      expect(overlaps(placement, CARD_200, anchor), `${anchor.x},${anchor.y}`).toBe(false)
+    }
+  })
+
+  it('어느 후보도 안 들어가면 겹침이 가장 작은 자리를 쓴다', () => {
+    // 카드가 패널을 가득 채우는 경우: 어디에 놓아도 겹친다. 그래도 패널 안에는 둔다
+    const bounds = { width: 320, height: 220 }
+    const anchor = { x: 160, y: 110 }
+    const placement = placeCard(anchor, CARD_200, bounds, 12, BODY)
+    expect(placement.left).toBeGreaterThanOrEqual(0)
+    expect(placement.left + CARD_200.width).toBeLessThanOrEqual(bounds.width)
+    expect(placement.top + CARD_200.height).toBeLessThanOrEqual(bounds.height)
+  })
+
+  it('placeCardInPanel의 뷰포트 폴백도 몸 상자를 피한다', () => {
+    const origin = { x: 500, y: 100 }
+    const panel = { width: 260, height: 146 }
+    const anchor = { x: 130, y: 70 }
+    const placement = placeCardInPanel(anchor, CARD_200, panel, { width: 1280, height: 720 }, origin, 12, BODY)
+    const inViewport = { left: placement.left + origin.x, top: placement.top + origin.y }
+    expect(overlaps(inViewport, CARD_200, { x: anchor.x + origin.x, y: anchor.y + origin.y })).toBe(false)
   })
 })

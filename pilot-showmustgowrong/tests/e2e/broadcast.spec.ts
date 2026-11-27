@@ -375,6 +375,35 @@ test('정보 카드는 스튜디오 패널 안에 놓이고 다른 곳을 누르
   await expect(card).toBeHidden()
 })
 
+test('가장자리에 가까운 출연자의 정보 카드도 패널 안에 있고 그 출연자를 덮지 않는다', async ({ page }) => {
+  await openBroadcast(page)
+  const host = page.getByTestId('studio-host')
+  const card = page.getByTestId('actor-card')
+  // 출연자 몸 중심 둘레의 몸 상자 반 크기(cardPlacement.ts의 ACTOR_BODY_BOX와 같다)
+  const halfWidth = 30
+  const halfHeight = 50
+  for (const actorId of ['rex', 'priya', 'okafor', 'mo']) {
+    const anchor = await actorAnchor(page, actorId)
+    await host.click({ position: anchor })
+    await expect(card).toBeVisible()
+    const panel = await page.getByTestId('studio').boundingBox()
+    const hostBox = await host.boundingBox()
+    const box = await card.boundingBox()
+    if (panel === null || hostBox === null || box === null) throw new Error('패널이나 카드가 보이지 않습니다')
+    expect(box.x, actorId).toBeGreaterThanOrEqual(panel.x)
+    expect(box.y, actorId).toBeGreaterThanOrEqual(panel.y)
+    expect(box.x + box.width, actorId).toBeLessThanOrEqual(panel.x + panel.width)
+    expect(box.y + box.height, actorId).toBeLessThanOrEqual(panel.y + panel.height)
+    const centerX = hostBox.x + anchor.x
+    const centerY = hostBox.y + anchor.y
+    const overlapWidth = Math.min(box.x + box.width, centerX + halfWidth) - Math.max(box.x, centerX - halfWidth)
+    const overlapHeight = Math.min(box.y + box.height, centerY + halfHeight) - Math.max(box.y, centerY - halfHeight)
+    expect(overlapWidth > 0 && overlapHeight > 0, `${actorId} 카드가 출연자를 덮습니다`).toBe(false)
+    await page.keyboard.press('Escape')
+    await expect(card).toBeHidden()
+  }
+})
+
 test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 카메라를 끌어 추적이 돌아온다", async ({
   page,
 }) => {

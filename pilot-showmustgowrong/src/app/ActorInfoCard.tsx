@@ -72,7 +72,7 @@ export function ActorInfoCard({ actor, performer, nameOf }: ActorInfoCardProps) 
   const moodText =
     actor.mood === null
       ? null
-      : actor.mood.stageName === null
+      : actor.mood.stageName === null || actor.mood.stageName === actor.mood.name
         ? actor.mood.name
         : `${actor.mood.name} · ${actor.mood.stageName}`
 

@@ -73,6 +73,11 @@ describe('ActorInfoCard', () => {
     expect(within(screen.getByTestId('card-tolerance')).getAllByTestId('tolerance-dot-filled')).toHaveLength(3)
   })
 
+  it('대표 감정 이름과 단계 이름이 같으면 한 번만 보인다', () => {
+    renderCard({ mood: { emotion: 'boredom', name: '지루함', stage: 1, stageName: '지루함', value: 51 } })
+    expect(screen.getByTestId('card-mood').textContent).toBe('지루함')
+  })
+
   it('감정 막대는 공용 4개 + 구분선 + 개인 감정(개인 표시), 막대마다 문턱 눈금 2개', () => {
     renderCard()
     const bars = screen.getAllByTestId(/^emotion-bar-/)

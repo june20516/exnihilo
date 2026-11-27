@@ -23,6 +23,7 @@ import { ResultScreen } from './ResultScreen'
 import { useStudioClick, type StudioClickState } from './studioClick'
 import { useAimDrag } from './useAimDrag'
 import { useBroadcastLoop } from './useBroadcastLoop'
+import { livePinnedAnchor } from './pinnedCard'
 import { usePinnedDismiss } from './usePinnedDismiss'
 
 interface BroadcastScreenProps {
@@ -280,11 +281,14 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     if (renderer === null || host === null) return null
     const rect = host.getBoundingClientRect()
     const point = clientToCanvas(event.clientX, event.clientY, rect, renderer.size)
+    const hit = renderer.hitTest(point.x, point.y)
+    // 출연자는 마우스 자리가 아니라 몸 중심에 카드를 붙여, 카드가 그 출연자를 덮지 않게 한다
+    const body = hit?.kind === 'actor' ? renderer.anchorOf('actor', hit.id) : null
     return {
-      hit: renderer.hitTest(point.x, point.y),
+      hit,
       canvas: point,
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      x: body === null ? event.clientX - rect.left : (body.x * rect.width) / renderer.size.width,
+      y: body === null ? event.clientY - rect.top : (body.y * rect.height) / renderer.size.height,
     }
   }
 
@@ -334,11 +338,8 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     },
   }
 
-  // 고정한 카드의 출연자가 이탈하면 고정은 없는 것으로 친다(카드가 닫히고 호버가 다시 카드를 정한다)
-  const pinnedActorGone =
-    pinnedAnchor?.hit.kind === 'actor' &&
-    view?.actors.find((actor) => actor.id === pinnedAnchor.hit.id)?.walkedOut === true
-  const livePinned = pinnedActorGone ? null : pinnedAnchor
+  // 개입 중이거나 고정한 출연자가 이탈했으면 고정은 없는 것으로 친다(개입 시작 때 상태도 비운다)
+  const livePinned = livePinnedAnchor(pinnedAnchor, view?.actors, interventionOpen)
   usePinnedDismiss(livePinned !== null, hostRef, clearInfo)
 
   // 고정한 자리가 있으면 호버는 카드를 바꾸지 않는다. 출연자는 정보 카드, 스태프·장비·현상은 말풍선이다.
