@@ -15,12 +15,16 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PNG } from 'pngjs'
 import {
+  IDLE_HEIGHT,
+  PERFORMER_IDS,
   cropScaled,
+  cutPose,
   findComponents,
   floodClearBackground,
   scaleForTargetHeight,
   whiteFringeRatio,
   type Box,
+  type PerformerId,
 } from './spriteCut'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -30,9 +34,6 @@ const POSES_DIR = join(ROOT, 'art-source/poses')
 const OUTPUT_DIR = join(ROOT, 'src/assets/performers')
 const CONTACT_SHEET_PATH = join(ROOT, 'art-source/contact-sheet.png')
 
-const PERFORMER_IDS = ['rex', 'priya', 'okafor', 'mo', 'june'] as const
-type PerformerId = (typeof PERFORMER_IDS)[number]
-
 const POSES = ['idle', 'laugh', 'angry', 'panic', 'flying', 'fallen'] as const
 type Pose = (typeof POSES)[number]
 
@@ -40,17 +41,12 @@ type Pose = (typeof POSES)[number]
 const SHEET_IDS = [...PERFORMER_IDS, 'june-fallen'] as const
 type SheetId = (typeof SHEET_IDS)[number]
 
-/** 출연자별 idle 높이(px). 같은 출연자의 다른 포즈는 idle 배율을 그대로 쓴다. */
-const IDLE_HEIGHT: Record<PerformerId, number> = { rex: 256, priya: 256, okafor: 256, mo: 268, june: 205 }
-
 /**
  * 포즈 매핑 값: 같은 이름 시트의 요소 번호, 또는 다른 시트의 요소.
- * 다른 시트는 그려진 크기가 달라 idle 배율이 맞지 않으므로, fitWidthTo(같은 이름 시트의 요소 번호)를 주면
- * 그 요소를 idle 배율로 줄였을 때의 폭에 맞춘다.
+ * fitWidthPx를 주면 idle 배율 대신 출력 폭을 그 px에 맞춘다. 준의 june-fallen.png 인물은 다른 시트보다
+ * 약 2.5배 크게 그려져 idle 배율로는 636x250이 되므로, 다른 출연자 쓰러짐 폭(260 안팎)에 맞춰 254px로 줄인다.
  */
-type PoseRef =
-  | number
-  | { readonly sheet: SheetId; readonly component: number; readonly fitWidthTo?: number }
+type PoseRef = number | { readonly sheet: SheetId; readonly component: number; readonly fitWidthPx?: number }
 type PoseMap = Record<Pose, PoseRef>
 
 /** 다른 시트의 쓰지 않은 요소는 크기 기준이 없어 대조 시트에 작게만 보인다. */
@@ -68,10 +64,22 @@ function writePng(path: string, img: PNG): void {
   writeFileSync(path, PNG.sync.write(img))
 }
 
-/** 시트를 읽어 흰 배경을 지우고 요소 목록을 돌려준다. */
-function loadSheet(sheet: SheetId): { cleared: PNG; boxes: Box[] } {
+interface LoadedSheet {
+  readonly cleared: PNG
+  readonly boxes: Box[]
+}
+
+/** 출연자 사이에서 공유하는 시트 캐시(june-fallen 같은 시트를 다시 읽고 flood fill하지 않는다). */
+const sheetCache = new Map<SheetId, LoadedSheet>()
+
+/** 시트를 읽어 흰 배경을 지우고 요소 목록을 돌려준다. 같은 시트는 한 번만 처리한다. */
+function loadSheet(sheet: SheetId): LoadedSheet {
+  const cached = sheetCache.get(sheet)
+  if (cached) return cached
   const cleared = floodClearBackground(readPng(join(SHEETS_DIR, `${sheet}.png`)))
-  return { cleared, boxes: findComponents(cleared) }
+  const loaded = { cleared, boxes: findComponents(cleared) }
+  sheetCache.set(sheet, loaded)
+  return loaded
 }
 
 // ---- 번호 그리기(대조 이미지용 3x5 숫자 글꼴) ----
@@ -187,7 +195,7 @@ function isPoseRef(value: unknown): value is PoseRef {
     typeof record.component === 'number' &&
     Number.isInteger(record.component) &&
     record.component >= 1 &&
-    (record.fitWidthTo === undefined || (typeof record.fitWidthTo === 'number' && record.fitWidthTo >= 1))
+    (record.fitWidthPx === undefined || (typeof record.fitWidthPx === 'number' && record.fitWidthPx >= 1))
   )
 }
 
@@ -221,15 +229,8 @@ interface BuiltPerformer {
 
 function buildPerformer(id: PerformerId): BuiltPerformer {
   const map = readPoseMap(id)
-  const sheets = new Map<SheetId, ReturnType<typeof loadSheet>>()
-  const sheetOf = (sheet: SheetId): ReturnType<typeof loadSheet> => {
-    const cached = sheets.get(sheet)
-    if (cached) return cached
-    const loaded = loadSheet(sheet)
-    sheets.set(sheet, loaded)
-    return loaded
-  }
-  const resolve = (ref: PoseRef): { sheet: SheetId; component: number; fitWidthTo?: number } =>
+  const sheetOf = loadSheet
+  const resolve = (ref: PoseRef): { sheet: SheetId; component: number; fitWidthPx?: number } =>
     typeof ref === 'number' ? { sheet: id, component: ref } : ref
   const boxOf = (sheet: SheetId, component: number): Box => {
     const box = sheetOf(sheet).boxes[component - 1]
@@ -241,11 +242,9 @@ function buildPerformer(id: PerformerId): BuiltPerformer {
   const scale = scaleForTargetHeight(boxOf(idleRef.sheet, idleRef.component), IDLE_HEIGHT[id])
 
   const poses = POSES.map((pose): BuiltPose => {
-    const { sheet, component, fitWidthTo } = resolve(map[pose])
+    const { sheet, component, fitWidthPx } = resolve(map[pose])
     const box = boxOf(sheet, component)
-    // 다른 시트의 요소는 기준 요소의 (idle 배율 적용) 폭에 맞춰 크기를 정한다.
-    const poseScale = fitWidthTo === undefined ? scale : (boxOf(id, fitWidthTo).width * scale) / box.width
-    const image = cropScaled(sheetOf(sheet).cleared, box, poseScale)
+    const image = cutPose(sheetOf(sheet).cleared, box, scale, fitWidthPx)
     writePng(join(OUTPUT_DIR, id, `${pose}.png`), image)
     return { pose, sheet, component, image, fringe: whiteFringeRatio(image) }
   })

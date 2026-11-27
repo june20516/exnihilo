@@ -1,7 +1,10 @@
 import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
 import {
+  IDLE_HEIGHT,
+  PERFORMER_IDS,
   cropScaled,
+  cutPose,
   findComponents,
   floodClearBackground,
   scaleForTargetHeight,
@@ -128,6 +131,24 @@ describe('cropScaled', () => {
     expect(alphaAt(out, 5, 10)).toBe(255)
   })
 
+  it('상자 안에 걸친 다른 조각 자리는 투명하게 남긴다', () => {
+    // 빨간 L자 요소의 오목한 자리(상자 안)에 닿지 않는 파란 조각이 들어 있다.
+    const img = new PNG({ width: 40, height: 40 })
+    fillRect(img, 5, 5, 4, 30, RED)
+    fillRect(img, 5, 31, 30, 4, RED)
+    fillRect(img, 20, 10, 6, 6, [0, 0, 255])
+    const boxes = findComponents(img, 0)
+    const lShape = boxes.find((b) => b.area === 4 * 30 + 26 * 4)!
+
+    const out = cropScaled(img, lShape, 1)
+
+    // 파란 조각 자리(상자 좌표로 15,5)는 요소 밖이라 알파 0이어야 한다.
+    expect(lShape.x).toBe(5)
+    expect(lShape.y).toBe(5)
+    expect(alphaAt(out, 15, 5)).toBe(0)
+    expect(alphaAt(out, 1, 10)).toBeGreaterThan(0)
+  })
+
   it('경계 1px을 블렌딩해 투명과 맞닿은 불투명 픽셀의 알파가 낮아진다', () => {
     const img = new PNG({ width: 30, height: 30 })
     fillRect(img, 5, 5, 20, 20, RED)
@@ -141,16 +162,32 @@ describe('cropScaled', () => {
   })
 })
 
-describe('scaleForTargetHeight', () => {
-  it('기준 포즈(idle) 높이를 targetHeight로 맞춘 배율을 같은 출연자 모든 포즈에 쓴다', () => {
-    const idle = { x: 0, y: 0, width: 80, height: 400, area: 1, pixels: new Int32Array() }
-    const fallen = { x: 0, y: 0, width: 300, height: 160, area: 1, pixels: new Int32Array() }
+describe('키 맞춤', () => {
+  /** idle과 같은 시트의 다른 포즈 요소를 합성한다(투명 바탕 위 사각형). */
+  function sheetOf(heights: number[]): PNG {
+    const img = new PNG({ width: 400 * heights.length, height: 500 })
+    heights.forEach((h, i) => fillRect(img, i * 400 + 10, 10, 100, h, RED))
+    return img
+  }
 
-    const scale = scaleForTargetHeight(idle, 256)
+  it.each(PERFORMER_IDS)('%s: 출력 idle 높이가 IDLE_HEIGHT와 일치하고 다른 포즈는 같은 배율을 쓴다', (id) => {
+    const img = sheetOf([410, 300])
+    const [idle, other] = findComponents(img)
 
-    expect(scale).toBeCloseTo(0.64)
-    expect(Math.round(idle.height * scale)).toBe(256)
-    expect(Math.round(fallen.height * scale)).toBe(102)
+    const scale = scaleForTargetHeight(idle, IDLE_HEIGHT[id])
+
+    expect(cutPose(img, idle, scale).height).toBe(IDLE_HEIGHT[id])
+    expect(cutPose(img, other, scale).height).toBe(Math.round(300 * scale))
+  })
+
+  it('fitWidthPx를 주면 idle 배율 대신 출력 폭을 그 값에 맞춘다', () => {
+    const img = sheetOf([400])
+    const [box] = findComponents(img)
+
+    const out = cutPose(img, box, 0.5, 40)
+
+    expect(out.width).toBe(40)
+    expect(out.height).toBe(160)
   })
 })
 
@@ -160,6 +197,15 @@ describe('whiteFringeRatio', () => {
     fillRect(img, 2, 2, 6, 6, RED)
     // 테두리 한 칸을 흰색으로 바꾼다. 경계 픽셀은 6*4-4=20개.
     setPixel(img, 2, 5, WHITE)
+
+    expect(whiteFringeRatio(img)).toBeCloseTo(1 / 20)
+  })
+
+  it('flood 임계값(232)에 못 미치는 연한 색(200 이상)도 기본 검사에서 센다', () => {
+    const img = new PNG({ width: 10, height: 10 })
+    fillRect(img, 2, 2, 6, 6, RED)
+    setPixel(img, 2, 5, [215, 215, 215])
+    setPixel(img, 2, 4, [190, 190, 190]) // 더 진한 색은 세지 않는다
 
     expect(whiteFringeRatio(img)).toBeCloseTo(1 / 20)
   })

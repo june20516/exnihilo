@@ -6,6 +6,15 @@ import { PNG } from 'pngjs'
 
 /** 흰 배경으로 보는 RGB 하한(모든 채널이 이 값 이상이면 배경 후보). */
 export const BACKGROUND_THRESHOLD = 232
+/** 흰 테두리 자체 검사에서 "연한 색"으로 세는 RGB 하한. flood 임계값(232)보다 낮춰 남은 밝은 헤일로까지 잡는다. */
+export const FRINGE_LIGHT_THRESHOLD = 200
+
+export const PERFORMER_IDS = ['rex', 'priya', 'okafor', 'mo', 'june'] as const
+export type PerformerId = (typeof PERFORMER_IDS)[number]
+
+/** 출연자별 idle 높이(px). 같은 출연자의 다른 포즈는 idle 배율을 그대로 쓴다. */
+export const IDLE_HEIGHT: Record<PerformerId, number> = { rex: 256, priya: 256, okafor: 256, mo: 268, june: 205 }
+
 /** 가장 큰 요소 면적 대비 이 비율 미만인 조각은 먼지로 보고 버린다. */
 export const MIN_AREA_RATIO = 0.02
 
@@ -152,6 +161,15 @@ export function scaleForTargetHeight(idle: Box, targetHeight: number): number {
   return targetHeight / idle.height
 }
 
+/**
+ * 한 포즈를 오린다. fitWidthPx가 있으면 idle 배율 대신 출력 폭을 그 값에 맞춘다.
+ * 원본 시트의 인물 크기가 다른 시트와 달라 idle 배율이 맞지 않는 포즈(준 fallen)에만 쓴다.
+ */
+export function cutPose(img: PNG, box: Box, idleScale: number, fitWidthPx?: number): PNG {
+  const scale = fitWidthPx === undefined ? idleScale : fitWidthPx / box.width
+  return cropScaled(img, box, scale)
+}
+
 /** 요소에 속한 픽셀만 상자 크기로 오려 낸다(상자 안에 걸친 다른 조각은 투명). */
 function extractComponent(img: PNG, box: Box): PNG {
   const out = new PNG({ width: box.width, height: box.height })
@@ -218,6 +236,7 @@ function alphaOrZero(img: PNG, x: number, y: number): number {
 }
 
 /** 투명(이미지 밖 포함)과 맞닿은 불투명 픽셀의 알파를 3x3 이웃 평균으로 낮춰 계단 가장자리를 부드럽게 한다. */
+// 이미지 밖은 투명으로 본다: 꼭 맞게 오린 그림의 바깥 가장자리 픽셀도 경계로 취급해 알파를 낮춘다.
 function blendEdge(img: PNG): PNG {
   const out = new PNG({ width: img.width, height: img.height })
   img.data.copy(out.data)
@@ -242,8 +261,11 @@ export function cropScaled(img: PNG, box: Box, scale: number): PNG {
   return blendEdge(resizeArea(extractComponent(img, box), scale))
 }
 
-/** 투명과 맞닿은 불투명 픽셀 중 RGB가 모두 임계값 이상(거의 흰색)인 비율. 흰 테두리가 남았는지 보는 자체 검사다. */
-export function whiteFringeRatio(img: PNG, threshold: number = BACKGROUND_THRESHOLD): number {
+/**
+ * 투명과 맞닿은 경계 픽셀(알파 > 0) 중 RGB가 모두 임계값 이상(연한 색)인 비율. 흰 테두리가 남았는지 보는 자체 검사다.
+ * 배경 제거 임계값(232)과 따로 FRINGE_LIGHT_THRESHOLD(200)를 기본으로 써서 자기참조 검사가 되지 않게 한다.
+ */
+export function whiteFringeRatio(img: PNG, threshold: number = FRINGE_LIGHT_THRESHOLD): number {
   let edge = 0
   let white = 0
   for (let y = 0; y < img.height; y++) {
