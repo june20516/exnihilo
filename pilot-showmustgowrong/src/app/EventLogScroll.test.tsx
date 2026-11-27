@@ -18,6 +18,7 @@ function line(index: number): LogLine {
     eventId: null,
     lastEventId: null,
     leadIn: null,
+    actorId: null,
     x: 0,
     y: 0,
     z: 0,

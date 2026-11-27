@@ -20,6 +20,8 @@ export interface LineInput {
   stage?: 1 | 2 | null
   /** 이어받은 사고 줄의 앞머리. text가 이것으로 시작한다. 기본 null */
   leadIn?: string | null
+  /** 줄의 주인공 출연자 id. 출연자가 아니면 null(LogLine.actorId) */
+  actorId: string | null
 }
 
 /** silent면 행동 줄과 현상 줄을 남기지 않는다(버릇·터짐이 자기 줄을 따로 남긴다, L3) */
@@ -92,6 +94,7 @@ export class LifeActions {
           kind: 'stage',
           depth: 1,
           eventId: null,
+          actorId: member.def.id,
           position: this.deps.cast.position(member),
           emotion: output.emotion.id,
           stage: output.stage,
@@ -140,6 +143,7 @@ export class LifeActions {
       // 기척이 없으면 기척을 냈을 때와 같은 깊이(원인 깊이, 광고 전 원인이면 0)
       depth: stir?.depth ?? this.deps.log.linkedCauseDepth(cause?.id ?? null),
       eventId: stir?.id ?? null,
+      actorId: member.def.id,
       position: emitter.position,
     })
   }
@@ -171,6 +175,7 @@ export class LifeActions {
       kind: 'incident',
       depth: first?.depth ?? causeDepth + 1,
       eventId: first?.id ?? null,
+      actorId: member.def.id,
       position,
       emotion: emotion.id,
     })

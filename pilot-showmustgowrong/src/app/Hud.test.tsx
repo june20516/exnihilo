@@ -18,6 +18,7 @@ function line(overrides: Partial<LogLine>): LogLine {
     eventId: null,
     lastEventId: null,
     leadIn: null,
+    actorId: null,
     x: 0,
     y: 0,
     z: 0,
@@ -97,21 +98,32 @@ describe('EventLog 줄 종류', () => {
     expect(rowOf(html, 8)).toContain('text-[#7C8DA6]')
   })
 
-  it('사고 줄의 왼쪽 띠는 줄에 처음 나오는 출연자의 색이고, 이름은 출연자 색으로 칠한다', () => {
+  it('사고 줄의 왼쪽 띠는 줄 주인공(actorId)의 색이고, 이름은 출연자 색으로 칠한다', () => {
+    const people = [
+      { name: '렉스', color: '#EF4444' },
+      { name: '모', color: '#F97316' },
+    ]
+    const actorColors = { rex: '#EF4444', mo: '#F97316' }
     const colored = renderToStaticMarkup(
       <EventLog
-        log={[line({ index: 0, text: '모가 렉스에게 달려든다' })]}
+        log={[
+          line({ index: 0, text: '모가 렉스에게 달려든다', actorId: 'mo' }),
+          // 글에 먼저 나오는 이름(모)이 아니라 엔진이 아는 주인공(렉스)을 쓴다
+          line({ index: 1, text: '모 옆에서 렉스가 넘어진다', actorId: 'rex' }),
+          // 주인공이 출연자가 아니면(장비 등) 이름이 있어도 기본 띠 색
+          line({ index: 2, text: '조명이 렉스 위로 떨어진다', actorId: null }),
+        ]}
         highlightedEventId={null}
         show={TALK_SHOW}
-        people={[
-          { name: '렉스', color: '#EF4444' },
-          { name: '모', color: '#F97316' },
-        ]}
+        people={people}
+        actorColors={actorColors}
       />,
     )
     expect(rowOf(colored, 0)).toContain('border-left-color:#F97316')
     expect(rowOf(colored, 0)).toContain('<span style="color:#F97316">모</span>')
     expect(rowOf(colored, 0)).toContain('<span style="color:#EF4444">렉스</span>')
+    expect(rowOf(colored, 1)).toContain('border-left-color:#EF4444')
+    expect(rowOf(colored, 2)).toContain('border-left-color:#e2e8f0')
   })
 
   it('이어받은 줄의 앞머리는 흐리게 칠한다', () => {

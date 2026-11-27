@@ -2,6 +2,7 @@ import { BROADCAST_STEPS } from '@/content/balance'
 import type { PerformerDef, ShowDef } from '@/content/types'
 import type { ChainLine } from '@/sim/engineTypes'
 import { GAUGE_LABELS, formatShowClock, formatShowEnd, formatViewers } from './labels'
+import { performerPalette } from './performerPalette'
 import { TrendChart } from './TrendChart'
 import type { TrendSeries } from './trendRecorder'
 import type { BroadcastResult } from './useBroadcastLoop'
@@ -21,8 +22,7 @@ const NON_PERFORMER_COLOR = '#94A3B8'
 
 export function ResultScreen({ result, trend, show, performers, onRestart }: ResultScreenProps) {
   const { summary, longestChain, haltedBy, interventionsIssued } = result
-  const colors = Object.fromEntries(performers.map((performer) => [performer.id, performer.color]))
-  const names = Object.fromEntries(performers.map((performer) => [performer.id, performer.shortName]))
+  const { colors, names } = performerPalette(performers)
   return (
     <main
       data-testid="result-screen"

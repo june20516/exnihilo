@@ -13,6 +13,7 @@ import { GAUGE_LABELS } from './labels'
 import { sortPeopleLongestFirst, type LogPerson } from './logSegments'
 import { LAYOUT_GRIDS, layoutStorage, loadLayout, nextLayout, saveLayout, type LayoutMode } from './layout'
 import { OnAirColumn } from './OnAirColumn'
+import { performerPalette, type PerformerPalette } from './performerPalette'
 import { TrendChart } from './TrendChart'
 import type { TrendRecorder } from './trendRecorder'
 import type { BroadcastLoopControls } from './useBroadcastLoop'
@@ -111,14 +112,7 @@ export function BroadcastStage({
       ),
     [performers],
   )
-  const trendColors = useMemo(
-    () => Object.fromEntries([...performers.values()].map((performer) => [performer.id, performer.color])),
-    [performers],
-  )
-  const trendNames = useMemo(
-    () => Object.fromEntries([...performers.values()].map((performer) => [performer.id, performer.shortName])),
-    [performers],
-  )
+  const palette = useMemo(() => performerPalette(performers.values()), [performers])
   const [layoutStore] = useState(layoutStorage)
   const [layout, setLayout] = useState<LayoutMode>(() => loadLayout(layoutStore))
   /** 사용자가 배치를 바꿀 때만 저장한다(열 때는 저장소를 건드리지 않는다) */
@@ -185,19 +179,13 @@ export function BroadcastStage({
               />
             ) : (
               <>
-                <TrendPanel
-                  trend={trend}
-                  view={view}
-                  startingIds={setup.performers.map((performer) => performer.id)}
-                  colors={trendColors}
-                  names={trendNames}
-                  show={show}
-                />
+                <TrendPanel trend={trend} view={view} palette={palette} show={show} />
                 <EventLog
                   log={view.log}
                   highlightedEventId={highlightedEventId}
                   show={show}
                   people={logPeople}
+                  actorColors={palette.colors}
                 />
                 <p className="text-[11px] text-slate-500">
                   누적 피로 {view.fatigue} · 시드 {setup.seed}
@@ -304,22 +292,16 @@ export function BroadcastStage({
 interface TrendPanelProps {
   trend: TrendRecorder
   view: BroadcastView
-  /** 처음부터 무대에 선 출연자(대기 출연자는 투입된 뒤에만 선이 생기고 범례에 오른다) */
-  startingIds: readonly string[]
-  colors: Record<string, string>
-  names: Record<string, string>
+  palette: PerformerPalette
   show: ShowDef
 }
 
-/** 왼쪽 칸 위의 터짐 추세 그래프. 창은 지금부터 TREND_WINDOW_BODY_SECONDS(몸 초) 전까지 */
-function TrendPanel({ trend, view, startingIds, colors, names, show }: TrendPanelProps) {
+/**
+ * 왼쪽 칸 위의 터짐 추세 그래프. 창은 지금부터 TREND_WINDOW_BODY_SECONDS(몸 초) 전까지.
+ * 값 없는 출연자(투입 전 대기 출연자 등)를 범례에서 빼는 규칙은 TrendChart가 맡는다.
+ */
+function TrendPanel({ trend, view, palette, show }: TrendPanelProps) {
   const windowSteps = Math.round(TREND_WINDOW_BODY_SECONDS / STEP_SECONDS)
-  const series = trend
-    .window(view.step, windowSteps)
-    .filter(
-      ({ actorId, points }) =>
-        startingIds.includes(actorId) || points.some((point) => point.value !== null),
-    )
   return (
     <section
       data-testid="trend-panel"
@@ -327,9 +309,9 @@ function TrendPanel({ trend, view, startingIds, colors, names, show }: TrendPane
     >
       <div className="mb-0.5 text-[11px] font-bold text-slate-500">터지기 직전</div>
       <TrendChart
-        series={series}
-        colors={colors}
-        names={names}
+        series={trend.window(view.step, windowSteps)}
+        colors={palette.colors}
+        names={palette.names}
         fromStep={view.step - windowSteps}
         toStep={view.step}
         axis="relative"

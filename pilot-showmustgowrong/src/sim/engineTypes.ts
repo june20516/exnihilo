@@ -130,6 +130,11 @@ export interface LogLine {
   lastEventId: number | null
   /** 이어받은 사고 줄의 앞머리("프리야의 킥킥거림에 이어 "). text는 이 앞머리로 시작한다. 그 밖은 null */
   leadIn: string | null
+  /**
+   * 줄의 주인공 출연자 id(화면용: 로그 색 띠). 현상 줄은 현상의 주체(longestChain의 actorId와 같은 기준),
+   * 행동·버릇·터짐·단계·이탈·시선 줄은 그 출연자다. 주체가 출연자가 아니면(스태프·장비·관객·방송) null
+   */
+  actorId: string | null
   x: number
   y: number
   z: number

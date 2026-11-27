@@ -93,7 +93,8 @@ export function TrendChart({ series, colors, names, fromStep, toStep, axis, show
           { x: PLOT_LEFT, text: `-${windowSeconds}초`, anchor: 'start' },
           { x: PLOT_RIGHT, text: '지금', anchor: 'end' },
         ]
-  // 무대에 오른 적 없는 출연자(값이 하나도 없는 시리즈)는 선이 없으니 범례에도 넣지 않는다
+  // 범례 규칙은 여기 한 곳이다: 그린 구간에 값이 하나도 없는 시리즈(투입 전 대기 출연자, 창보다 먼저 이탈한
+  // 출연자)는 선이 없으니 범례에도 넣지 않는다
   const legendSeries = series.filter(({ points }) => points.some(({ value }) => value !== null))
   const chartHeight =
     CHART_HEIGHT + (Math.max(1, Math.ceil(legendSeries.length / LEGEND_PER_ROW)) - 1) * LEGEND_ROW_HEIGHT

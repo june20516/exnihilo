@@ -57,6 +57,29 @@ describe('연쇄 줄의 주인공', () => {
     }
     expect(chain.find((line) => line.text.startsWith('프리야'))?.actorId).toBe('priya')
   })
+
+  it('로그 줄의 actorId는 같은 사건의 연쇄 줄 actorId와 같고, 스태프 줄은 null이다', async () => {
+    const broadcast = await open(lineupSetup())
+    run(broadcast, 10)
+    broadcast.step([{ type: 'direct', actorId: 'priya', directiveId: 'laughBig' }])
+    run(broadcast, STEPS_PER_SECOND * 10)
+
+    const lines = broadcast.logLines()
+    const chain = broadcast.longestChain()
+    expect(chain.length).toBeGreaterThan(1)
+    for (const chainLine of chain) {
+      // 이어받은 줄은 앞머리가 붙으므로 끝 글로 찾는다
+      const logLine = lines.find(
+        (candidate) => candidate.step === chainLine.step && candidate.text.endsWith(chainLine.text),
+      )
+      expect(logLine, chainLine.text).toBeDefined()
+      expect(logLine?.actorId, chainLine.text).toBe(chainLine.actorId)
+    }
+    for (const line of lines.filter((candidate) => candidate.kind === 'staff')) {
+      expect(line.actorId).toBeNull()
+    }
+    expect(lines.filter((line) => line.kind === 'habit').every((line) => line.actorId !== null)).toBe(true)
+  })
 })
 
 const WINK: HabitDef = {

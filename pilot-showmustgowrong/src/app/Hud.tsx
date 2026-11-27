@@ -145,15 +145,18 @@ interface EventLogProps {
   show: ShowDef
   /** 줄 속 이름을 칠할 출연자(정식 이름과 짧은 이름). 없으면 이름을 칠하지 않는다 */
   people?: readonly LogPerson[]
+  /** 출연자 id → 색. 사고 줄 색 띠를 줄 주인공(LogLine.actorId)의 색으로 칠한다. 없으면 기본 띠 색 */
+  actorColors?: Readonly<Record<string, string>>
 }
 
 /** 맨 아래에서 이 거리(px) 안이면 새 줄이 올 때 따라 내려간다 */
 const LOG_FOLLOW_THRESHOLD_PX = 8
 /** 앞머리(이어받은 줄의 "○○의 △△에 이어")를 흐리게 하는 투명도 */
 const LOG_LEAD_IN_OPACITY = 0.5
-/** 사고 줄에 출연자 이름이 없을 때의 띠 색 */
+/** 사고 줄 주인공이 출연자가 아닐 때(장비·관객 등)의 띠 색 */
 const LOG_INCIDENT_BAND_FALLBACK = '#e2e8f0'
 const NO_PEOPLE: readonly LogPerson[] = []
+const NO_ACTOR_COLORS: Readonly<Record<string, string>> = {}
 
 /** 스크롤 위치가 맨 아래에서 LOG_FOLLOW_THRESHOLD_PX 이내인지 */
 function isNearBottom(element: HTMLElement): boolean {
@@ -164,7 +167,13 @@ function isNearBottom(element: HTMLElement): boolean {
  * 왼쪽 열의 사고 로그(spec 8절). 3단 위계: 사고는 색 띠와 흰 굵은 글, 감정 단계는 감정 색과 아이콘, 나머지는
  * 흐린 기울임. 연쇄 깊이만큼 들여쓴다. 맨 아래를 보고 있으면 새 줄을 따라가고, 위로 올려 읽는 중이면 따라가지 않는다.
  */
-export function EventLog({ log, highlightedEventId, show, people = NO_PEOPLE }: EventLogProps) {
+export function EventLog({
+  log,
+  highlightedEventId,
+  show,
+  people = NO_PEOPLE,
+  actorColors = NO_ACTOR_COLORS,
+}: EventLogProps) {
   const recent = log.slice(-LOG_LINES_SHOWN)
   const listRef = useRef<HTMLOListElement>(null)
   const followingRef = useRef(true)
@@ -197,6 +206,7 @@ export function EventLog({ log, highlightedEventId, show, people = NO_PEOPLE }: 
             line={line}
             show={show}
             people={people}
+            actorColors={actorColors}
             highlighted={containsEvent(line, highlightedEventId)}
           />
         ))}
@@ -209,6 +219,7 @@ interface LogRowProps {
   line: LogLine
   show: ShowDef
   people: readonly LogPerson[]
+  actorColors: Readonly<Record<string, string>>
   highlighted: boolean
 }
 
@@ -226,16 +237,19 @@ function sameRow(before: LogRowProps, after: LogRowProps): boolean {
     a.depth === b.depth &&
     a.repeat === b.repeat &&
     a.leadIn === b.leadIn &&
+    a.actorId === b.actorId &&
     before.highlighted === after.highlighted &&
     before.show === after.show &&
-    before.people === after.people
+    before.people === after.people &&
+    before.actorColors === after.actorColors
   )
 }
 
-const LogRow = memo(function LogRow({ line, show, people, highlighted }: LogRowProps) {
+const LogRow = memo(function LogRow({ line, show, people, actorColors, highlighted }: LogRowProps) {
   const tier = logTier(line)
   const segments = logSegments(line, people)
-  const heroColor = segments.find((segment) => segment.color !== null && !segment.dim)?.color ?? null
+  // 색 띠는 글에서 이름을 찾지 않고 엔진이 아는 주인공을 쓴다(정산 연쇄 점과 같은 출처)
+  const heroColor = line.actorId === null ? null : (actorColors[line.actorId] ?? null)
   const stageStyle = line.kind === 'stage' && line.emotion !== null ? emotionStyle(line.emotion) : null
   return (
     <li

@@ -464,7 +464,7 @@ export class Broadcast {
       .filter(isStrong)
       .slice(-this.deepestEvent.depth)
       .map((event) => ({
-        actorId: this.performerIds.has(event.sourceId) ? event.sourceId : null,
+        actorId: this.performerActorId(event),
         step: event.step,
         text: this.describe(event),
         depth: event.depth,
@@ -705,6 +705,7 @@ export class Broadcast {
       kind: 'incident',
       depth: 1,
       eventId: null,
+      actorId: member.def.id,
       position,
     })
     for (const kind of ['anger', 'noise'] as const) {
@@ -952,6 +953,7 @@ export class Broadcast {
       // 광고로 끊긴 원인은 잇지 않는다(Ruling 9)
       depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
       eventId: null,
+      actorId: null,
       position: camera.position,
     })
   }
@@ -974,6 +976,7 @@ export class Broadcast {
         kind: 'staff',
         depth: 1,
         eventId: null,
+        actorId: null,
         position: this.requireCamera(member.cameraId).position,
       })
     }
@@ -1003,7 +1006,7 @@ export class Broadcast {
         ? `${withSubject(camera.label)} ${withObject(name)} 잡았다`
         : `${withSubject(name)} 한동안 화면에 잡히지 않았다`
     const position = this.cast.position(member)
-    this.addLine({ text, kind: 'incident', depth: 1, eventId: null, position })
+    this.addLine({ text, kind: 'incident', depth: 1, eventId: null, actorId: member.def.id, position })
     this.executeAction(member, reaction.action, null)
     return true
   }
@@ -1190,6 +1193,7 @@ export class Broadcast {
         // 광고 전 원인이면 1부터 센다(Ruling 9)
         depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
         eventId: null,
+        actorId: member.def.id,
         position: emitter.position,
       })
       linePrefix = ''
@@ -1318,6 +1322,7 @@ export class Broadcast {
         kind: event.kind === 'silence' ? 'silence' : 'incident',
         depth: event.depth,
         eventId: event.id,
+        actorId: this.performerActorId(event),
         position: event,
         leadIn: linePrefix === '' ? null : linePrefix,
       })
@@ -1335,6 +1340,7 @@ export class Broadcast {
     emotion = null,
     stage = null,
     leadIn = null,
+    actorId,
   }: LineInput): void {
     const last = this.lines.at(-1)
     const sameAsLast =
@@ -1361,10 +1367,16 @@ export class Broadcast {
       eventId,
       lastEventId: eventId,
       leadIn,
+      actorId,
       x: position.x,
       y: position.y,
       z: position.z,
     })
+  }
+
+  /** 현상의 주체가 출연자면 그 id, 아니면 null. 로그 줄과 정산 연쇄가 같은 기준으로 주인공을 정한다 */
+  private performerActorId(event: PhenomenonEvent): string | null {
+    return this.performerIds.has(event.sourceId) ? event.sourceId : null
   }
 
   private describe(event: PhenomenonEvent): string {
