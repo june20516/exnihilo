@@ -16,6 +16,8 @@ export interface LineInput {
   eventId: number | null
   position: Vec3
   emotion?: EmotionId | null
+  /** stage 줄의 진입 단계. 기본 null */
+  stage?: 1 | 2 | null
   /** 이어받은 사고 줄의 앞머리. text가 이것으로 시작한다. 기본 null */
   leadIn?: string | null
 }
@@ -92,6 +94,7 @@ export class LifeActions {
           eventId: null,
           position: this.deps.cast.position(member),
           emotion: output.emotion.id,
+          stage: output.stage,
         })
         return
       case 'habit':

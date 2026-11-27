@@ -12,6 +12,7 @@ function line(overrides: Partial<LogLine>): LogLine {
     text: '문장',
     kind: 'incident',
     emotion: null,
+    stage: null,
     repeat: 1,
     depth: 1,
     eventId: null,
@@ -66,23 +67,68 @@ describe('EventLog 줄 종류', () => {
     expect(rowOf(html, 4)).not.toContain('italic')
   })
 
+  it('단계 줄은 감정 색(inline)과 감정 아이콘이고 개인 감정도 같은 표를 쓴다', () => {
+    expect(rowOf(html, 1)).toContain('color:#EF4444')
+    expect(rowOf(html, 1)).toContain('😠')
+    expect(rowOf(html, 2)).toContain('color:#FACC15')
+    expect(rowOf(html, 3)).toContain('color:#A855F7')
+    expect(rowOf(html, 4)).toContain('color:#64748B')
+    expect(rowOf(html, 5)).toContain('color:#EC4899')
+    expect(rowOf(html, 5)).toContain('📷')
+  })
+
+  it('2단계 진입 줄만 굵게 하고 1단계 진입 줄은 굵게 하지 않는다', () => {
+    const stages = render([
+      line({ index: 0, kind: 'stage', emotion: 'irritation', stage: 1, text: '슬슬 짜증이 난다' }),
+      line({ index: 1, kind: 'stage', emotion: 'irritation', stage: 2, text: '폭발 직전이다' }),
+    ])
+    expect(rowOf(stages, 0)).not.toContain('font-bold')
+    expect(rowOf(stages, 1)).toContain('font-bold')
+  })
+
+  it('사건 줄은 흰 굵은 글과 3단 표식이고, 스태프·정적·버릇은 흐린 1단이다', () => {
+    expect(rowOf(html, 6)).toContain('font-bold text-white')
+    expect(rowOf(html, 6)).toContain('data-log-tier="3"')
+    for (const index of [0, 7, 8]) {
+      expect(rowOf(html, index)).toContain('data-log-tier="1"')
+      expect(rowOf(html, index)).toContain('italic')
+      expect(rowOf(html, index)).not.toContain('font-bold')
+    }
+    expect(rowOf(html, 8)).toContain('text-[#7C8DA6]')
+  })
+
+  it('사고 줄의 왼쪽 띠는 줄에 처음 나오는 출연자의 색이고, 이름은 출연자 색으로 칠한다', () => {
+    const colored = renderToStaticMarkup(
+      <EventLog
+        log={[line({ index: 0, text: '모가 렉스에게 달려든다' })]}
+        highlightedEventId={null}
+        show={TALK_SHOW}
+        people={[
+          { name: '렉스', color: '#EF4444' },
+          { name: '모', color: '#F97316' },
+        ]}
+      />,
+    )
+    expect(rowOf(colored, 0)).toContain('border-left-color:#F97316')
+    expect(rowOf(colored, 0)).toContain('<span style="color:#F97316">모</span>')
+    expect(rowOf(colored, 0)).toContain('<span style="color:#EF4444">렉스</span>')
+  })
+
+  it('이어받은 줄의 앞머리는 흐리게 칠한다', () => {
+    const led = renderToStaticMarkup(
+      <EventLog
+        log={[line({ index: 0, text: '프리야의 킥킥거림에 이어 모가 웃는다', leadIn: '프리야의 킥킥거림에 이어 ' })]}
+        highlightedEventId={null}
+        show={TALK_SHOW}
+        people={[{ name: '프리야', color: '#A855F7' }]}
+      />,
+    )
+    expect(rowOf(led, 0)).toContain('opacity:0.5')
+  })
+
   it('긴 줄은 자르지 않고 줄바꿈한다', () => {
     expect(html).not.toContain('truncate')
     expect(html).toContain('break-keep')
-  })
-
-  it('단계 줄은 감정별 색이고 개인 감정은 violet-300이다', () => {
-    expect(rowOf(html, 1)).toContain('text-red-300')
-    expect(rowOf(html, 2)).toContain('text-amber-300')
-    expect(rowOf(html, 3)).toContain('text-sky-300')
-    expect(rowOf(html, 4)).toContain('text-slate-400')
-    expect(rowOf(html, 5)).toContain('text-violet-300')
-  })
-
-  it('사건 줄만 굵게 하고, 스태프·정적 줄은 색을 따로 주지 않는다', () => {
-    expect(rowOf(html, 6)).toContain('font-semibold')
-    for (const index of [0, 1, 7, 8]) expect(rowOf(html, index)).not.toContain('font-semibold')
-    for (const index of [7, 8]) expect(rowOf(html, index)).not.toMatch(/text-(red|amber|sky|violet)-300/)
   })
 })
 

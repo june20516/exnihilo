@@ -1333,6 +1333,7 @@ export class Broadcast {
     eventId,
     position,
     emotion = null,
+    stage = null,
     leadIn = null,
   }: LineInput): void {
     const last = this.lines.at(-1)
@@ -1354,6 +1355,7 @@ export class Broadcast {
       text,
       kind,
       emotion,
+      stage,
       repeat: 1,
       depth,
       eventId,

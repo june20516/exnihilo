@@ -1,9 +1,12 @@
 import type { ShowDef } from '@/content/types'
 import { GAUGE_LABELS, formatShowClock, formatViewers } from './labels'
+import type { TrendSeries } from './trendRecorder'
 import type { BroadcastResult } from './useBroadcastLoop'
 
 interface ResultScreenProps {
   result: BroadcastResult
+  /** 방송 전체의 근접도 기록(정산의 전체 추세 그래프가 쓴다) */
+  trend: readonly TrendSeries[]
   show: ShowDef
   onRestart(): void
 }

@@ -10,6 +10,7 @@ import { AdPanel } from './AdPanel'
 import { BroadcastStage, type BroadcastStageProps, type StageControls } from './BroadcastStage'
 import { ErrorScreen } from './ErrorScreen'
 import { LAYOUT_STORAGE_KEY } from './layout'
+import { TrendRecorder } from './trendRecorder'
 import {
   CHAIN_INDENT_MAX_LEVEL,
   CHAIN_INDENT_PX,
@@ -37,7 +38,7 @@ function escapeRegExp(text: string): string {
 
 describe('ResultScreen', () => {
   it('중단 원인 게이지, 시청자, 최대 연쇄와 그 문장들, 다시 하기를 보여 준다', () => {
-    const html = renderToStaticMarkup(<ResultScreen show={TALK_SHOW} result={HALTED} onRestart={noop} />)
+    const html = renderToStaticMarkup(<ResultScreen trend={[]} show={TALK_SHOW} result={HALTED} onRestart={noop} />)
     expect(html).toContain('방송 중단(언어 게이지)')
     expect(html).toContain('612,500명')
     expect(html).toContain('540,000명')
@@ -50,6 +51,7 @@ describe('ResultScreen', () => {
   it('끝까지 가면 방송 완료, 연쇄가 없으면 그렇게 쓴다', () => {
     const html = renderToStaticMarkup(
       <ResultScreen
+        trend={[]}
         show={TALK_SHOW}
         result={{ ...HALTED, haltedBy: null, longestChain: [] }}
         onRestart={noop}
@@ -74,7 +76,7 @@ describe('ResultScreen 긴 연쇄', () => {
   }
 
   it('표시 줄 수 상한까지만 보여 주고 나머지는 "… 외 N단계"로 줄인다', () => {
-    const html = renderToStaticMarkup(<ResultScreen show={TALK_SHOW} result={LONG} onRestart={noop} />)
+    const html = renderToStaticMarkup(<ResultScreen trend={[]} show={TALK_SHOW} result={LONG} onRestart={noop} />)
     const items = html.match(/<li/g) ?? []
     expect(items).toHaveLength(CHAIN_LINES_SHOWN + 1)
     expect(html).toContain(`연쇄 문장 ${CHAIN_LINES_SHOWN}번`)
@@ -83,14 +85,14 @@ describe('ResultScreen 긴 연쇄', () => {
   })
 
   it('들여쓰기는 상한 단계에서 멈춘다', () => {
-    const html = renderToStaticMarkup(<ResultScreen show={TALK_SHOW} result={LONG} onRestart={noop} />)
+    const html = renderToStaticMarkup(<ResultScreen trend={[]} show={TALK_SHOW} result={LONG} onRestart={noop} />)
     const indents = [...html.matchAll(/padding-left:(\d+)px/g)].map((match) => Number(match[1]))
     expect(indents.length).toBeGreaterThan(0)
     expect(Math.max(...indents)).toBe(CHAIN_INDENT_MAX_LEVEL * CHAIN_INDENT_PX)
   })
 
   it('상한 이하의 연쇄는 줄이지 않는다', () => {
-    const html = renderToStaticMarkup(<ResultScreen show={TALK_SHOW} result={HALTED} onRestart={noop} />)
+    const html = renderToStaticMarkup(<ResultScreen trend={[]} show={TALK_SHOW} result={HALTED} onRestart={noop} />)
     expect(html).not.toContain('… 외')
   })
 })
@@ -101,6 +103,7 @@ describe('ResultScreen 긴 문장', () => {
   it('연쇄 줄은 한 줄로 고정(truncate)하고 전체 문장은 title로 보여 준다', () => {
     const html = renderToStaticMarkup(
       <ResultScreen
+        trend={[]}
         show={TALK_SHOW}
         result={{ ...HALTED, longestChain: [{ actorId: null, step: 300, text: LONG_TEXT, depth: 1 }] }}
         onRestart={noop}
@@ -172,6 +175,7 @@ describe('BroadcastStage 생방송 화면', () => {
         view={baseView}
         setup={SETUP}
         controls={CONTROLS}
+        trend={new TrendRecorder([])}
         selectedTarget={null}
         hoverTip={null}
         onSelectTarget={noop}
@@ -330,6 +334,7 @@ describe('BroadcastStage 생방송 화면', () => {
           view={baseView}
           setup={SETUP}
           controls={CONTROLS}
+          trend={new TrendRecorder([])}
           selectedTarget={null}
           hoverTip={null}
           onSelectTarget={noop}

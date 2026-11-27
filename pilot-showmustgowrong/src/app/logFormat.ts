@@ -1,4 +1,3 @@
-import { COMMON_EMOTIONS, type CommonEmotionId } from '@/content/types'
 import type { LogLine } from '@/sim/engine'
 
 /** 연쇄 깊이 한 단계의 들여쓰기(px) */
@@ -11,39 +10,38 @@ export function logIndent(depth: number): number {
   return Math.max(0, Math.min(depth, LOG_INDENT_MAX_LEVEL) - 1) * LOG_INDENT_PX
 }
 
-/** 공용 감정의 단계 줄 색. 개인 감정은 LOG_PERSONAL_EMOTION_COLOR */
-const LOG_STAGE_COLORS: Record<CommonEmotionId, string> = {
-  irritation: 'text-red-300',
-  excitement: 'text-amber-300',
-  anxiety: 'text-sky-300',
-  boredom: 'text-slate-400',
-}
-const LOG_PERSONAL_EMOTION_COLOR = 'text-violet-300'
+/** 로그 줄의 보이는 단(spec 8절): 3 사고(가장 강함), 2 감정 단계 진입, 1 버릇·정적·스태프(가장 약함) */
+export type LogTier = 1 | 2 | 3
 
-function isCommonEmotion(emotion: string): emotion is CommonEmotionId {
-  return (COMMON_EMOTIONS as readonly string[]).includes(emotion)
+export function logTier(line: LogLine): LogTier {
+  switch (line.kind) {
+    case 'incident':
+      return 3
+    case 'stage':
+      return 2
+    default:
+      return 1
+  }
 }
 
-function stageColor(emotion: string | null): string {
-  return emotion !== null && isCommonEmotion(emotion)
-    ? LOG_STAGE_COLORS[emotion]
-    : LOG_PERSONAL_EMOTION_COLOR
-}
+/** 정적 줄의 회청색(버릇·스태프의 회색과 구분한다) */
+const SILENCE_TEXT_COLOR = 'text-[#7C8DA6]'
 
 /**
- * 줄 종류에 따른 글씨 스타일. staff와 silence는 로그의 기본 색을 그대로 쓴다.
- * 버릇은 이탤릭으로 눕혀 사건·감정 줄보다 한 단계 낮은 배경 소리로 읽히게 한다.
+ * 줄 종류에 따른 글씨 스타일(색은 감정 색을 inline으로 주는 단계 줄 말고 여기서 정한다).
+ * 1단은 흐린 기울임, 2단 2단계 진입은 굵게, 3단은 흰 굵은 글이다.
  */
 export function logTextClass(line: LogLine): string {
   switch (line.kind) {
     case 'habit':
+    case 'staff':
       return 'italic text-slate-500'
+    case 'silence':
+      return `italic ${SILENCE_TEXT_COLOR}`
     case 'stage':
-      return stageColor(line.emotion)
+      return line.stage === 2 ? 'font-bold' : ''
     case 'incident':
-      return 'font-semibold'
-    default:
-      return ''
+      return 'font-bold text-white'
   }
 }
 

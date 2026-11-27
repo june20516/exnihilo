@@ -119,6 +119,8 @@ export interface LogLine {
   kind: LogKind
   /** stage 줄과 감정 터짐 줄의 감정. 그 밖은 null */
   emotion: EmotionId | null
+  /** stage 줄이 몇 단계 진입인지(1 또는 2). 그 밖은 null */
+  stage: 1 | 2 | null
   /** 같은 text·kind가 연달아 나와 묶인 횟수(1부터) */
   repeat: number
   depth: number

@@ -1,6 +1,6 @@
 import { useMemo, useState, type MouseEvent, type PointerEvent, type Ref } from 'react'
-import { INTERVENTION_SPEED } from '@/content/balance'
-import type { PerformerDef } from '@/content/types'
+import { INTERVENTION_SPEED, STEP_SECONDS, TREND_WINDOW_BODY_SECONDS } from '@/content/balance'
+import type { PerformerDef, ShowDef } from '@/content/types'
 import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine'
 import { AdPanel } from './AdPanel'
 import { HoverTip } from './HoverTip'
@@ -9,8 +9,11 @@ import { EventLog, TOP_BAND_HEIGHT, TopBand } from './Hud'
 import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
 import { GAUGE_LABELS } from './labels'
+import type { LogPerson } from './logSegments'
 import { LAYOUT_GRIDS, layoutStorage, loadLayout, nextLayout, saveLayout, type LayoutMode } from './layout'
 import { OnAirColumn } from './OnAirColumn'
+import { TrendChart } from './TrendChart'
+import type { TrendRecorder } from './trendRecorder'
 import type { BroadcastLoopControls } from './useBroadcastLoop'
 import { useLayoutHotkey } from './useLayoutHotkey'
 
@@ -37,6 +40,8 @@ export interface BroadcastStageProps {
   view: BroadcastView | null
   setup: BroadcastSetup
   controls: StageControls
+  /** 이 방송의 근접도 기록(방송마다 하나, BroadcastScreen이 만든다) */
+  trend: TrendRecorder
   selectedTarget: InterventionTarget | null
   hoverTip: HoverTipState | null
   onSelectTarget(target: InterventionTarget): void
@@ -65,6 +70,7 @@ export function BroadcastStage({
   view,
   setup,
   controls,
+  trend,
   selectedTarget,
   hoverTip,
   onSelectTarget,
@@ -80,6 +86,23 @@ export function BroadcastStage({
         [...setup.performers, ...setup.bench].map((performer) => [performer.id, performer]),
       ),
     [setup],
+  )
+  /** 줄 속 이름을 칠할 출연자: 정식 이름과 짧은 이름 */
+  const logPeople = useMemo<LogPerson[]>(
+    () =>
+      [...performers.values()].flatMap((performer) => [
+        { name: performer.name, color: performer.color },
+        { name: performer.shortName, color: performer.color },
+      ]),
+    [performers],
+  )
+  const trendColors = useMemo(
+    () => Object.fromEntries([...performers.values()].map((performer) => [performer.id, performer.color])),
+    [performers],
+  )
+  const trendNames = useMemo(
+    () => Object.fromEntries([...performers.values()].map((performer) => [performer.id, performer.shortName])),
+    [performers],
   )
   const [layoutStore] = useState(layoutStorage)
   const [layout, setLayout] = useState<LayoutMode>(() => loadLayout(layoutStore))
@@ -134,7 +157,20 @@ export function BroadcastStage({
               />
             ) : (
               <>
-                <EventLog log={view.log} highlightedEventId={highlightedEventId} show={show} />
+                <TrendPanel
+                  trend={trend}
+                  view={view}
+                  startingIds={setup.performers.map((performer) => performer.id)}
+                  colors={trendColors}
+                  names={trendNames}
+                  show={show}
+                />
+                <EventLog
+                  log={view.log}
+                  highlightedEventId={highlightedEventId}
+                  show={show}
+                  people={logPeople}
+                />
                 <p className="text-[11px] text-slate-500">
                   누적 피로 {view.fatigue} · 시드 {setup.seed}
                 </p>
@@ -231,6 +267,44 @@ export function BroadcastStage({
         </svg>
       </div>
     </main>
+  )
+}
+
+interface TrendPanelProps {
+  trend: TrendRecorder
+  view: BroadcastView
+  /** 처음부터 무대에 선 출연자(대기 출연자는 투입된 뒤에만 선이 생기고 범례에 오른다) */
+  startingIds: readonly string[]
+  colors: Record<string, string>
+  names: Record<string, string>
+  show: ShowDef
+}
+
+/** 왼쪽 칸 위의 터짐 추세 그래프. 창은 지금부터 TREND_WINDOW_BODY_SECONDS(몸 초) 전까지 */
+function TrendPanel({ trend, view, startingIds, colors, names, show }: TrendPanelProps) {
+  const windowSteps = Math.round(TREND_WINDOW_BODY_SECONDS / STEP_SECONDS)
+  const series = trend
+    .window(view.step, windowSteps)
+    .filter(
+      ({ actorId, points }) =>
+        startingIds.includes(actorId) || points.some((point) => point.value !== null),
+    )
+  return (
+    <section
+      data-testid="trend-panel"
+      className="shrink-0 rounded-xl border-2 border-slate-800 bg-slate-900/60 px-2.5 py-1.5"
+    >
+      <div className="mb-0.5 text-[11px] font-bold text-slate-500">터지기 직전</div>
+      <TrendChart
+        series={series}
+        colors={colors}
+        names={names}
+        fromStep={view.step - windowSteps}
+        toStep={view.step}
+        axis="relative"
+        show={show}
+      />
+    </section>
   )
 }
 

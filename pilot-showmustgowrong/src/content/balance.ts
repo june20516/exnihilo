@@ -240,3 +240,6 @@ export const LIFE_RNG_SALT = 0x6c696665
  */
 export const INTENSE_SOURCE_INTENSITY: Intensity = 2
 export const INTENSE_EMIT_INTENSITY: Intensity = 3
+
+/** 터짐 추세 그래프가 한 화면에 보여 주는 길이(몸 초). 기록은 방송 전체가 남는다 */
+export const TREND_WINDOW_BODY_SECONDS = tuned('TREND_WINDOW_BODY_SECONDS')

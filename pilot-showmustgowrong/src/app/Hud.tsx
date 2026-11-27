@@ -1,13 +1,16 @@
 import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
 import { GAUGE_KINDS, type GaugeKind, type ShowDef } from '@/content/types'
 import type { BroadcastView, LogLine } from '@/sim/engine'
-import { containsEvent, logIndent, logTextClass } from './logFormat'
+import { useLayoutEffect, useRef } from 'react'
+import { emotionStyle } from '@/render/emotionBadge'
+import { containsEvent, logIndent, logTextClass, logTier } from './logFormat'
+import { logSegments, type LogPerson } from './logSegments'
 import { GAUGE_LABELS, formatShowClock, formatShowEnd, formatViewers } from './labels'
 import type { LayoutMode } from './layout'
 import { LayoutToggle } from './LayoutToggle'
 
 /** 사고 로그에 보여 주는 최근 줄 수 */
-const LOG_LINES_SHOWN = 14
+const LOG_LINES_SHOWN = 60
 /** 게이지 막대 전체 길이가 상한의 몇 배인지. 상한 눈금이 막대 안쪽에 보이게 여유를 둔다. */
 const GAUGE_TRACK_SCALE = 1.25
 
@@ -140,45 +143,115 @@ interface EventLogProps {
   /** 자동 슬로모션 계기 이벤트. 그 줄을 강조한다. */
   highlightedEventId: number | null
   show: ShowDef
+  /** 줄 속 이름을 칠할 출연자(정식 이름과 짧은 이름). 없으면 이름을 칠하지 않는다 */
+  people?: readonly LogPerson[]
 }
 
-/** 평소 왼쪽 열의 작고 흐린 사고 로그(spec 8.2 5단계). 연쇄 깊이만큼 들여쓴다. */
-export function EventLog({ log, highlightedEventId, show }: EventLogProps) {
+/** 맨 아래에서 이 거리(px) 안이면 새 줄이 올 때 따라 내려간다 */
+const LOG_FOLLOW_THRESHOLD_PX = 8
+/** 앞머리(이어받은 줄의 "○○의 △△에 이어")를 흐리게 하는 투명도 */
+const LOG_LEAD_IN_OPACITY = 0.5
+/** 사고 줄에 출연자 이름이 없을 때의 띠 색 */
+const LOG_INCIDENT_BAND_FALLBACK = '#e2e8f0'
+const NO_PEOPLE: readonly LogPerson[] = []
+
+/** 스크롤 위치가 맨 아래에서 LOG_FOLLOW_THRESHOLD_PX 이내인지 */
+function isNearBottom(element: HTMLElement): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= LOG_FOLLOW_THRESHOLD_PX
+}
+
+/**
+ * 왼쪽 열의 사고 로그(spec 8절). 3단 위계: 사고는 색 띠와 흰 굵은 글, 감정 단계는 감정 색과 아이콘, 나머지는
+ * 흐린 기울임. 연쇄 깊이만큼 들여쓴다. 맨 아래를 보고 있으면 새 줄을 따라가고, 위로 올려 읽는 중이면 따라가지 않는다.
+ */
+export function EventLog({ log, highlightedEventId, show, people = NO_PEOPLE }: EventLogProps) {
   const recent = log.slice(-LOG_LINES_SHOWN)
+  const listRef = useRef<HTMLOListElement>(null)
+  const followingRef = useRef(true)
+  const newestIndex = recent.at(-1)?.index ?? -1
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (list !== null && followingRef.current) list.scrollTop = list.scrollHeight
+  }, [newestIndex])
   return (
     <section
       data-testid="event-log"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-2 border-slate-800 bg-slate-900/60 px-2.5 py-2 opacity-80"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-2 border-slate-800 bg-slate-900/60 px-2.5 py-2"
     >
       <div className="mb-1 text-[11px] font-bold text-slate-500">사고 로그</div>
       {recent.length === 0 && <div className="text-xs text-slate-500">아직 아무 일도 없습니다.</div>}
-      {/* 긴 줄은 자르지 않고 줄바꿈한다. 넘치면 아래(최신)를 붙들고 오래된 줄이 위로 밀려난다 */}
-      <ol className="flex min-h-0 flex-1 flex-col justify-end gap-0.5 overflow-hidden text-xs leading-4 text-slate-300">
+      {/* 긴 줄은 자르지 않고 줄바꿈한다. 줄이 모자라면 아래(최신)에 붙고, 넘치면 스크롤한다 */}
+      <ol
+        ref={listRef}
+        data-testid="event-log-list"
+        onScroll={(event) => {
+          followingRef.current = isNearBottom(event.currentTarget)
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto text-xs leading-4 text-slate-300 [&>li:first-child]:mt-auto"
+      >
         {recent.map((line) => (
-          <li
+          <LogRow
             key={line.index}
-            data-log-index={line.index}
-            className={`flex shrink-0 rounded-sm ${
-              containsEvent(line, highlightedEventId) ? 'bg-amber-500/30 text-amber-100' : ''
-            }`}
-          >
-            <span className="w-10 shrink-0 tabular-nums text-slate-500">
-              {formatShowClock(line.step, show)}
-            </span>
-            <span
-              className={`min-w-0 break-keep ${logTextClass(line)}`}
-              data-log-text={line.text}
-              style={{ paddingLeft: `${logIndent(line.depth)}px` }}
-            >
-              {line.depth > 1 && <span className="text-slate-500">└ </span>}
-              {line.text}
-            </span>
-            {line.repeat > 1 && (
-              <span className="ml-1 shrink-0 tabular-nums text-slate-500">×{line.repeat}</span>
-            )}
-          </li>
+            line={line}
+            show={show}
+            people={people}
+            highlighted={containsEvent(line, highlightedEventId)}
+          />
         ))}
       </ol>
     </section>
+  )
+}
+
+interface LogRowProps {
+  line: LogLine
+  show: ShowDef
+  people: readonly LogPerson[]
+  highlighted: boolean
+}
+
+function LogRow({ line, show, people, highlighted }: LogRowProps) {
+  const tier = logTier(line)
+  const segments = logSegments(line, people)
+  const heroColor = segments.find((segment) => segment.color !== null && !segment.dim)?.color ?? null
+  const stageStyle = line.kind === 'stage' && line.emotion !== null ? emotionStyle(line.emotion) : null
+  return (
+    <li
+      data-log-index={line.index}
+      data-log-tier={tier}
+      className={`flex shrink-0 rounded-sm border-l-[3px] pl-1 ${
+        highlighted ? 'bg-amber-500/30 text-amber-100' : tier === 3 ? 'bg-slate-800/60' : ''
+      }`}
+      style={{ borderLeftColor: tier === 3 ? (heroColor ?? LOG_INCIDENT_BAND_FALLBACK) : 'transparent' }}
+    >
+      <span className="w-10 shrink-0 tabular-nums text-slate-500">
+        {formatShowClock(line.step, show)}
+      </span>
+      <span
+        className={`min-w-0 break-keep ${logTextClass(line)}`}
+        data-log-text={line.text}
+        style={{
+          paddingLeft: `${logIndent(line.depth)}px`,
+          ...(stageStyle === null ? {} : { color: stageStyle.color }),
+        }}
+      >
+        {line.depth > 1 && <span className="text-slate-500">└ </span>}
+        {stageStyle !== null && <span aria-hidden="true">{stageStyle.icon} </span>}
+        {segments.map((segment, index) => (
+          <span
+            key={index}
+            style={{
+              ...(segment.color === null ? {} : { color: segment.color }),
+              ...(segment.dim ? { opacity: LOG_LEAD_IN_OPACITY } : {}),
+            }}
+          >
+            {segment.text}
+          </span>
+        ))}
+      </span>
+      {line.repeat > 1 && (
+        <span className="ml-1 shrink-0 tabular-nums text-slate-500">×{line.repeat}</span>
+      )}
+    </li>
   )
 }

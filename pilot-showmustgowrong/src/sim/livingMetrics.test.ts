@@ -22,6 +22,7 @@ function line(step: number, kind: LogKind = 'habit', repeat = 1): LogLine {
     text: `줄 ${step}`,
     kind,
     emotion: null,
+    stage: null,
     repeat,
     depth: 0,
     eventId: null,

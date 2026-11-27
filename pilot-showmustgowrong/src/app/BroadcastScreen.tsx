@@ -17,6 +17,7 @@ import { resolveHoverTip, type HoverAnchor, type HoverTipState } from './hoverTi
 import type { InterventionTarget } from './interventionTargets'
 import { SWITCHER_KEYS } from './labels'
 import type { Slowmo } from './loopState'
+import { TrendRecorder } from './trendRecorder'
 import { ResultScreen } from './ResultScreen'
 import { useStudioClick, type StudioClickState } from './studioClick'
 import { useAimDrag } from './useAimDrag'
@@ -51,6 +52,10 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
   // 렌더러 effect는 출연자 배열에만 기대고 setup 객체 전체에는 기대지 않는다. 배열은 라인업 상수를 그대로
   // 가리켜 방송 중에 바뀌지 않으므로 렌더러와 캔버스가 다시 만들어지지 않는다.
   const { show, performers, bench } = setup
+  // 근접도 기록은 방송(이 컴포넌트가 마운트된 동안)마다 하나다. 배치를 바꿔도 다시 만들지 않는다.
+  const [trend] = useState(
+    () => new TrendRecorder([...performers, ...bench].map((performer) => performer.id)),
+  )
   const rowRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLElement>(null)
@@ -155,6 +160,11 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     }
     host.dataset.cameraAnchors = JSON.stringify(cameraAnchors)
   }, [show])
+
+  // 몸 0.5초마다 한 점만 찍으므로 프레임마다 불러도 같은 구간에서는 건너뛴다
+  useEffect(() => {
+    if (view !== null) trend.record(view)
+  }, [view, trend])
 
   const linkedTarget = interventionOpen ? selectedTarget : null
   useEffect(() => {
@@ -337,13 +347,16 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     return <ErrorScreen kind={loop.error.kind} message={loop.error.message} />
   }
   if (rendererError !== null) return <ErrorScreen kind="create" message={rendererError} />
-  if (loop.result !== null) return <ResultScreen result={loop.result} show={show} onRestart={onRestart} />
+  if (loop.result !== null) return (
+      <ResultScreen result={loop.result} trend={trend.all()} show={show} onRestart={onRestart} />
+    )
 
   return (
     <BroadcastStage
       view={view}
       setup={setup}
       controls={loop}
+      trend={trend}
       selectedTarget={selectedTarget}
       hoverTip={hoverTip}
       onSelectTarget={setSelectedTarget}
