@@ -3,10 +3,12 @@ import { findPerformerArtUrl } from './performerArt'
 
 /** 주소별로 한 번만 만든 그림. 카메라 화면이 매 프레임 새로 만들지 않게 한다 */
 const images = new Map<string, HTMLImageElement>()
+/** 아직 불러오는 그림을 기다리는 다시 그리기 호출. URL마다 load 리스너는 한 번만 단다 */
+const waiting = new Map<string, Set<() => void>>()
 
 /**
  * 출연자 포즈 그림. 그림이 없는 출연자·포즈면 null이다(그리기 루프라 throw하지 않는다).
- * 아직 불러오는 중이면 그림을 돌려주되 complete가 false이고, 다 불러오면 onLoad를 한 번 부른다.
+ * 아직 불러오는 중이면 그림을 돌려주되 complete가 false이고, 다 불러오면 onLoad를 부른다(같은 함수는 한 번만 모은다).
  */
 export function feedArtImage(
   performerId: string,
@@ -21,7 +23,23 @@ export function feedArtImage(
     image.src = url
     images.set(url, image)
   }
-  if (!image.complete) image.addEventListener('load', onLoad, { once: true })
+  if (!image.complete) {
+    let callbacks = waiting.get(url)
+    if (callbacks === undefined) {
+      const pending = new Set<() => void>()
+      callbacks = pending
+      waiting.set(url, pending)
+      image.addEventListener(
+        'load',
+        () => {
+          waiting.delete(url)
+          pending.forEach((callback) => callback())
+        },
+        { once: true },
+      )
+    }
+    callbacks.add(onLoad)
+  }
   return image
 }
 

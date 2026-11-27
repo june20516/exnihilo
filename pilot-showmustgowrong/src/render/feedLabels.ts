@@ -88,7 +88,7 @@ function candidatesFor(
  * 앞 이름표 때문에 뒤가 막히면 되돌아가 다시 놓는다. 겹치지 않는 배치가 없으면 이름표마다
  * 겹침 넓이가 가장 작은 자리를 쓴다(throw하지 않는다). 겹치지 않는 한 먼저 온 이름표가 원래 자리를 차지한다.
  */
-export function layoutFeedLabels(
+function computeLayout(
   requests: readonly FeedLabelRequest[],
   canvasWidth: number,
   canvasHeight: number,
@@ -121,7 +121,8 @@ export function layoutFeedLabels(
   }
   if (search(0)) return chosen
 
-  // 2) 없으면 앞에서부터 겹침이 가장 작은 자리에 놓는다
+  // 2) 없으면 앞에서부터 겹침이 가장 작은 자리에 놓는다. 전역 최소가 아니라 이름표별 탐욕이다:
+  //    앞 이름표를 고정한 채 하나씩 고르므로 조합이 폭발하지 않는다.
   const fallback: Candidate[] = []
   options.forEach((candidates, index) => {
     let best = candidates[0]
@@ -140,4 +141,24 @@ export function layoutFeedLabels(
     fallback.push(best)
   })
   return fallback
+}
+
+/** 직전 배치 입력과 결과. 같은 입력이면 다시 계산하지 않는다(그리기가 자주 불린다) */
+let lastKey = ''
+let lastResult: FeedLabelPlacement[] = []
+
+/** 이름표 배치(위 설명). 입력이 직전과 같으면 직전 결과를 그대로 돌려준다. */
+export function layoutFeedLabels(
+  requests: readonly FeedLabelRequest[],
+  canvasWidth: number,
+  canvasHeight: number,
+  lineHeight: number,
+  padding: number,
+): FeedLabelPlacement[] {
+  const key = JSON.stringify([requests, canvasWidth, canvasHeight, lineHeight, padding])
+  if (key !== lastKey) {
+    lastResult = computeLayout(requests, canvasWidth, canvasHeight, lineHeight, padding)
+    lastKey = key
+  }
+  return lastResult
 }

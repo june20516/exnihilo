@@ -103,13 +103,34 @@ describe('layoutFeedLabels', () => {
   })
 
   it('이름표 높이를 넘는 세로 공간이 없으면 가장 덜 겹치는 배치를 돌려주고 throw하지 않는다', () => {
-    // 높이 12, 폭 40 캔버스에 폭 34 이름표 다섯 개: 줄이 하나뿐이라 반드시 겹친다
-    const requests = crowd(20, 10)
-    const placed = layoutFeedLabels(requests, 40, 12, 12, 2)
+    // 높이 12, 폭 84 캔버스에 폭 34 이름표 다섯 개: 줄이 하나뿐이고 가로로도 다 못 들어가 반드시 겹친다
+    const requests = crowd(42, 10)
+    const placed = layoutFeedLabels(requests, 84, 12, 12, 2)
     expect(placed).toHaveLength(5)
-    for (const point of placed) {
-      expect(Number.isFinite(point.x)).toBe(true)
-      expect(Number.isFinite(point.y)).toBe(true)
+    const overlapSum = (points: { x: number; y: number }[]) => {
+      let sum = 0
+      points.forEach((a, i) => {
+        for (const b of points.slice(i + 1)) {
+          const width = Math.max(0, 34 - Math.abs(a.x - b.x))
+          const height = Math.max(0, 12 - Math.abs(a.y - b.y))
+          sum += width * height
+        }
+      })
+      return sum
     }
+    const stacked = requests.map(() => ({ x: 42, y: 12 }))
+    expect(overlapSum(placed)).toBeGreaterThan(0)
+    expect(overlapSum(placed)).toBeLessThan(overlapSum(stacked))
+    for (const point of placed) {
+      expect(point.x - 17).toBeGreaterThanOrEqual(0)
+      expect(point.x + 17).toBeLessThanOrEqual(84)
+    }
+  })
+
+  it('같은 입력이면 직전 배치 결과를 그대로 돌려준다', () => {
+    const requests = crowd(42, 30)
+    expect(layoutFeedLabels(requests, 84, 47, 12.5, 2)).toBe(
+      layoutFeedLabels(requests, 84, 47, 12.5, 2),
+    )
   })
 })

@@ -11,6 +11,8 @@ import { layoutFeedLabels } from '@/render/feedLabels'
 const HORIZON_RATIO = 0.35
 const FLOOR_LINE_RATIO = 0.75
 const BODY_HEIGHT_RATIO = 0.3
+/** 그림이 없거나 아직 불러오는 중일 때 대신 그리는 사각형의 가로/세로 */
+const PLACEHOLDER_ASPECT = 0.4
 const NAME_FONT_RATIO = 0.05
 const MIN_FONT_PX = 10
 const HIGHLIGHT_WIDTH = 3
@@ -82,7 +84,7 @@ const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`
 
 /** 화면 픽셀 밀도. Retina처럼 2 이상이면 그만큼 큰 캔버스에 그려 흐리지 않게 한다. */
 function pixelRatio(): number {
-  return typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1)
+  return typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
 }
 
 interface CameraFeedCanvasProps {
@@ -224,25 +226,31 @@ function drawActor(
   const bodyHeight = height * BODY_HEIGHT_RATIO * item.size
   const bottom = floorY - item.heightOffset * height * BODY_HEIGHT_RATIO
   const image = feedArtImage(item.id, item.pose ?? 'idle', onArtLoad)
-  let top = bottom - bodyHeight
+  const borderColor = performers.get(item.id)?.color ?? NEUTRAL_BORDER
+  // 그림이 없거나 아직 불러오는 중이면 출연자 색 사각형으로 대신한다
+  let drawWidth = bodyHeight * PLACEHOLDER_ASPECT
+  let drawHeight = bodyHeight
   if (image !== null && isArtReady(image)) {
     // 키 기준 그림이 몸 높이가 되는 배율을 모든 그림에 똑같이 쓴다(그림끼리 키 차이가 남는다)
     const scale = bodyHeight / REFERENCE_ART_HEIGHT_PX
-    const drawWidth = image.naturalWidth * scale
-    const drawHeight = image.naturalHeight * scale
-    top = bottom - drawHeight
-    context.drawImage(image, x - drawWidth / 2, top, drawWidth, drawHeight)
-    if (item.highlighted) {
-      context.lineWidth = HIGHLIGHT_WIDTH
-      context.strokeStyle = hex(COLORS.closeupRing)
-      context.strokeRect(x - drawWidth / 2, top, drawWidth, drawHeight)
-    }
+    drawWidth = image.naturalWidth * scale
+    drawHeight = image.naturalHeight * scale
+    context.drawImage(image, x - drawWidth / 2, bottom - drawHeight, drawWidth, drawHeight)
+  } else {
+    context.fillStyle = borderColor
+    context.fillRect(x - drawWidth / 2, bottom - drawHeight, drawWidth, drawHeight)
+  }
+  const top = bottom - drawHeight
+  if (item.highlighted) {
+    context.lineWidth = HIGHLIGHT_WIDTH
+    context.strokeStyle = hex(COLORS.closeupRing)
+    context.strokeRect(x - drawWidth / 2, top, drawWidth, drawHeight)
   }
   return {
     text: item.label,
     x,
     top,
-    borderColor: performers.get(item.id)?.color ?? NEUTRAL_BORDER,
+    borderColor,
     icon: stageIcon(item),
   }
 }
