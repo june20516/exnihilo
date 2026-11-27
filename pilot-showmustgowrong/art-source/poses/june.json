@@ -1,0 +1,8 @@
+{
+  "idle": 1,
+  "laugh": 2,
+  "angry": 3,
+  "panic": 4,
+  "flying": 5,
+  "fallen": { "sheet": "june-fallen", "component": 1, "fitWidthTo": 7 }
+}
