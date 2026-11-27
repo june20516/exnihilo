@@ -63,7 +63,7 @@ describe('layoutFeedLabels', () => {
 
   function expectNoOverlapInside(
     requests: { width: number }[],
-    placed: { x: number; y: number }[],
+    placed: readonly { x: number; y: number }[],
     canvasWidth: number,
     canvasHeight: number,
     lineHeight: number,
@@ -107,7 +107,7 @@ describe('layoutFeedLabels', () => {
     const requests = crowd(42, 10)
     const placed = layoutFeedLabels(requests, 84, 12, 12, 2)
     expect(placed).toHaveLength(5)
-    const overlapSum = (points: { x: number; y: number }[]) => {
+    const overlapSum = (points: readonly { x: number; y: number }[]) => {
       let sum = 0
       points.forEach((a, i) => {
         for (const b of points.slice(i + 1)) {

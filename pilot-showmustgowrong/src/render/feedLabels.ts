@@ -7,8 +7,8 @@ export interface FeedLabelRequest {
 
 /** 놓인 이름표. x는 가운데, y는 글자 아래쪽 좌표다. */
 export interface FeedLabelPlacement {
-  x: number
-  y: number
+  readonly x: number
+  readonly y: number
 }
 
 interface LabelBox {
@@ -145,7 +145,7 @@ function computeLayout(
 
 /** 직전 배치 입력과 결과. 같은 입력이면 다시 계산하지 않는다(그리기가 자주 불린다) */
 let lastKey = ''
-let lastResult: FeedLabelPlacement[] = []
+let lastResult: readonly FeedLabelPlacement[] = []
 
 /** 이름표 배치(위 설명). 입력이 직전과 같으면 직전 결과를 그대로 돌려준다. */
 export function layoutFeedLabels(
@@ -154,7 +154,7 @@ export function layoutFeedLabels(
   canvasHeight: number,
   lineHeight: number,
   padding: number,
-): FeedLabelPlacement[] {
+): readonly FeedLabelPlacement[] {
   const key = JSON.stringify([requests, canvasWidth, canvasHeight, lineHeight, padding])
   if (key !== lastKey) {
     lastResult = computeLayout(requests, canvasWidth, canvasHeight, lineHeight, padding)

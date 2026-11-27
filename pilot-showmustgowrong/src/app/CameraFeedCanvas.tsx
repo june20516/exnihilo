@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CameraDef, PerformerDef, ShowDef } from '@/content/types'
 import { REFERENCE_ART_HEIGHT_PX } from '@/render/actorFigure'
 import { COLORS } from '@/render/colors'
@@ -119,6 +119,8 @@ export function CameraFeedCanvas({
   const [size, setSize] = useState<FeedSize>({ width: 0, height: 0 })
   /** 그림이 늦게 불러와졌을 때 다시 그리게 하는 값 */
   const [artVersion, setArtVersion] = useState(0)
+  /** 참조를 고정해 둬야 로드 전 그리기를 여러 번 해도 feedArt의 대기 콜백이 쌓이지 않는다 */
+  const onArtLoad = useCallback(() => setArtVersion((version) => version + 1), [])
   const ratio = pixelRatio()
 
   useEffect(() => {
@@ -153,7 +155,7 @@ export function CameraFeedCanvas({
         width: size.width,
         height: size.height,
         realMs: performance.now(),
-        onArtLoad: () => setArtVersion((version) => version + 1),
+        onArtLoad,
       })
     }
     draw()
@@ -162,7 +164,7 @@ export function CameraFeedCanvas({
     if (!blinks) return
     const timer = setInterval(draw, BLINK_REDRAW_MS)
     return () => clearInterval(timer)
-  }, [view, camera, audienceZone, performers, compact, size, ratio, artVersion])
+  }, [view, camera, audienceZone, performers, compact, size, ratio, artVersion, onArtLoad])
 
   return (
     <div ref={hostRef} className="relative h-full w-full">
