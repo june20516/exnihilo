@@ -5,6 +5,7 @@ import {
   PERFORMER_IDS,
   cropScaled,
   cutPose,
+  defringeLightEdge,
   findComponents,
   floodClearBackground,
   scaleForTargetHeight,
@@ -208,5 +209,60 @@ describe('whiteFringeRatio', () => {
     setPixel(img, 2, 4, [190, 190, 190]) // 더 진한 색은 세지 않는다
 
     expect(whiteFringeRatio(img)).toBeCloseTo(1 / 20)
+  })
+})
+
+describe('defringeLightEdge', () => {
+  const GRAY: Rgb = [220, 220, 220]
+  const BLACK: Rgb = [10, 10, 10]
+
+  /** 투명 바탕 가운데에 검은 윤곽 사각형(바깥 12x12, 안쪽 흰색 채움)과 바깥쪽 연회색 띠 1px을 둔다. */
+  function outlinedShape(): PNG {
+    const img = new PNG({ width: 20, height: 20 })
+    fillRect(img, 3, 3, 14, 14, GRAY) // 띠(바깥 1px)
+    fillRect(img, 4, 4, 12, 12, BLACK) // 윤곽선
+    fillRect(img, 6, 6, 8, 8, WHITE) // 안쪽 흰 영역
+    return img
+  }
+
+  it('투명과 맞닿은 연회색 띠의 알파가 밝기에 비례해 줄어든다', () => {
+    const out = defringeLightEdge(outlinedShape())
+
+    // 220 -> alpha 255 * (255-220)/55 = 약 162
+    expect(alphaAt(out, 3, 10)).toBeLessThan(200)
+    expect(alphaAt(out, 3, 10)).toBeGreaterThan(0)
+    expect(alphaAt(out, 4, 10)).toBe(255) // 검은 윤곽은 그대로
+  })
+
+  it('윤곽선 안쪽의 흰 영역은 투명과 맞닿지 않아 그대로다', () => {
+    const out = defringeLightEdge(outlinedShape())
+    expect(alphaAt(out, 10, 10)).toBe(255)
+    expect(alphaAt(out, 6, 6)).toBe(255)
+  })
+
+  it('원본을 바꾸지 않는다', () => {
+    const img = outlinedShape()
+    defringeLightEdge(img)
+    expect(alphaAt(img, 3, 10)).toBe(255)
+  })
+
+  it('2겹까지만 깎고 그 안쪽은 건드리지 않는다', () => {
+    // 바깥에서부터 순백 3겹 뒤 검은 몸통. 순백은 한 겹에 바로 투명해진다.
+    const img = new PNG({ width: 20, height: 20 })
+    fillRect(img, 2, 2, 16, 16, WHITE)
+    fillRect(img, 5, 5, 10, 10, BLACK)
+
+    const out = defringeLightEdge(img)
+
+    expect(alphaAt(out, 2, 10)).toBe(0) // 1겹
+    expect(alphaAt(out, 3, 10)).toBe(0) // 2겹
+    expect(alphaAt(out, 4, 10)).toBe(255) // 3겹은 남는다
+    expect(alphaAt(out, 6, 10)).toBe(255)
+  })
+
+  it('연하지 않은 경계 픽셀(임계값 미만)은 건드리지 않는다', () => {
+    const img = new PNG({ width: 10, height: 10 })
+    fillRect(img, 2, 2, 6, 6, [190, 190, 190])
+    expect(alphaAt(defringeLightEdge(img), 2, 5)).toBe(255)
   })
 })

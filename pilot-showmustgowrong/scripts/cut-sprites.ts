@@ -19,6 +19,7 @@ import {
   PERFORMER_IDS,
   cropScaled,
   cutPose,
+  defringeLightEdge,
   findComponents,
   floodClearBackground,
   scaleForTargetHeight,
@@ -76,7 +77,8 @@ const sheetCache = new Map<SheetId, LoadedSheet>()
 function loadSheet(sheet: SheetId): LoadedSheet {
   const cached = sheetCache.get(sheet)
   if (cached) return cached
-  const cleared = floodClearBackground(readPng(join(SHEETS_DIR, `${sheet}.png`)))
+  // 순서: 배경 flood -> 연회색 띠 정리 -> (요소 찾기, 크기 조정, 1px 경계 블렌딩). 정리는 원본 해상도에서 하고 블렌딩이 마지막이다.
+  const cleared = defringeLightEdge(floodClearBackground(readPng(join(SHEETS_DIR, `${sheet}.png`))))
   const loaded = { cleared, boxes: findComponents(cleared) }
   sheetCache.set(sheet, loaded)
   return loaded

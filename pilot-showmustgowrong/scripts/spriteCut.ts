@@ -9,6 +9,11 @@ export const BACKGROUND_THRESHOLD = 232
 /** 흰 테두리 자체 검사에서 "연한 색"으로 세는 RGB 하한. flood 임계값(232)보다 낮춰 남은 밝은 헤일로까지 잡는다. */
 export const FRINGE_LIGHT_THRESHOLD = 200
 
+/** 경계 정리를 거듭하는 최대 겹 수. */
+export const DEFRINGE_MAX_PASSES = 2
+/** 경계 정리로 알파가 이 값 미만이 되면 사실상 안 보이므로 0(투명)으로 만들어 다음 겹이 안쪽을 보게 한다. */
+const DEFRINGE_CLEAR_ALPHA = 8
+
 export const PERFORMER_IDS = ['rex', 'priya', 'okafor', 'mo', 'june'] as const
 export type PerformerId = (typeof PERFORMER_IDS)[number]
 
@@ -81,6 +86,48 @@ export function floodClearBackground(img: PNG, threshold: number = BACKGROUND_TH
       const ny = y + dy
       if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
       seed(nx, ny)
+    }
+  }
+  return out
+}
+
+/**
+ * flood fill 뒤에 남은 연회색 안티앨리어싱 띠를 지운다. 투명(알파 0)과 4방향으로 맞닿은 픽셀 중
+ * min(R,G,B) >= threshold인 것의 알파를 (255 - min) / (255 - threshold) 배로 줄인다(거의 흰색은 거의 투명, 임계값 근처는 거의 유지).
+ * 줄어서 투명해진 픽셀의 안쪽 이웃은 다음 겹의 대상이 된다. 한 픽셀은 한 번만 줄이고, 최대 maxPasses겹까지 한다.
+ * 이미지 밖은 투명으로 보지 않는다(시트 가장자리는 이미 flood가 비웠다). 윤곽선 안쪽에 갇힌 흰 영역은 투명과 닿지 않아 그대로다.
+ */
+export function defringeLightEdge(
+  img: PNG,
+  maxPasses: number = DEFRINGE_MAX_PASSES,
+  threshold: number = FRINGE_LIGHT_THRESHOLD,
+): PNG {
+  const { width, height } = img
+  const out = new PNG({ width, height })
+  img.data.copy(out.data)
+  const processed = new Uint8Array(width * height)
+  const isClear = (x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x < width && y < height && out.data[(y * width + x) * 4 + 3] === 0
+
+  for (let pass = 0; pass < maxPasses; pass++) {
+    // 이번 겹의 대상은 겹이 시작할 때의 투명 상태로 정한다(같은 겹 안에서 연쇄로 깎지 않는다).
+    const targets: number[] = []
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const pixel = y * width + x
+        if (processed[pixel] || out.data[pixel * 4 + 3] === 0) continue
+        if (!NEIGHBORS_4.some(([dx, dy]) => isClear(x + dx, y + dy))) continue
+        const i = pixel * 4
+        if (Math.min(out.data[i], out.data[i + 1], out.data[i + 2]) >= threshold) targets.push(pixel)
+      }
+    }
+    if (targets.length === 0) break
+    for (const pixel of targets) {
+      const i = pixel * 4
+      const lightest = Math.min(out.data[i], out.data[i + 1], out.data[i + 2])
+      const reduced = Math.round((out.data[i + 3] * (255 - lightest)) / (255 - threshold))
+      out.data[i + 3] = reduced < DEFRINGE_CLEAR_ALPHA ? 0 : reduced
+      processed[pixel] = 1
     }
   }
   return out
