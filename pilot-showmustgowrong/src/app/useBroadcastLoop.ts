@@ -35,7 +35,6 @@ export interface BroadcastLoopControls {
   interventionOpen: boolean
   interventionSecondsLeft: number
   adPanelOpen: boolean
-  adPanelSecondsLeft: number | null
   adBreak: boolean
   adBreakSecondsLeft: number
   send(input: BroadcastInput): void
@@ -54,7 +53,6 @@ const INITIAL_SNAPSHOT: LoopSnapshot = {
   interventionSecondsLeft: 0,
   interventionsIssued: 0,
   adPanelOpen: false,
-  adPanelSecondsLeft: null,
   adBreak: false,
   adBreakSecondsLeft: 0,
   ended: false,
@@ -174,7 +172,6 @@ export function useBroadcastLoop(setup: BroadcastSetup): BroadcastLoopControls {
     interventionOpen: snapshot.interventionOpen,
     interventionSecondsLeft: snapshot.interventionSecondsLeft,
     adPanelOpen: snapshot.adPanelOpen,
-    adPanelSecondsLeft: snapshot.adPanelSecondsLeft,
     adBreak: snapshot.adBreak,
     adBreakSecondsLeft: snapshot.adBreakSecondsLeft,
     send,

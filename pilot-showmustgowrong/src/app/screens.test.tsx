@@ -193,17 +193,11 @@ describe('ResultScreen', () => {
   })
 })
 
-describe('AdPanel 남은 시간', () => {
-  it('개입 중에 연 패널(secondsLeft 있음)만 남은 초를 보여 준다', () => {
-    const open = renderToStaticMarkup(
-      <AdPanel benchLeft={1} secondsLeft={2.34} onConfirm={noop} onCancel={noop} />,
-    )
-    expect(open).toContain('data-testid="ad-seconds"')
-    expect(open).toContain('2.3초')
-    const normal = renderToStaticMarkup(
-      <AdPanel benchLeft={1} secondsLeft={null} onConfirm={noop} onCancel={noop} />,
-    )
-    expect(normal).not.toContain('ad-seconds')
+describe('AdPanel', () => {
+  it('시간 제한이 없어 남은 초를 보여 주지 않는다', () => {
+    const html = renderToStaticMarkup(<AdPanel benchLeft={1} onConfirm={noop} onCancel={noop} />)
+    expect(html).toContain('광고 효과를 2개 고르세요')
+    expect(html).not.toMatch(/\d초/)
   })
 })
 
@@ -236,7 +230,6 @@ describe('BroadcastStage 생방송 화면', () => {
     interventionOpen: false,
     interventionSecondsLeft: 0,
     adPanelOpen: false,
-    adPanelSecondsLeft: null,
     adBreak: false,
     adBreakSecondsLeft: 0,
     send: noop,
@@ -429,14 +422,12 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).not.toContain('COMMERCIAL')
   })
 
-  it('개입 중에 연 광고 패널이면 배지가 광고 효과 선택 시간을 말한다', () => {
-    const intervening = { ...CONTROLS, slowmo: 'intervention' as const }
-    expect(render({ controls: { ...intervening, interventionOpen: true } })).toContain('안에 지시')
-    const adHtml = render({
-      controls: { ...intervening, adPanelOpen: true, adPanelSecondsLeft: 4.2 },
+  it('개입 중 배지는 남은 지시 시간과 "안에 지시"를 보여 준다', () => {
+    const html = render({
+      controls: { ...CONTROLS, slowmo: 'intervention', interventionOpen: true, interventionSecondsLeft: 4.2 },
     })
-    expect(adHtml).toContain('안에 광고 효과 선택')
-    expect(adHtml).not.toContain('안에 지시')
+    expect(html).toContain('4.2초')
+    expect(html).toContain('안에 지시')
   })
   describe('배치 전환', () => {
     let getContextSpy: MockInstance<HTMLCanvasElement['getContext']>

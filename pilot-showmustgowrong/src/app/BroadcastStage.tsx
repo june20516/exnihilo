@@ -262,12 +262,7 @@ export function BroadcastStage({
           className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-xl"
         >
           {view !== null && slowmo === 'intervention' && !adBreak && (
-            <InterventionBadge
-              secondsLeft={
-                adPanelOpen ? (controls.adPanelSecondsLeft ?? 0) : controls.interventionSecondsLeft
-              }
-              purpose={adPanelOpen ? '안에 광고 효과 선택' : '안에 지시'}
-            />
+            <InterventionBadge secondsLeft={controls.interventionSecondsLeft} />
           )}
           {view !== null && slowmo === 'auto' && !adBreak && (
             <AutoSlowmoBadge
@@ -289,7 +284,6 @@ export function BroadcastStage({
           >
             <AdPanel
               benchLeft={view.benchLeft}
-              secondsLeft={controls.adPanelSecondsLeft}
               onConfirm={controls.endAd}
               onCancel={controls.cancelAd}
             />
@@ -382,13 +376,7 @@ function BroadcastButtons({ view, controls, onBeginIntervention }: BroadcastButt
 }
 
 /** 개입 중 스튜디오 위: 느려진 배율과 남은 선택 시간을 크게(spec 8.2) */
-interface InterventionBadgeProps {
-  secondsLeft: number
-  /** 남은 시간 안에 할 일(개입 중 "안에 지시", 개입에서 연 광고 패널이면 "안에 광고 효과 선택") */
-  purpose: string
-}
-
-function InterventionBadge({ secondsLeft, purpose }: InterventionBadgeProps) {
+function InterventionBadge({ secondsLeft }: { secondsLeft: number }) {
   return (
     <div
       data-testid="slowmo-badge"
@@ -403,7 +391,7 @@ function InterventionBadge({ secondsLeft, purpose }: InterventionBadgeProps) {
       >
         {secondsLeft.toFixed(1)}초
       </span>
-      <span className="text-xs text-slate-300">{purpose}</span>
+      <span className="text-xs text-slate-300">안에 지시</span>
     </div>
   )
 }
