@@ -108,6 +108,11 @@ const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
 const MOTION_CAUSE_STEPS = secondsToSteps(MOTION_CAUSE_SECONDS)
 const POSE_HOLD_STEPS = secondsToSteps(POSE_HOLD_SECONDS)
 const WALK_MAX_STEPS = secondsToSteps(WALK_MAX_SECONDS)
+/** 버릇 이모트가 머리 위에 떠 있는 스텝 수(EMOTE_BODY_SECONDS x 초당 스텝). 조정값을 매번 읽는다. */
+export function emoteWindowSteps(): number {
+  return Math.round(tuned('EMOTE_BODY_SECONDS') * STEPS_PER_SECOND)
+}
+
 /** 출연자 지시가 연루 사고를 이어받는 창. 조정값 0이면 0(꺼짐)이다 */
 const TAKEOVER_WINDOW_STEPS = takeoverWindowSteps(TAKEOVER_BODY_SECONDS, STEPS_PER_SECOND)
 /** 시간이 지나면 풀리는 감정 포즈. 넘어짐·놀람은 물리나 다른 행동이 끝낸다. */
@@ -1480,8 +1485,7 @@ export class Broadcast {
     if (member.walkedOut) return null
     const last = this.life.lastEmote(member.def.id)
     if (last === null) return null
-    const emoteSteps = Math.round(tuned('EMOTE_BODY_SECONDS') * STEPS_PER_SECOND)
-    return this.stepCount - last.startedStep < emoteSteps ? last : null
+    return this.stepCount - last.startedStep < emoteWindowSteps() ? last : null
   }
 
   private viewersTrend(): -1 | 0 | 1 {

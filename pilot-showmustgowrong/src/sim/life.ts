@@ -279,6 +279,7 @@ export class StudioLife {
       actor.lastResponseStep = null
       actor.pendingResponse = null
       actor.lastHabit = null
+      actor.lastEmote = null
     }
   }
 

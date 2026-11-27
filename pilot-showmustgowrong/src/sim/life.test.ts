@@ -532,6 +532,37 @@ describe('응답', () => {
     expect(life.recentHabit('a', 30)?.id).toBe('chuckle')
   })
 
+  it('lastEmote는 새 버릇이 덮어쓰고(startedStep과 emote 모두), resetAll이 지운다', () => {
+    const laugh = habit('laugh', {
+      emote: '😆',
+      respondsTo: { kinds: ['laughter'], chance: 1 },
+    })
+    const glare = habit('glare', {
+      emote: '😠',
+      respondsTo: { kinds: ['anger'], chance: 1 },
+    })
+    const life = makeLife(1, [
+      performer('a', mindDef({ habits: [laugh, glare] })),
+      performer('b', mindDef()),
+    ])
+    const everyone = [perceiver('a'), perceiver('b')]
+    life.perceive([laughterAt(10)], everyone, 10)
+    run(life, ['a', 'b'], 30, 30, { nudge: false })
+    expect(life.lastEmote('a')).toEqual({ emote: '😆', startedStep: 30 })
+
+    // 응답 쿨다운이 지난 뒤 첫 틱 스텝에서 다른 버릇으로 응수한다
+    const cooldown = showSecondsToSteps(RESPONSE_COOLDOWN_SHOW_SECONDS, TALK_SHOW)
+    const secondStep = Math.ceil((30 + cooldown + TICK_STEPS) / TICK_STEPS) * TICK_STEPS
+    const anger = laughterAt(secondStep - 10, { kind: 'anger', intensity: 1 })
+    life.perceive([anger], everyone, secondStep - 10)
+    const second = habits(run(life, ['a', 'b'], secondStep, secondStep, { nudge: false }))
+    expect(second).toHaveLength(1)
+    expect(life.lastEmote('a')).toEqual({ emote: '😠', startedStep: secondStep })
+
+    life.resetAll(secondStep + 10)
+    expect(life.lastEmote('a')).toBeNull()
+  })
+
   it('나를 향하지 않았거나 응답하지 않는 종류는 대기열에 들지 않는다', () => {
     const life = responseLife()
     const other = laughterAt(10, { targetId: null })

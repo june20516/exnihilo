@@ -3,10 +3,9 @@ import { COMMON_EMOTION_DEFS } from '@/content/emotions'
 import { STEP_SECONDS } from '@/content/balance'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
-import { tuned } from '@/content/tuning'
 import type { BurstDef, HabitDef, PerformerDef } from '@/content/types'
 import { fixtureColor } from '@/test-support/fixtureColor'
-import { Broadcast, type BroadcastInput, type BroadcastSetup } from './engine'
+import { Broadcast, emoteWindowSteps, type BroadcastInput, type BroadcastSetup } from './engine'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 const PRESS_GUEST: BroadcastInput = { type: 'direct', actorId: 'rex', directiveId: 'pressGuest' }
@@ -119,12 +118,30 @@ describe('버릇 이모트', () => {
     if (habit === null) throw new Error('버릇이 나오지 않았습니다.')
     expect(habit.emote).toBe(WINK.emote)
 
-    const bodySteps = Math.round(tuned('EMOTE_BODY_SECONDS') * STEPS_PER_SECOND)
+    const bodySteps = emoteWindowSteps()
     // 시작 스텝부터 bodySteps 동안만 보인다
     while (broadcast.currentStep - habit.startedStep < bodySteps - 1) broadcast.step()
     expect(habitOf()?.startedStep).toBe(habit.startedStep)
     broadcast.step()
     expect(habitOf()?.startedStep).not.toBe(habit.startedStep)
+  })
+})
+
+describe('버릇 이모트 재정비', () => {
+  it('광고 재정비 직후 ActorView.habit은 null이다', async () => {
+    const broadcast = await open({
+      show: TALK_SHOW,
+      performers: [winker()],
+      bench: [],
+      staff: [],
+      equipment: [],
+      seed: 1,
+    })
+    const habitOf = () => broadcast.view().actors[0].habit
+    for (let i = 0; i < STEPS_PER_SECOND * 600 && habitOf() === null; i++) broadcast.step()
+    expect(habitOf()).not.toBeNull()
+    broadcast.step([{ type: 'ad', effects: ['relief', 'reset'] }])
+    expect(habitOf()).toBeNull()
   })
 })
 
