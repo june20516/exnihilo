@@ -582,6 +582,8 @@ test('개입 중 판단 카드에 감정 변화 칩이 보이고 Esc로 닫힌�
   const card = panel.getByTestId('target-card')
   await expect(card).toBeVisible()
   await expect(card.getByTestId('directive-chip').first()).toBeVisible()
+  // 칩은 '감정 ▲/▼ 크기' 형태다
+  await expect(card.getByTestId('directive-chip').first()).toHaveText(/[▲▼] (조금|꽤|크게)/)
   await expectInViewport(page, 'target-card')
   await page.keyboard.press('Escape')
   await expect(panel).toBeHidden()
@@ -590,10 +592,7 @@ test('개입 중 판단 카드에 감정 변화 칩이 보이고 Esc로 닫힌�
 test('방송이 끝나면 정산 화면에 뿌리 문장 또는 "큰 사고 없이 끝났다"와 연쇄·추세가 보인다', async ({ page }) => {
   test.setTimeout(60_000)
   // 방송을 실제 10초로 줄여 정산까지 빨리 간다(기존 다시 하기 테스트와 같은 방법)
-  await page.addInitScript(
-    ([key]) => window.localStorage.setItem(key, JSON.stringify({ BROADCAST_REAL_SECONDS: 10 })),
-    [TUNING_STORAGE_KEY] as const,
-  )
+  await storeTuning(page, JSON.stringify({ BROADCAST_REAL_SECONDS: 10 }))
   await openBroadcast(page)
   const result = page.getByTestId('result-screen')
   await expect(result).toBeVisible({ timeout: 20_000 })
