@@ -1,0 +1,8 @@
+{
+  "idle": 1,
+  "laugh": 2,
+  "angry": 3,
+  "panic": 5,
+  "flying": 6,
+  "fallen": 7
+}

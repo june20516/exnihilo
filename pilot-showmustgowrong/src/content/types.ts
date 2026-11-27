@@ -90,6 +90,8 @@ export interface PerformerDef {
   id: string
   name: string
   shortName: string
+  /** 화면에서 이 출연자를 가리키는 색(#RRGGBB). 출연자끼리 겹치지 않는다 */
+  color: string
   /** 연쇄 역할 한 단어(예: "MC") */
   role: string
   /** 무엇을 받으면 무엇을 일으키는지 한 줄 */
@@ -147,6 +149,10 @@ export interface EquipmentDef {
   darknessZone?: { x: number; z: number; radius: number }
 }
 
+/** 카메라 화면에 까는 배경 그림 종류. stage: 무대 정면, audience: 관객석 정면 */
+export const BACKDROP_KINDS = ['stage', 'audience'] as const
+export type BackdropKind = (typeof BACKDROP_KINDS)[number]
+
 export interface CameraDef {
   id: string
   label: string
@@ -158,6 +164,8 @@ export interface CameraDef {
   shotIntensity: Intensity
   /** 대상 출연자를 따라 고개를 돌리는 카메라(클로즈업) */
   tracking?: boolean
+  /** 카메라 화면 배경 그림. 화면 표시에만 쓰고 엔진은 읽지 않는다 */
+  backdrop: BackdropKind
 }
 
 export interface CornerDef {
@@ -279,6 +287,8 @@ export interface HabitDef {
   recall: string
   /** '코 파기' — 기척의 label, 쌓임·원인 받기 줄의 명사 */
   noun: string
+  /** 버릇이 일어날 때 출연자 머리 위에 잠시 뜨는 이모지(그래핌 1개) */
+  emote: string
   pose: Pose
   move?: MoveDef
   stir?: { kind: StirKind; target: HabitTarget }

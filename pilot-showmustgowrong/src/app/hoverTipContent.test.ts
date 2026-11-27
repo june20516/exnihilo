@@ -42,6 +42,7 @@ const REX_VIEW: ActorView = {
   emotions: [],
   misfireChance: 0,
   takeover: null,
+  habit: null,
 }
 
 const OPERATOR_VIEW: StaffView = {
@@ -101,28 +102,19 @@ describe('hoverTipContent', () => {
     )
   })
 
-  it('출연자는 이름·역할, 성향, 스탯, 지시 목록을 보여 준다', () => {
-    const rex = LINEUP.performers.find((performer) => performer.id === 'rex')
-    expect(hoverTipContent({ kind: 'actor', id: 'rex' }, VIEW, SETUP)).toEqual({
-      title: '렉스 캘러웨이 · MC',
-      lines: [
-        rex?.tendency,
-        '존재감 3 · 남은 내성 4 · 체급 보통',
-        '지시: 카메라 앞으로 나오세요 / 게스트를 몰아붙이세요',
-      ],
-    })
+  it('출연자는 정보 카드가 맡으므로 말풍선 설명이 없다', () => {
+    expect(hoverTipContent({ kind: 'actor', id: 'rex' }, VIEW, SETUP)).toBeNull()
   })
 
   it('스태프는 이름·역할, 성향, 담당 카메라를 보여 준다', () => {
     const [operator] = LINEUP.staff
     expect(hoverTipContent({ kind: 'staff', id: operator.id }, VIEW, SETUP)).toEqual({
       title: `${operator.name} · ${operator.role}`,
-      lines: [operator.tendency, '담당 CAM 2 클로즈업'],
+      lines: [operator.tendency, '담당 카메라 2 클로즈업'],
     })
   })
 
-  it('빈 곳, 사라진 현상, view에 없는 출연자는 설명이 없다', () => {
-    expect(hoverTipContent({ kind: 'actor', id: 'june' }, VIEW, SETUP)).toBeNull()
+  it('빈 곳과 사라진 현상은 설명이 없다', () => {
     expect(hoverTipContent(null, VIEW, SETUP)).toBeNull()
     expect(hoverTipContent({ kind: 'phenomenon', id: 99 }, VIEW, SETUP)).toBeNull()
   })

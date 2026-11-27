@@ -34,9 +34,9 @@ export const WEIGHT_LABELS: Record<Weight, string> = {
   heavy: '무거움',
 }
 
-/** "CAM 2 클로즈업"처럼 스위처 번호와 카메라 이름 */
+/** "카메라 2 클로즈업"처럼 스위처 번호와 카메라 이름 */
 export function cameraName(cameras: readonly CameraDef[], camera: CameraDef): string {
-  return `CAM ${cameras.indexOf(camera) + 1} ${camera.label}`
+  return `카메라 ${cameras.indexOf(camera) + 1} ${camera.label}`
 }
 
 /** 강도 1~3을 "강도 2"처럼 쓴다. */

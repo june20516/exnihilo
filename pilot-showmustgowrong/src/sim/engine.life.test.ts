@@ -17,6 +17,7 @@ import type {
   ReactionDef,
   SensitivityDef,
 } from '@/content/types'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { describeRootEvent, withSubject } from './describe'
 import {
   Broadcast,
@@ -47,6 +48,7 @@ const NOSE_PICK: HabitDef = {
   line: '코를 판다',
   recall: '코를 파던',
   noun: '코 파기',
+  emote: '🙂',
   pose: 'idle',
   stir: { kind: 'noise', target: 'none' },
   weight: 1,
@@ -58,6 +60,7 @@ const GIGGLE: HabitDef = {
   targetLine: '{target:을} 보며 킥킥댄다',
   recall: '킥킥대던',
   noun: '킥킥거림',
+  emote: '🙂',
   pose: 'laugh',
   stir: { kind: 'laughter', target: 'nearestPerformer' },
   weight: 1,
@@ -69,6 +72,7 @@ const GLARE: HabitDef = {
   targetLine: '{target:에게} 눈을 흘긴다',
   recall: '눈을 흘기던',
   noun: '눈 흘김',
+  emote: '🙂',
   pose: 'angry',
   stir: { kind: 'anger', target: 'cause' },
   weight: 1,
@@ -125,6 +129,7 @@ function performer(
     id,
     name: shortName,
     shortName,
+    color: fixtureColor(id),
     role: '역할',
     tendency: '성향',
     presence: 1,
@@ -546,6 +551,7 @@ describe('광고 경계와 줄 깊이(Ruling 9)', () => {
       line: '토라진다',
       recall: '토라졌던',
       noun: '토라짐',
+      emote: '🙂',
       pose: 'idle',
       weight: 1,
       respondsTo: { kinds: ['anger'], chance: 1 },
@@ -897,6 +903,7 @@ describe('정산 뿌리 줄', () => {
       line: GIGGLE.line,
       recall: '낄낄대던',
       noun: '낄낄거림',
+      emote: '🙂',
       pose: 'laugh',
       stir: { kind: 'laughter', target: 'nearestPerformer' },
       weight: 1,

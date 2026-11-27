@@ -26,3 +26,9 @@ dist-ssr
 # Playwright 산출물
 playwright-report/
 test-results/
+
+# 캐릭터 그림 자르기 중간 산출물(npm run sprites -- components로 다시 만든다)
+art-source/components/
+
+# Cloudflare wrangler 로컬 상태
+.wrangler

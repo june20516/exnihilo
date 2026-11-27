@@ -6,6 +6,7 @@ import {
 } from '@/content/balance'
 import type { ActionDef, MoodShift, PerformerDef, StaffDef } from '@/content/types'
 import { createRng, type RngState } from '@/kit/rng'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { Director, type DirectiveOutcome } from './director'
 
 const SHOUT: ActionDef = {
@@ -32,6 +33,7 @@ function performer(
     id,
     name: id,
     shortName: id,
+    color: fixtureColor(id),
     role: '역할',
     tendency: '성향',
     presence: 1,

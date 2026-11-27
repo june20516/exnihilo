@@ -20,6 +20,7 @@ const NOSE_PICK: HabitDef = {
   line: '코를 판다',
   recall: '코를 파던',
   noun: '코 파기',
+  emote: '🙂',
   pose: 'idle',
   weight: 1,
 }
@@ -29,6 +30,7 @@ const SNICKER: HabitDef = {
   targetLine: '{target:을} 보며 킥킥댄다',
   recall: '킥킥대던',
   noun: '킥킥거림',
+  emote: '🙂',
   pose: 'laugh',
   weight: 1,
 }
@@ -37,6 +39,7 @@ const THROAT: HabitDef = {
   line: '헛기침을 한다',
   recall: '헛기침하던',
   noun: '헛기침',
+  emote: '🙂',
   pose: 'idle',
   weight: 1,
 }

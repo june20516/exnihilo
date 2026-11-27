@@ -64,6 +64,8 @@ export interface ActorView {
   misfireChance: number
   /** 지금 지시하면 이어받을 사고. 없거나 이탈했으면 null */
   takeover: TakeoverView | null
+  /** 마지막 버릇의 이모트. 시작 스텝부터 EMOTE_BODY_SECONDS 동안만 있고, 이탈했으면 null */
+  habit: { emote: string; startedStep: number } | null
 }
 
 export interface EquipmentView {
@@ -117,6 +119,8 @@ export interface LogLine {
   kind: LogKind
   /** stage 줄과 감정 터짐 줄의 감정. 그 밖은 null */
   emotion: EmotionId | null
+  /** stage 줄이 몇 단계 진입인지(1 또는 2). 그 밖은 null */
+  stage: 1 | 2 | null
   /** 같은 text·kind가 연달아 나와 묶인 횟수(1부터) */
   repeat: number
   depth: number
@@ -124,6 +128,13 @@ export interface LogLine {
   eventId: number | null
   /** 묶인 줄이 가진 마지막 사건의 id. 묶이지 않았으면 eventId와 같다. 첫~마지막 id 범위로 강조한다. */
   lastEventId: number | null
+  /** 이어받은 사고 줄의 앞머리("프리야의 킥킥거림에 이어 "). text는 이 앞머리로 시작한다. 그 밖은 null */
+  leadIn: string | null
+  /**
+   * 줄의 주인공 출연자 id(화면용: 로그 색 띠). 현상 줄은 현상의 주체(longestChain의 actorId와 같은 기준),
+   * 행동·버릇·터짐·단계·이탈·시선 줄은 그 출연자다. 주체가 출연자가 아니면(스태프·장비·관객·방송) null
+   */
+  actorId: string | null
   x: number
   y: number
   z: number
@@ -198,6 +209,8 @@ export interface BroadcastView {
 }
 
 export interface ChainLine {
+  /** 그 줄 사건의 주인공(사건 source)이 출연자(라인업·벤치)면 그 id, 장비·관객 등이면 null */
+  actorId: string | null
   step: number
   text: string
   depth: number

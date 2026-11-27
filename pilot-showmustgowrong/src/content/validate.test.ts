@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { TunableDef } from '@/kit/tuning/tuning'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { COMMON_EMOTION_DEFS } from './emotions'
 import type {
   ActionDef,
   BurstAction,
   BurstDef,
+  CameraDef,
   EmotionDef,
   EquipmentDef,
   HabitDef,
@@ -21,6 +23,7 @@ const idleAction: ActionDef = { pose: 'idle', emits: [] }
 function makePerformer(id: string, overrides: Partial<PerformerDef> = {}): PerformerDef {
   return {
     id,
+    color: fixtureColor(id),
     name: `이름 ${id}`,
     shortName: id,
     role: '역할',
@@ -72,6 +75,7 @@ const show: ShowDef = {
       range: 12,
       shotIntensity: 1,
       tracking: true,
+      backdrop: 'stage',
     },
   ],
   homeSpots: [
@@ -125,6 +129,26 @@ describe('validateShow', () => {
     expect(validateShow(show, performers, [makeStaff()], equipment, [badTunable])).toEqual([
       '조정 항목 오류: 기본값이 범위 밖입니다: BAD',
     ])
+  })
+
+  it('출연자 색이 #RRGGBB가 아니면 오류', () => {
+    const errors = validateShow(
+      show,
+      [makePerformer('a', { color: 'red' }), makePerformer('b')],
+      [makeStaff()],
+      equipment,
+    )
+    expect(errors.join('\n')).toContain('출연자 색 오류')
+  })
+
+  it('출연자 색이 겹치면 오류', () => {
+    const errors = validateShow(
+      show,
+      [makePerformer('a', { color: '#EF4444' }), makePerformer('b', { color: '#ef4444' })],
+      [makeStaff()],
+      equipment,
+    )
+    expect(errors.join('\n')).toContain('출연자 색 중복 오류')
   })
 
   it('극 중 길이가 0 이하이거나 시작 시각이 범위 밖이면 오류', () => {
@@ -305,6 +329,18 @@ describe('validateShow', () => {
     expect(validateShow(empty, performers, [makeStaff()], equipment)).toContain('자동 컷 오류: rotation이 비어 있음')
   })
 
+  it('알 수 없는 카메라 배경을 보고한다', () => {
+    // 데이터에서 잘못 들어온 값을 흉내 내려고 타입을 넓혀 넣는다
+    const unknownBackdrop = { ...show.cameras[0], backdrop: 'moon' } as unknown as CameraDef
+    const errors = validateShow(
+      { ...show, cameras: [unknownBackdrop] },
+      performers,
+      [makeStaff()],
+      equipment,
+    )
+    expect(errors).toContain('알 수 없는 카메라 배경: moon (cam1)')
+  })
+
   it('카메라 중복 id를 보고한다', () => {
     const dupShow = { ...show, cameras: [show.cameras[0], show.cameras[0]] }
     const errors = validateShow(dupShow, performers, [makeStaff()], equipment)
@@ -405,6 +441,7 @@ describe('validateShow', () => {
       line: '코를 판다',
       recall: '코를 파던',
       noun: '코 파기',
+      emote: '👃',
       pose: 'idle',
       weight: 1,
     }
@@ -414,6 +451,7 @@ describe('validateShow', () => {
       targetLine: '{target:을} 보며 킥킥댄다',
       recall: '킥킥대던',
       noun: '킥킥',
+      emote: '🤭',
       pose: 'laugh',
       weight: 1,
       respondsTo: { kinds: ['laughter'], chance: 0.5 },
@@ -452,6 +490,16 @@ describe('validateShow', () => {
 
     it('정상 mind(공용 4 + 개인 1, 버릇 2개)에는 오류가 없다', () => {
       expect(errorsFor(makeMind())).toEqual([])
+    })
+
+    it('버릇 이모트가 비었거나 그래핌 2개 이상이면 오류', () => {
+      for (const emote of ['', '😀😀']) {
+        expect(errorsFor(makeMind({ habits: [{ ...habitClock, emote }] })).join('\n')).toContain(
+          '버릇 이모트 오류',
+        )
+      }
+      // 가족 이모지처럼 코드 포인트가 여럿이어도 그래핌 하나면 통과한다
+      expect(errorsFor(makeMind({ habits: [{ ...habitClock, emote: '👨‍👩‍👧' }] }))).toEqual([])
     })
 
     it('1. 공용 감정이 빠지거나 개인 감정이 3개이거나 id가 겹치면 오류', () => {

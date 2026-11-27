@@ -600,6 +600,41 @@ export const TUNABLES: readonly TunableDef[] = [
       description: '정적 동안 준에게 쌓이는 지루함.',
     },
   ]),
+
+  ...group('화면', [
+    {
+      key: 'EMOTE_BODY_SECONDS',
+      label: '버릇 이모트 시간',
+      unit: '몸 초',
+      defaultValue: 2,
+      range: { min: 0.5, max: 5, step: 0.5 },
+      description: '버릇을 할 때 머리 위에 이모트가 떠 있는 시간(평소 실제 2초, 슬로모션 중에는 그만큼 길게 보임).',
+    },
+    {
+      key: 'TREND_WINDOW_BODY_SECONDS',
+      label: '추세 그래프 창 길이',
+      unit: '몸 초',
+      defaultValue: 60,
+      range: { min: 20, max: 180, step: 10 },
+      description: '터짐 추세 그래프가 한 화면에 보여 주는 시간(60이면 극 중 10분). 기록은 방송 전체가 남는다.',
+    },
+    {
+      key: 'SHIFT_SIZE_SOME',
+      label: '감정 변화 "꽤" 경계',
+      unit: '포인트',
+      defaultValue: 20,
+      range: { min: 5, max: 60, step: 5 },
+      description: '지시의 감정 변화 크기가 이 값 미만이면 "조금", 이상이면 "꽤"로 보인다.',
+    },
+    {
+      key: 'SHIFT_SIZE_BIG',
+      label: '감정 변화 "크게" 경계',
+      unit: '포인트',
+      defaultValue: 30,
+      range: { min: 5, max: 80, step: 5 },
+      description: '지시의 감정 변화 크기가 이 값 이상이면 "크게"로 보인다. 30은 1단계(50)와 2단계(80) 문턱 사이 간격이다.',
+    },
+  ]),
 ]
 
 const THRESHOLD_CONSTRAINTS: readonly TuningConstraint[] = [
@@ -638,13 +673,26 @@ const AUTO_DIRECTOR_CONSTRAINTS: readonly TuningConstraint[] = [
   },
 ]
 
+const SCREEN_CONSTRAINTS: readonly TuningConstraint[] = [
+  {
+    keys: ['SHIFT_SIZE_SOME', 'SHIFT_SIZE_BIG'],
+    description: '감정 변화 "꽤" 경계는 "크게" 경계보다 작아야 합니다',
+    holds: (v) => v['SHIFT_SIZE_SOME'] < v['SHIFT_SIZE_BIG'],
+  },
+]
+
 /**
  * 항목 사이의 관계. 엔진이 throw하는 관계는 없다. 어긋나면 게임이 이상해지는 조합만 막는다.
  * - 감정 문턱: 조합이 어긋나면 단계 판정이 뒤엉킨다.
  * - 자동 PD: 최소 컷 유지가 평소 컷 길이보다 길면 사고를 따라 컷을 옮기기까지 평소 컷 하나보다 오래 기다려
  *   "일어난 일 따라가기"(spec Plan B1 2.3)가 늦어진다.
+ * - 화면: "꽤" 경계가 "크게" 경계 이상이면 "꽤" 구간이 사라져 판단 카드의 크기 단계가 뒤엉킨다.
  */
-export const TUNING_CONSTRAINTS: readonly TuningConstraint[] = [...THRESHOLD_CONSTRAINTS, ...AUTO_DIRECTOR_CONSTRAINTS]
+export const TUNING_CONSTRAINTS: readonly TuningConstraint[] = [
+  ...THRESHOLD_CONSTRAINTS,
+  ...AUTO_DIRECTOR_CONSTRAINTS,
+  ...SCREEN_CONSTRAINTS,
+]
 
 function loadTuning(): ResolvedTuning & { storageError: string | null } {
   const { overrides, error } = initialOverrides(TUNING_STORAGE_KEY)

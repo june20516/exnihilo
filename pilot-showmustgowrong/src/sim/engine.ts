@@ -45,6 +45,7 @@ import type {
   StaffDef,
   StaffDirectiveDef,
 } from '@/content/types'
+import { tuned } from '@/content/tuning'
 import { validateShow } from '@/content/validate'
 import { createRng, nextFloat, type RngState } from '@/kit/rng'
 import { BroadcastScore, inFrame, viewersTrendOf } from './broadcast'
@@ -107,6 +108,11 @@ const AUDIENCE_NOISE_STEPS = secondsToSteps(AUDIENCE_NOISE_SECONDS)
 const MOTION_CAUSE_STEPS = secondsToSteps(MOTION_CAUSE_SECONDS)
 const POSE_HOLD_STEPS = secondsToSteps(POSE_HOLD_SECONDS)
 const WALK_MAX_STEPS = secondsToSteps(WALK_MAX_SECONDS)
+/** 버릇 이모트가 머리 위에 떠 있는 스텝 수(EMOTE_BODY_SECONDS x 초당 스텝). 조정값을 매번 읽는다. */
+export function emoteWindowSteps(): number {
+  return Math.round(tuned('EMOTE_BODY_SECONDS') * STEPS_PER_SECOND)
+}
+
 /** 출연자 지시가 연루 사고를 이어받는 창. 조정값 0이면 0(꺼짐)이다 */
 const TAKEOVER_WINDOW_STEPS = takeoverWindowSteps(TAKEOVER_BODY_SECONDS, STEPS_PER_SECOND)
 /** 시간이 지나면 풀리는 감정 포즈. 넘어짐·놀람은 물리나 다른 행동이 끝낸다. */
@@ -184,6 +190,8 @@ export class Broadcast {
   private readonly darkZones: NonNullable<EquipmentDef['darknessZone']>[] = []
   private readonly benchQueue: PerformerDef[]
   private readonly names: Record<string, string> = {}
+  /** 출연자(라인업·벤치) id. 연쇄 줄의 주인공이 출연자인지 가른다. */
+  private readonly performerIds = new Set<string>()
 
   private rng: RngState
   private stepCount = 0
@@ -278,6 +286,7 @@ export class Broadcast {
     }
     for (const performer of [...setup.performers, ...setup.bench]) {
       this.names[performer.id] = performer.shortName
+      this.performerIds.add(performer.id)
     }
     setup.performers.forEach((performer, index) => {
       this.addToStage(performer, setup.show.homeSpots[index])
@@ -454,7 +463,12 @@ export class Broadcast {
       .chain(this.deepestEvent.id)
       .filter(isStrong)
       .slice(-this.deepestEvent.depth)
-      .map((event) => ({ step: event.step, text: this.describe(event), depth: event.depth }))
+      .map((event) => ({
+        actorId: this.performerActorId(event),
+        step: event.step,
+        text: this.describe(event),
+        depth: event.depth,
+      }))
   }
 
   summary(): BroadcastSummary {
@@ -691,6 +705,7 @@ export class Broadcast {
       kind: 'incident',
       depth: 1,
       eventId: null,
+      actorId: member.def.id,
       position,
     })
     for (const kind of ['anger', 'noise'] as const) {
@@ -938,6 +953,7 @@ export class Broadcast {
       // 광고로 끊긴 원인은 잇지 않는다(Ruling 9)
       depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
       eventId: null,
+      actorId: null,
       position: camera.position,
     })
   }
@@ -960,6 +976,7 @@ export class Broadcast {
         kind: 'staff',
         depth: 1,
         eventId: null,
+        actorId: null,
         position: this.requireCamera(member.cameraId).position,
       })
     }
@@ -989,7 +1006,7 @@ export class Broadcast {
         ? `${withSubject(camera.label)} ${withObject(name)} 잡았다`
         : `${withSubject(name)} 한동안 화면에 잡히지 않았다`
     const position = this.cast.position(member)
-    this.addLine({ text, kind: 'incident', depth: 1, eventId: null, position })
+    this.addLine({ text, kind: 'incident', depth: 1, eventId: null, actorId: member.def.id, position })
     this.executeAction(member, reaction.action, null)
     return true
   }
@@ -1171,10 +1188,12 @@ export class Broadcast {
     if (action.line !== undefined && !silent) {
       this.addLine({
         text: `${linePrefix}${action.line}`,
+        leadIn: linePrefix === '' ? null : linePrefix,
         kind: 'incident',
         // 광고 전 원인이면 1부터 센다(Ruling 9)
         depth: this.log.linkedCauseDepth(cause?.id ?? null) + 1,
         eventId: null,
+        actorId: member.def.id,
         position: emitter.position,
       })
       linePrefix = ''
@@ -1303,14 +1322,26 @@ export class Broadcast {
         kind: event.kind === 'silence' ? 'silence' : 'incident',
         depth: event.depth,
         eventId: event.id,
+        actorId: this.performerActorId(event),
         position: event,
+        leadIn: linePrefix === '' ? null : linePrefix,
       })
     }
     return event
   }
 
   /** 직전 줄과 text·kind·depth·emotion이 모두 같으면 새 줄 대신 직전 줄의 repeat를 올린다(step은 처음 것). */
-  private addLine({ text, kind, depth, eventId, position, emotion = null }: LineInput): void {
+  private addLine({
+    text,
+    kind,
+    depth,
+    eventId,
+    position,
+    emotion = null,
+    stage = null,
+    leadIn = null,
+    actorId,
+  }: LineInput): void {
     const last = this.lines.at(-1)
     const sameAsLast =
       last !== undefined &&
@@ -1330,14 +1361,22 @@ export class Broadcast {
       text,
       kind,
       emotion,
+      stage,
       repeat: 1,
       depth,
       eventId,
       lastEventId: eventId,
+      leadIn,
+      actorId,
       x: position.x,
       y: position.y,
       z: position.z,
     })
+  }
+
+  /** 현상의 주체가 출연자면 그 id, 아니면 null. 로그 줄과 정산 연쇄가 같은 기준으로 주인공을 정한다 */
+  private performerActorId(event: PhenomenonEvent): string | null {
+    return this.performerIds.has(event.sourceId) ? event.sourceId : null
   }
 
   private describe(event: PhenomenonEvent): string {
@@ -1451,7 +1490,16 @@ export class Broadcast {
       emotions: this.life.emotions(member.def.id),
       misfireChance: this.director.previewMisfireChance(member.def.id),
       takeover: this.takeoverView(member),
+      habit: this.habitView(member),
     }
+  }
+
+  /** 마지막 버릇의 이모트. 시작 스텝부터 EMOTE_BODY_SECONDS 동안만 보이고, 이탈하면 없다. */
+  private habitView(member: CastMember): ActorView['habit'] {
+    if (member.walkedOut) return null
+    const last = this.life.lastEmote(member.def.id)
+    if (last === null) return null
+    return this.stepCount - last.startedStep < emoteWindowSteps() ? last : null
   }
 
   private viewersTrend(): -1 | 0 | 1 {

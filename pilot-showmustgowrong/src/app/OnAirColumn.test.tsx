@@ -37,7 +37,8 @@ describe('OnAirColumn 카메라 칸', () => {
         onSwitch={handlers.onSwitch ?? vi.fn()}
         onAimDragStart={handlers.onAimDragStart}
         actions={null}
-        overlay={null}
+        previews="row"
+        monitorFills={false}
       />,
     )
   }

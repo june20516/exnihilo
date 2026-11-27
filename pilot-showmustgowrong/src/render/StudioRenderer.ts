@@ -1,4 +1,12 @@
-import { Application, ColorMatrixFilter, Container, Graphics, Text } from 'pixi.js'
+import {
+  Application,
+  Assets,
+  ColorMatrixFilter,
+  Container,
+  Graphics,
+  Text,
+  type Texture,
+} from 'pixi.js'
 import {
   CAPSULE,
   LIGHT_HALF_EXTENTS,
@@ -9,7 +17,7 @@ import {
   STUDIO_DEPTH,
   STUDIO_WIDTH,
 } from '@/content/balance'
-import type { ShowDef } from '@/content/types'
+import type { PerformerDef, ShowDef } from '@/content/types'
 import type {
   ActorView,
   BroadcastView,
@@ -19,9 +27,17 @@ import type {
   StaffView,
 } from '@/sim/engineTypes'
 import { type FloorPoint, type Vec3, yawBetween } from '@/sim/vec'
-import { COLORS, POSE_COLORS, POSE_SYMBOLS } from './colors'
 import {
-  ISO_VIEW_HEIGHT,
+  ActorFigure,
+  CLOSEUP_RING_RADIUS_METERS,
+  WALKED_OUT_ALPHA,
+  drawCloseupRing,
+  type ArtTextures,
+  type TrackMark,
+} from './actorFigure'
+import { studioBackdropUrls } from './backdropArt'
+import { COLORS } from './colors'
+import {
   cameraFanFloorPoints,
   unprojectFloor,
   clipToFloor,
@@ -29,12 +45,14 @@ import {
   fitIso,
   floorEllipseRadii,
   projectIso,
-  screenTilt,
   visibleBoxFaces,
   type IsoTransform,
   type Point,
 } from './geometry'
 import { pickHit, type HitShapes, type StudioHit } from './hitTest'
+import { allPerformerArtUrls, assertPerformerArt } from './performerArt'
+import { saturationPlan } from './saturationPlan'
+import { StudioBackdrop, type StudioBackdropTextures } from './studioBackdrop'
 
 export type { StudioHit } from './hitTest'
 
@@ -47,12 +65,8 @@ const FALLBACK_HEIGHT = 540
 const FIT_PADDING = 16
 const FONT_FAMILY = 'sans-serif'
 
-// 바닥
-const TILE_METERS = 1
-const TILE_LINE_WIDTH = 1
+// 바닥. 바닥·벽 그림은 studioBackdrop.ts가 깐다
 const FLOOR_EDGE_WIDTH = 2
-const BACK_WALL_ALPHA = 0.9
-const AUDIENCE_FILL_ALPHA = 0.55
 const SPOT_RADIUS_METERS = 0.35
 const SPOT_ALPHA = 0.5
 const DARKNESS_ALPHA = 0.6
@@ -85,31 +99,12 @@ const SHADOW_ALPHA = 0.35
 const SHADOW_SHRINK_PER_METER = 0.15
 const SHADOW_MIN_RATIO = 0.4
 const ACTOR_OUTLINE_WIDTH = 2
-const ACTOR_ON_AIR_OUTLINE_WIDTH = 4
 const ACTOR_OUTLINE_ALPHA = 0.6
-const WALKED_OUT_ALPHA = 0.45
-const ACTOR_HIT_PADDING_PX = 6
-const SYMBOL_FONT_SIZE = 14
-const NAME_FONT_SIZE = 11
-const NAME_GAP = 2
+/** 출연자가 없을 때 이름표 테두리에 쓰는 색 */
+const FALLBACK_PERFORMER_COLOR = '#FFFFFF'
 
 // 머리 위 표시
 const OVERHEAD_GAP = 6
-const MOOD_BAR_WIDTH = 34
-const MOOD_BAR_HEIGHT = 5
-const TOLERANCE_DOT_RADIUS = 2.5
-const TOLERANCE_DOT_GAP = 3
-const TOLERANCE_ROW_GAP = 3
-const BURST_FONT_SIZE = 11
-const BURST_PADDING_X = 5
-const BURST_PADDING_Y = 2
-const BURST_GAP = 3
-const TRACKING_ICON_WIDTH = 12
-const TRACKING_ICON_HEIGHT = 8
-const TRACKING_ICON_GAP = 4
-/** 지시로 고정돼 대상을 따라가지 않는 카메라의 표시: 속을 비우고 흐리게 */
-const HELD_ICON_ALPHA = 0.5
-const HELD_ICON_STROKE = 1.5
 
 // 스태프
 const STAFF_HEIGHT_METERS = 1.6
@@ -159,9 +154,6 @@ const AUTO_VIGNETTE_ALPHA = 0.5
 const LIGHT_DIRECTION: Vec3 = { x: 0.35, y: 1, z: 0.6 }
 const FACE_MIN_BRIGHTNESS = 0.55
 
-/** 머리 위 클로즈업 표시. following: 대상을 따라가는 중, held: 대상이지만 지시·놀람으로 다른 곳을 봄 */
-type TrackMark = 'following' | 'held'
-
 /** 출연자별 클로즈업 표시. 대상으로 삼은 카메라 중 하나라도 따라가는 중이면 following이다. */
 function trackMarks(
   view: Pick<BroadcastView, 'cameraTargets' | 'cameraAimModes'>,
@@ -173,20 +165,6 @@ function trackMarks(
     if (following || !marks.has(actorId)) marks.set(actorId, following ? 'following' : 'held')
   }
   return marks
-}
-
-interface ActorSprite {
-  root: Container
-  /** 몸 도형과 포즈 기호를 함께 기울이는 묶음 */
-  tiltGroup: Container
-  body: Graphics
-  symbol: Text
-  label: Text
-  overhead: Container
-  overheadMarks: Graphics
-  burstTag: Container
-  /** 마지막으로 그린 몸의 key(pose, 송출, scale). 바뀔 때만 도형을 다시 그린다. */
-  drawnKey: string | null
 }
 
 interface StaffSprite {
@@ -205,6 +183,7 @@ export class StudioRenderer {
   private readonly app: Application
   private readonly show: ShowDef
   private readonly world = new Container()
+  private readonly backdrop: StudioBackdrop
   private readonly floorStatic = new Graphics()
   private readonly floorDynamic = new Graphics()
   private readonly bodies = new Container()
@@ -213,7 +192,9 @@ export class StudioRenderer {
   private readonly vignette = new Graphics()
   private readonly interventionFilter = new ColorMatrixFilter()
   private readonly autoFilter = new ColorMatrixFilter()
-  private readonly actorSprites = new Map<string, ActorSprite>()
+  /** 레이어마다 지금 걸어 둔 채도 필터. 같으면 다시 걸지 않는다 */
+  private readonly appliedFilters = new WeakMap<Container, ColorMatrixFilter | null>()
+  private readonly actorFigures = new Map<string, ActorFigure>()
   private readonly staffSprites = new Map<string, StaffSprite>()
   private readonly equipmentShapes = new Map<string, Graphics>()
   private transform: IsoTransform
@@ -225,11 +206,27 @@ export class StudioRenderer {
   /** 마지막 draw에서 그린 카메라 표시의 캔버스 논리 좌표 */
   private cameraMarks = new Map<string, Point>()
   private aimPreview: AimPreview | null = null
+  /** 초점을 둔 출연자. null이 아니면 다른 출연자를 흐리게 그린다 */
+  private focusActorId: string | null = null
   private destroyed = false
+  private readonly textures: ArtTextures
+  /** 출연자 id → 출연자 색(#RRGGBB) */
+  private readonly performerColors: ReadonlyMap<string, string>
 
-  private constructor(app: Application, show: ShowDef, width: number, height: number) {
+  private constructor(
+    app: Application,
+    show: ShowDef,
+    performers: readonly PerformerDef[],
+    textures: ArtTextures,
+    backdropTextures: StudioBackdropTextures,
+    width: number,
+    height: number,
+  ) {
     this.app = app
     this.show = show
+    this.textures = textures
+    this.backdrop = new StudioBackdrop(backdropTextures)
+    this.performerColors = new Map(performers.map((performer) => [performer.id, performer.color]))
     this.logicalWidth = width
     this.logicalHeight = height
     this.transform = fitIso(width, height, FIT_PADDING)
@@ -240,12 +237,17 @@ export class StudioRenderer {
    * 초기화(await)가 끝나기 전에 화면이 사라질 수 있으므로(React StrictMode의 이중 마운트 등)
    * AbortSignal을 받는다. 초기화 뒤 이미 abort됐다면 만들던 Pixi 앱을 바로 정리하고
    * `AbortError` DOMException으로 reject한다. 호출 쪽은 이 오류를 무시하면 된다.
+   * performers는 무대와 대기석 출연자 전부다(이름표 색). 출연자 그림 30장과 스튜디오 면 그림 3장은 여기서 한 번 불러 둔다.
    */
   static async create(
     host: HTMLElement,
     show: ShowDef,
+    performers: readonly PerformerDef[],
     signal?: AbortSignal,
   ): Promise<StudioRenderer> {
+    // 그림이 빠진 출연자가 있으면 그리기 도중이 아니라 여기서 바로 알린다.
+    assertPerformerArt(performers.map((performer) => performer.id))
+    const backdropUrls = studioBackdropUrls()
     const width = host.clientWidth > 0 ? host.clientWidth : FALLBACK_WIDTH
     const height = host.clientHeight > 0 ? host.clientHeight : FALLBACK_HEIGHT
     const app = new Application()
@@ -257,11 +259,37 @@ export class StudioRenderer {
       autoDensity: true,
       resolution: window.devicePixelRatio || 1,
     })
+    let textures: ArtTextures
+    let backdropTextures: StudioBackdropTextures
+    try {
+      // 한쪽이 실패하면 다른 쪽 로드는 끝까지 돌지만 결과를 쓰지 않고 앱을 정리한 뒤 오류를 그대로 던진다
+      const [performerTextures, planeTextures] = await Promise.all([
+        Assets.load<Texture>(allPerformerArtUrls()),
+        Assets.load<Texture>(Object.values(backdropUrls)),
+      ])
+      textures = performerTextures
+      backdropTextures = {
+        floor: planeTextures[backdropUrls.floor],
+        backWall: planeTextures[backdropUrls.backWall],
+        sideWall: planeTextures[backdropUrls.sideWall],
+      }
+    } catch (error: unknown) {
+      app.destroy({ removeView: true }, { children: true })
+      throw error
+    }
     if (signal?.aborted) {
       app.destroy({ removeView: true }, { children: true })
       throw new DOMException('StudioRenderer 생성이 취소되었습니다.', 'AbortError')
     }
-    const renderer = new StudioRenderer(app, show, width, height)
+    const renderer = new StudioRenderer(
+      app,
+      show,
+      performers,
+      textures,
+      backdropTextures,
+      width,
+      height,
+    )
     host.appendChild(app.canvas)
     renderer.buildScene()
     return renderer
@@ -281,6 +309,8 @@ export class StudioRenderer {
     this.drawStaff(view.staff)
     this.drawPhenomenonMarks(view)
     this.applyMode(mode)
+    // 출연자 그림은 처음 보일 때 만들어지므로 레이어 목록은 매 draw 다시 본다
+    this.applySaturation()
   }
 
   /**
@@ -318,6 +348,13 @@ export class StudioRenderer {
     if (!this.destroyed && this.lastView !== null) this.draw(this.lastView, this.mode)
   }
 
+  /** actorId에 초점을 두고 다른 출연자를 흐리게 한다. null이면 모두 또렷하게 되돌린다. 바로 다시 그린다. */
+  setFocus(actorId: string | null): void {
+    if (actorId === this.focusActorId) return
+    this.focusActorId = actorId
+    if (!this.destroyed && this.lastView !== null) this.draw(this.lastView, this.mode)
+  }
+
   /**
    * 마지막 draw에서 그린 출연자·스태프의 캔버스 논리 좌표(몸 중심). 화면에 없으면 null.
    * 개입 카드와 스튜디오의 대상을 선으로 잇는 데 쓴다.
@@ -329,6 +366,15 @@ export class StudioRenderer {
     const staff = this.hits.staff.find((shape) => shape.id === id)
     if (staff === undefined) return null
     return { x: (staff.left + staff.right) / 2, y: (staff.top + staff.bottom) / 2 }
+  }
+
+  /**
+   * 마지막 draw에서 그린 출연자 그림의 반폭·반높이(캔버스 논리 좌표, 히트 여유 포함). 화면에 없으면 null.
+   * 정보 카드가 출연자를 덮지 않게 몸 상자로 쓴다. 확대 비율에 따라 달라지는 실제 그림 크기다.
+   */
+  actorHalfSize(id: string): { halfWidth: number; halfHeight: number } | null {
+    const shape = this.hits.actors.find((candidate) => candidate.id === id)
+    return shape === undefined ? null : { halfWidth: shape.halfWidth, halfHeight: shape.halfHeight }
   }
 
   resize(width: number, height: number): void {
@@ -346,11 +392,11 @@ export class StudioRenderer {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
-    this.world.filters = null
+    for (const layer of [this.world, ...this.saturationLayers()]) layer.filters = null
     this.interventionFilter.destroy()
     this.autoFilter.destroy()
     this.app.destroy({ removeView: true }, { children: true })
-    this.actorSprites.clear()
+    this.actorFigures.clear()
     this.staffSprites.clear()
     this.equipmentShapes.clear()
     this.lastView = null
@@ -363,8 +409,19 @@ export class StudioRenderer {
     this.autoFilter.saturate(AUTO_SATURATION, false)
     this.bodies.sortableChildren = true
     this.overlays.addChild(this.overlayMarks)
-    this.world.addChild(this.floorStatic, this.floorDynamic, this.bodies, this.overlays)
+    this.world.addChild(
+      this.backdrop.container,
+      this.floorStatic,
+      this.floorDynamic,
+      this.bodies,
+      this.overlays,
+    )
     this.app.stage.addChild(this.world, this.vignette)
+    // 2단계 배지의 깜박임은 방송 속도와 관계없이 실제 시간으로 돈다(spec 4.1).
+    this.app.ticker.add(() => {
+      const now = performance.now()
+      for (const figure of this.actorFigures.values()) figure.blink(now)
+    })
     this.drawFloorStatic()
     this.drawVignette()
   }
@@ -382,39 +439,13 @@ export class StudioRenderer {
     ]
   }
 
-  /** 바뀌지 않는 바닥: 뒤 벽 두 면, 바닥 타일, 관객석, home spot, 대기석, 출구. */
+  /**
+   * 바뀌지 않는 바닥: 바닥·벽 그림 자리, 바닥 테두리, 관객석 테두리, home spot, 대기석, 출구.
+   * 바닥 그림에 나무 판자 결이 있어 1m 격자선은 긋지 않는다. 관객석은 그림의 붉은 카펫이 보여 주므로 테두리만 긋는다.
+   */
   private drawFloorStatic(): void {
+    this.backdrop.layout(this.transform)
     const floor = this.floorStatic.clear()
-    const top = ISO_VIEW_HEIGHT
-    // 뒤 벽(z=0 면과 x=0 면)
-    floor
-      .poly([
-        this.project({ x: 0, y: 0, z: 0 }),
-        this.project({ x: STUDIO_WIDTH, y: 0, z: 0 }),
-        this.project({ x: STUDIO_WIDTH, y: top, z: 0 }),
-        this.project({ x: 0, y: top, z: 0 }),
-      ])
-      .fill({ color: COLORS.backWall, alpha: BACK_WALL_ALPHA })
-      .poly([
-        this.project({ x: 0, y: 0, z: 0 }),
-        this.project({ x: 0, y: 0, z: STUDIO_DEPTH }),
-        this.project({ x: 0, y: top, z: STUDIO_DEPTH }),
-        this.project({ x: 0, y: top, z: 0 }),
-      ])
-      .fill({ color: COLORS.backWall, alpha: BACK_WALL_ALPHA * 0.8 })
-
-    floor.poly(this.floorPolygon(0, STUDIO_WIDTH, 0, STUDIO_DEPTH)).fill(COLORS.floor)
-    for (let x = TILE_METERS; x < STUDIO_WIDTH; x += TILE_METERS) {
-      const a = this.project({ x, y: 0, z: 0 })
-      const b = this.project({ x, y: 0, z: STUDIO_DEPTH })
-      floor.moveTo(a.x, a.y).lineTo(b.x, b.y)
-    }
-    for (let z = TILE_METERS; z < STUDIO_DEPTH; z += TILE_METERS) {
-      const a = this.project({ x: 0, y: 0, z })
-      const b = this.project({ x: STUDIO_WIDTH, y: 0, z })
-      floor.moveTo(a.x, a.y).lineTo(b.x, b.y)
-    }
-    floor.stroke({ color: COLORS.floorTile, width: TILE_LINE_WIDTH })
     floor
       .poly(this.floorPolygon(0, STUDIO_WIDTH, 0, STUDIO_DEPTH))
       .stroke({ color: COLORS.floorEdge, width: FLOOR_EDGE_WIDTH })
@@ -426,11 +457,7 @@ export class StudioRenderer {
       audienceZone.minZ,
       audienceZone.maxZ,
     )
-    floor
-      .poly(audience)
-      .fill({ color: COLORS.audienceZone, alpha: AUDIENCE_FILL_ALPHA })
-      .poly(audience)
-      .stroke({ color: COLORS.audienceZoneLine, width: FLOOR_EDGE_WIDTH })
+    floor.poly(audience).stroke({ color: COLORS.audienceZoneLine, width: FLOOR_EDGE_WIDTH })
 
     const spot = floorEllipseRadii(SPOT_RADIUS_METERS, this.transform.scale)
     for (const home of homeSpots) {
@@ -468,26 +495,67 @@ export class StudioRenderer {
     this.vignette.visible = this.mode !== 'live'
   }
 
-  /** 개입은 강하게, 자동 슬로모션은 약하게 채도를 빼고 가장자리를 어둡게 한다. */
+  /** 개입은 강하게, 자동 슬로모션은 약하게 가장자리를 어둡게 한다(채도는 applySaturation). */
   private applyMode(mode: StudioMode): void {
     if (mode === this.mode) return
     this.mode = mode
     this.vignette.visible = mode !== 'live'
     this.vignette.alpha = mode === 'auto' ? AUTO_VIGNETTE_ALPHA : 1
-    if (mode === 'intervention') this.world.filters = [this.interventionFilter]
-    else if (mode === 'auto') this.world.filters = [this.autoFilter]
-    else this.world.filters = null
+  }
+
+  /**
+   * 개입은 강하게, 자동 슬로모션은 약하게 채도를 뺀다. 개입 중 고른 출연자(초점)의 몸과 머리 위 표시는
+   * 필터 밖에 두어 밝게 남긴다(B2 spec 7절, saturationPlan).
+   */
+  private applySaturation(): void {
+    const filter =
+      this.mode === 'intervention' ? this.interventionFilter : this.mode === 'auto' ? this.autoFilter : null
+    const focused = this.focusActorId === null ? undefined : this.actorFigures.get(this.focusActorId)
+    const kept = focused === undefined ? [] : [focused.body, focused.overhead]
+    const plan = saturationPlan(filter !== null, this.saturationLayers(), kept)
+    this.setFilter(this.world, plan.world ? filter : null)
+    for (const layer of plan.filtered) this.setFilter(layer, filter)
+    for (const layer of plan.unfiltered) this.setFilter(layer, null)
+  }
+
+  /** world 안에서 채도 필터를 따로 걸 수 있는 레이어: 배경, 바닥, 몸·장비·스태프 하나하나, 머리 위 표시 하나하나 */
+  private saturationLayers(): Container[] {
+    return [
+      this.backdrop.container,
+      this.floorStatic,
+      this.floorDynamic,
+      ...this.bodies.children,
+      ...this.overlays.children,
+    ]
+  }
+
+  private setFilter(target: Container, filter: ColorMatrixFilter | null): void {
+    if ((this.appliedFilters.get(target) ?? null) === filter) return
+    this.appliedFilters.set(target, filter)
+    target.filters = filter === null ? null : [filter]
   }
 
   // ── 바닥 표시 ─────────────────────────────────────────────
 
-  /** 몸보다 먼저 그리는 바닥 표시: 어둠, 카메라 시야, 현상 링, 그림자. */
+  /** 몸보다 먼저 그리는 바닥 표시: 어둠, 카메라 시야, 현상 링, 그림자, 클로즈업 대상 고리. */
   private drawFloorMarks(view: BroadcastView): void {
     const floor = this.floorDynamic.clear()
     this.drawDarkness(floor, view.darkZones)
     this.drawCameraFans(floor, view)
     this.drawPhenomenonRings(floor, view.recentPhenomena)
     this.drawShadows(floor, view)
+    this.drawCloseupRings(floor, view)
+  }
+
+  /** 클로즈업 대상의 발밑 노란 점선 고리 */
+  private drawCloseupRings(floor: Graphics, view: BroadcastView): void {
+    const marks = trackMarks(view)
+    const radii = floorEllipseRadii(CLOSEUP_RING_RADIUS_METERS, this.transform.scale)
+    for (const actor of view.actors) {
+      const mark = marks.get(actor.id)
+      if (mark === undefined || actor.departed) continue
+      drawCloseupRing(floor, this.project({ x: actor.x, y: 0, z: actor.z }), radii, mark)
+    }
   }
 
   private drawDarkness(floor: Graphics, zones: readonly DarkZone[]): void {
@@ -657,174 +725,25 @@ export class StudioRenderer {
 
   private drawActors(view: BroadcastView): void {
     this.hits.actors = []
-    const marks = trackMarks(view)
+    const context = {
+      project: (point: Vec3): Point => this.project(point),
+      scale: this.transform.scale,
+      textures: this.textures,
+    }
     for (const actor of view.actors) {
-      const sprite = this.actorSprites.get(actor.id) ?? this.createActorSprite(actor)
-      this.drawActor(sprite, actor, marks.get(actor.id) ?? null)
+      const figure = this.actorFigures.get(actor.id) ?? this.createActorFigure(actor.id)
+      const unfocused = this.focusActorId !== null && this.focusActorId !== actor.id
+      const hit = figure.update(actor, { ...context, unfocused })
+      if (hit !== null) this.hits.actors.push(hit)
     }
   }
 
-  private createActorSprite(actor: ActorView): ActorSprite {
-    const root = new Container()
-    const body = new Graphics()
-    const symbol = new Text({
-      text: '',
-      style: {
-        fill: COLORS.nameText,
-        fontSize: SYMBOL_FONT_SIZE,
-        fontWeight: 'bold',
-        fontFamily: FONT_FAMILY,
-      },
-    })
-    symbol.anchor.set(0.5)
-    const tiltGroup = new Container()
-    tiltGroup.addChild(body, symbol)
-    const label = new Text({
-      text: actor.name,
-      style: { fill: COLORS.nameText, fontSize: NAME_FONT_SIZE, fontFamily: FONT_FAMILY },
-    })
-    label.anchor.set(0.5, 0)
-    root.addChild(tiltGroup, label)
-    this.bodies.addChild(root)
-
-    const overhead = new Container()
-    const overheadMarks = new Graphics()
-    const burstTag = createTag('곧 터짐!', COLORS.burstTag, COLORS.burstText, BURST_FONT_SIZE, {
-      x: BURST_PADDING_X,
-      y: BURST_PADDING_Y,
-    })
-    overhead.addChild(overheadMarks, burstTag)
-    this.overlays.addChild(overhead)
-
-    const sprite: ActorSprite = {
-      root,
-      tiltGroup,
-      body,
-      symbol,
-      label,
-      overhead,
-      overheadMarks,
-      burstTag,
-      drawnKey: null,
-    }
-    this.actorSprites.set(actor.id, sprite)
-    return sprite
-  }
-
-  /** Plan 3에서 툰 스프라이트로 바뀌는 지점. 출연자 한 명을 그리는 일은 이 함수가 전부 맡는다. */
-  private drawActor(sprite: ActorSprite, actor: ActorView, trackMark: TrackMark | null): void {
-    const visible = !actor.departed
-    sprite.root.visible = visible
-    sprite.overhead.visible = visible && !actor.walkedOut
-    if (!visible) return
-
-    const scale = this.transform.scale
-    const halfWidth = CAPSULE.radius * scale
-    const halfHeight = (CAPSULE.halfHeight + CAPSULE.radius) * scale
-    const drawnKey = `${actor.pose}:${actor.onAir}:${scale}`
-    if (sprite.drawnKey !== drawnKey) {
-      sprite.drawnKey = drawnKey
-      sprite.body
-        .clear()
-        .roundRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, halfWidth)
-        .fill(POSE_COLORS[actor.pose])
-        .stroke(
-          actor.onAir
-            ? { color: COLORS.cameraOnAirStroke, width: ACTOR_ON_AIR_OUTLINE_WIDTH }
-            : {
-                color: COLORS.actorOutline,
-                width: ACTOR_OUTLINE_WIDTH,
-                alpha: ACTOR_OUTLINE_ALPHA,
-              },
-        )
-      sprite.symbol.text = POSE_SYMBOLS[actor.pose]
-    }
-
-    const center = this.project(actor)
-    const tilt = screenTilt(actor.up)
-    const depth = depthKey(actor)
-    sprite.root.position.set(center.x, center.y)
-    sprite.root.zIndex = depth
-    sprite.root.alpha = actor.walkedOut ? WALKED_OUT_ALPHA : 1
-    sprite.tiltGroup.rotation = tilt
-    // 몸이 화면에서 위·아래로 차지하는 폭. 누우면 줄어들어 이름표와 머리 위 표시가 몸에 붙는다.
-    const extent = Math.abs(Math.cos(tilt)) * (halfHeight - halfWidth) + halfWidth
-    if (sprite.label.text !== actor.name) sprite.label.text = actor.name
-    sprite.label.position.set(0, extent + NAME_GAP)
-
-    sprite.overhead.position.set(center.x, center.y - extent - OVERHEAD_GAP)
-    this.drawOverhead(sprite, actor, trackMark)
-
-    if (!actor.walkedOut) {
-      this.hits.actors.push({
-        id: actor.id,
-        center,
-        tilt,
-        halfWidth: halfWidth + ACTOR_HIT_PADDING_PX,
-        halfHeight: halfHeight + ACTOR_HIT_PADDING_PX,
-        depth,
-      })
-    }
-  }
-
-  /**
-   * 머리 위(아래에서 위로): 남은 내성 점, 대표 감정 막대, "곧 터짐!" 태그. 클로즈업 대상이면 카메라 표시
-   * (따라가는 중이면 채운 표시, 지시나 놀람으로 다른 곳을 보고 있으면 속이 빈 흐린 표시).
-   */
-  private drawOverhead(sprite: ActorSprite, actor: ActorView, trackMark: TrackMark | null): void {
-    const marks = sprite.overheadMarks.clear()
-    // 남은 내성 점(바닥 줄)
-    const dotCount = Math.max(0, actor.directivesLeft)
-    const dotsWidth =
-      dotCount * TOLERANCE_DOT_RADIUS * 2 + Math.max(0, dotCount - 1) * TOLERANCE_DOT_GAP
-    const dotY = -TOLERANCE_DOT_RADIUS
-    for (let index = 0; index < dotCount; index++) {
-      const x =
-        -dotsWidth / 2 +
-        TOLERANCE_DOT_RADIUS +
-        index * (TOLERANCE_DOT_RADIUS * 2 + TOLERANCE_DOT_GAP)
-      marks.circle(x, dotY, TOLERANCE_DOT_RADIUS).fill(COLORS.toleranceDot)
-    }
-    if (dotCount === 0) marks.circle(0, dotY, TOLERANCE_DOT_RADIUS).fill(COLORS.toleranceDotEmpty)
-
-    // 대표 감정 막대(값 0~100). 2단계면 위험 색과 "곧 터짐!"
-    const barTop = dotY - TOLERANCE_DOT_RADIUS - TOLERANCE_ROW_GAP - MOOD_BAR_HEIGHT
-    const moodFill = actor.mood === null ? 0 : Math.min(1, Math.max(0, actor.mood.value / 100))
-    const aboutToBurst = actor.mood?.stage === 2
-    marks
-      .rect(-MOOD_BAR_WIDTH / 2, barTop, MOOD_BAR_WIDTH, MOOD_BAR_HEIGHT)
-      .fill(COLORS.moodTrack)
-    if (moodFill > 0) {
-      marks
-        .rect(-MOOD_BAR_WIDTH / 2, barTop, MOOD_BAR_WIDTH * moodFill, MOOD_BAR_HEIGHT)
-        .fill(aboutToBurst ? COLORS.moodDanger : COLORS.moodFill)
-    }
-
-    // 클로즈업 대상: 막대 오른쪽의 작은 카메라
-    if (trackMark !== null) {
-      const left = MOOD_BAR_WIDTH / 2 + TRACKING_ICON_GAP
-      const top = barTop + MOOD_BAR_HEIGHT / 2 - TRACKING_ICON_HEIGHT / 2
-      const lensX = left + TRACKING_ICON_WIDTH + TRACKING_ICON_HEIGHT / 2
-      marks
-        .roundRect(left, top, TRACKING_ICON_WIDTH, TRACKING_ICON_HEIGHT, 2)
-        .poly([
-          { x: left + TRACKING_ICON_WIDTH, y: top + TRACKING_ICON_HEIGHT / 2 },
-          { x: lensX, y: top },
-          { x: lensX, y: top + TRACKING_ICON_HEIGHT },
-        ])
-      if (trackMark === 'following') {
-        marks.fill(COLORS.trackingIcon)
-      } else {
-        marks.stroke({
-          color: COLORS.trackingIcon,
-          width: HELD_ICON_STROKE,
-          alpha: HELD_ICON_ALPHA,
-        })
-      }
-    }
-
-    sprite.burstTag.visible = aboutToBurst
-    sprite.burstTag.position.set(0, barTop - BURST_GAP - sprite.burstTag.height / 2)
+  private createActorFigure(actorId: string): ActorFigure {
+    const figure = new ActorFigure(this.performerColors.get(actorId) ?? FALLBACK_PERFORMER_COLOR)
+    this.bodies.addChild(figure.body)
+    this.overlays.addChild(figure.overhead)
+    this.actorFigures.set(actorId, figure)
+    return figure
   }
 
   private drawStaff(staff: readonly StaffView[]): void {

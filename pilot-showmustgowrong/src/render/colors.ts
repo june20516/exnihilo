@@ -1,13 +1,9 @@
-import type { Pose } from '@/content/types'
-
 /** 렌더링 색 모음. 0xRRGGBB. */
 export const COLORS = {
   background: 0x14141c,
   floor: 0x3a3340,
-  floorTile: 0x4a4252,
   floorEdge: 0x6b6074,
   backWall: 0x241f2c,
-  audienceZone: 0x2a3a52,
   audienceZoneLine: 0x4d6a94,
   exit: 0x3f8f5f,
   homeSpot: 0xd8c27a,
@@ -26,14 +22,14 @@ export const COLORS = {
   aimPreview: 0xffc83d,
   actorOutline: 0x000000,
   nameText: 0xffffff,
-  moodTrack: 0x2a2a33,
-  moodFill: 0xf2c94c,
+  /** 감정 배지 2단계(곧 터짐)의 꽉 찬 고리 */
   moodDanger: 0xe5252a,
-  toleranceDot: 0xf2e08a,
-  toleranceDotEmpty: 0x4a4a55,
-  burstTag: 0xe5252a,
-  burstText: 0xffffff,
-  trackingIcon: 0xffd23f,
+  /** 감정 배지 원 바탕과 단계 이름 외곽선 */
+  badgeDisc: 0x14141c,
+  /** 출연자 이름표 바탕. 테두리는 출연자 색이다 */
+  nameTagBack: 0x14141c,
+  /** 스튜디오 발밑의 클로즈업 대상 점선 고리 */
+  closeupRing: 0xffd23f,
   staffBody: 0x4a7bd0,
   staffHead: 0xf0c8a0,
   startledBubble: 0xffd23f,
@@ -47,21 +43,3 @@ export const COLORS = {
   anger: 0xe5484d,
   vignette: 0x000000,
 } as const
-
-export const POSE_COLORS: Record<Pose, number> = {
-  idle: 0x9aa7b8,
-  laugh: 0xf2c94c,
-  angry: 0xe5484d,
-  panic: 0xb07ee0,
-  flying: 0x56c2e6,
-  fallen: 0x6f6a78,
-}
-
-export const POSE_SYMBOLS: Record<Pose, string> = {
-  idle: '',
-  laugh: 'ㅋ',
-  angry: '#',
-  panic: '!',
-  flying: '~',
-  fallen: '@',
-}

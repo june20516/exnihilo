@@ -27,6 +27,7 @@ import type {
   ShowDef,
   StaffDef,
 } from '@/content/types'
+import { fixtureColor } from '@/test-support/fixtureColor'
 import { STANDING_Y } from './cast'
 import { Broadcast, replay, type BroadcastInput, type BroadcastSetup } from './engine'
 import type { PhenomenonEvent } from './phenomena'
@@ -41,6 +42,7 @@ const camera = (overrides: Partial<CameraDef> & { id: string }): CameraDef => ({
   fovDegrees: 60,
   range: 10,
   shotIntensity: 1,
+  backdrop: 'stage',
   ...overrides,
 })
 
@@ -115,6 +117,7 @@ const CHARGE = directive('charge', {
 const performer = (overrides: Partial<PerformerDef> & { id: string }): PerformerDef => ({
   name: overrides.id,
   shortName: overrides.id,
+  color: fixtureColor(overrides.id),
   role: '역할',
   tendency: '성향',
   presence: 1,

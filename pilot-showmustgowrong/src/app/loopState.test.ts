@@ -37,6 +37,7 @@ function actor(id: string, overrides: Partial<ActorView> = {}): ActorView {
     emotions: [],
     misfireChance: 0,
     takeover: null,
+    habit: null,
     ...overrides,
   }
 }
@@ -301,7 +302,7 @@ describe('BroadcastLoop 자동 슬로모션', () => {
 })
 
 describe('BroadcastLoop 광고', () => {
-  it('평상시에 연 광고 패널은 정상 속도로 돌고 시간 제한이 없다(Ruling 5a)', () => {
+  it('광고 패널은 정상 속도로 돌고 시간 제한이 없다', () => {
     const { broadcast, loop } = setup()
     loop.openAdPanel()
     expect(loop.snapshot()).toMatchObject({ adPanelOpen: true, slowmo: 'none' })
@@ -319,72 +320,19 @@ describe('BroadcastLoop 광고', () => {
     expect(broadcast.steps).toEqual([[]])
   })
 
-  it('개입 중에 연 광고 패널은 개입의 남은 시간 동안만 느려지고, 다 되면 취소된다(Ruling 5a)', () => {
-    const { broadcast, loop } = setup()
+  it('개입 중에는 광고 패널을 열 수 없고 개입과 남은 시간이 그대로다(B2 spec 7절)', () => {
+    const { loop } = setup()
     loop.openIntervention()
     runSeconds(loop, 1)
+    const before = loop.snapshot()
     loop.openAdPanel()
-    expect(loop.snapshot()).toMatchObject({ adPanelOpen: true, slowmo: 'intervention' })
-
-    runSeconds(loop, INTERVENTION_REAL_SECONDS - 1.5)
-    expect(loop.snapshot()).toMatchObject({ adPanelOpen: true, slowmo: 'intervention' })
-    // 0.2배속이면 실제 1초에 12스텝
-    expect(broadcast.steps).toHaveLength(12 * (INTERVENTION_REAL_SECONDS - 0.5))
-
-    runSeconds(loop, 1)
+    expect(loop.snapshot()).toEqual(before)
     expect(loop.snapshot()).toMatchObject({
+      interventionOpen: true,
       adPanelOpen: false,
-      slowmo: 'none',
-      interventionOpen: false,
-      interventionsIssued: 0,
+      slowmo: 'intervention',
     })
-    expect(broadcast.steps.flat()).toEqual([])
-  })
-
-  it('광고 패널의 남은 시간은 개입 중에 연 경우에만 있고, 줄어든다', () => {
-    const { loop } = setup()
-    loop.openAdPanel()
-    expect(loop.snapshot().adPanelSecondsLeft).toBeNull()
-    loop.cancelAdPanel()
-
-    loop.openIntervention()
-    runSeconds(loop, 1)
-    loop.openAdPanel()
-    expect(loop.snapshot().adPanelSecondsLeft).toBeCloseTo(INTERVENTION_REAL_SECONDS - 1, 5)
-    runSeconds(loop, 1)
-    expect(loop.snapshot().adPanelSecondsLeft).toBeCloseTo(INTERVENTION_REAL_SECONDS - 2, 5)
-    loop.cancelAdPanel()
-    expect(loop.snapshot().adPanelSecondsLeft).toBeNull()
-  })
-
-  it('개입 중에 연 광고 패널을 취소하면 슬로모션도 끝난다', () => {
-    const { loop } = setup()
-    loop.openIntervention()
-    loop.openAdPanel()
-    loop.cancelAdPanel()
-    expect(loop.snapshot()).toMatchObject({ adPanelOpen: false, slowmo: 'none' })
-  })
-
-  it('개입 중에 연 광고 패널도 시간이 다 되기 전에 확정하면 광고가 들어간다', () => {
-    const { broadcast, loop } = setup()
-    loop.openIntervention()
-    loop.openAdPanel()
-    runSeconds(loop, 1)
-    loop.confirmAd(['relief', 'reset'])
-    loop.frame(FRAME)
-    expect(broadcast.steps.at(-1)).toEqual([{ type: 'ad', effects: ['relief', 'reset'] }])
-    expect(loop.snapshot()).toMatchObject({ adBreak: true, slowmo: 'none' })
-  })
-
-  it('개입 중에 광고 패널을 열면 개입은 세지 않고 닫힌다', () => {
-    const { loop } = setup()
-    loop.openIntervention()
-    loop.openAdPanel()
-    expect(loop.snapshot()).toMatchObject({
-      interventionOpen: false,
-      adPanelOpen: true,
-      interventionsIssued: 0,
-    })
+    expect(loop.snapshot().interventionSecondsLeft).toBeCloseTo(INTERVENTION_REAL_SECONDS - 1, 5)
   })
 
   it('광고 패널이나 광고 중에는 개입을 열 수 없다', () => {

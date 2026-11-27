@@ -4,6 +4,7 @@ import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import { TEMPLATE_TOKEN } from './templateTokens'
 import { TUNABLES } from './tuning'
 import {
+  BACKDROP_KINDS,
   COMMON_EMOTIONS,
   type ActionDef,
   type EmotionDef,
@@ -192,10 +193,20 @@ function checkSensitivities(mind: MindDef, owner: string): string[] {
   return errors
 }
 
+const GRAPHEME_SEGMENTER = new Intl.Segmenter('ko', { granularity: 'grapheme' })
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/
+
+function countGraphemes(text: string): number {
+  return [...GRAPHEME_SEGMENTER.segment(text)].length
+}
+
 function checkHabit(habit: HabitDef, knownTags: ReadonlySet<string>, owner: string): string[] {
   const errors: string[] = []
   for (const field of ['line', 'recall', 'noun'] as const) {
     if (isBlank(habit[field])) errors.push(`빈 버릇 문구 오류: ${field} ${habit.id} (${owner})`)
+  }
+  if (countGraphemes(habit.emote) !== 1) {
+    errors.push(`버릇 이모트 오류: "${habit.emote}"는 그래핌 1개여야 함 (${habit.id}, ${owner})`)
   }
   if (!(habit.weight > 0)) errors.push(`버릇 가중치 오류: ${habit.weight} (${habit.id}, ${owner})`)
   if (habit.respondsTo) {
@@ -317,6 +328,12 @@ export function validateShow(
   // 대상·조건 태그는 이 출연자 하나가 아니라 쇼 전체 출연자 태그의 합집합에서 찾는다.
   const knownTags = new Set(performers.flatMap((p) => p.tags))
   const knownCameraIds = new Set(show.cameras.map((c) => c.id))
+  const knownBackdrops: ReadonlySet<string> = new Set(BACKDROP_KINDS)
+  for (const camera of show.cameras) {
+    if (!knownBackdrops.has(camera.backdrop)) {
+      errors.push(`알 수 없는 카메라 배경: ${camera.backdrop} (${camera.id})`)
+    }
+  }
 
   const { autoCut } = show
   if (autoCut.rotation.length === 0) errors.push('자동 컷 오류: rotation이 비어 있음')
@@ -346,6 +363,13 @@ export function validateShow(
       }
     }
     for (const target of reactionTargets(reactions)) checkTarget(target, owner)
+  }
+
+  for (const performer of performers) {
+    if (!HEX_COLOR.test(performer.color)) errors.push(`출연자 색 오류: ${performer.color} (${performer.id})`)
+  }
+  for (const color of findDuplicates(performers.map((p) => p.color.toUpperCase()))) {
+    errors.push(`출연자 색 중복 오류: ${color}`)
   }
 
   for (const performer of performers) {
