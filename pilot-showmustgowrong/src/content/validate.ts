@@ -1,6 +1,8 @@
+import { validateTunables, type TunableDef } from '@/kit/tuning/tuning'
 import type { FloorPoint } from '@/sim/vec'
 import { STEP_SECONDS, STUDIO_DEPTH, STUDIO_WIDTH } from './balance'
 import { TEMPLATE_TOKEN } from './templateTokens'
+import { TUNABLES } from './tuning'
 import {
   COMMON_EMOTIONS,
   type ActionDef,
@@ -51,7 +53,8 @@ function isBlank(text: string): boolean {
   return text.trim() === ''
 }
 
-function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean {
+/** 감정 문턱이 0 < 내림 < 진입 <= 100, 1단계 < 2단계, 2단계 진입 <= intense <= 100을 지키는지. tuning.ts의 문턱 관계와 같은 규칙이다 */
+export function isValidThresholds({ rise, fall, intense }: EmotionThresholds): boolean {
   const pairsValid = [0, 1].every((i) => 0 < fall[i] && fall[i] < rise[i] && rise[i] <= 100)
   return pairsValid && rise[0] < rise[1] && fall[0] < fall[1] && rise[1] <= intense && intense <= 100
 }
@@ -276,14 +279,18 @@ function checkMoodShifts(
   return errors
 }
 
-/** 오류 메시지 목록을 돌려준다. 빈 배열이면 통과. performers는 무대와 대기 출연자를 합친 전체다. */
+/**
+ * 오류 메시지 목록을 돌려준다. 빈 배열이면 통과. performers는 무대와 대기 출연자를 합친 전체다.
+ * tunables는 조정 항목 정의다(spec Plan B1 1.4: 모든 기본값이 자기 범위 안). 테스트가 잘못된 정의를 넣을 수 있게 인자로 받는다.
+ */
 export function validateShow(
   show: ShowDef,
   performers: PerformerDef[],
   staff: StaffDef[],
   equipment: EquipmentDef[],
+  tunables: readonly TunableDef[] = TUNABLES,
 ): string[] {
-  const errors: string[] = []
+  const errors: string[] = validateTunables(tunables).map((error) => `조정 항목 오류: ${error}`)
 
   if (!(Number.isFinite(show.showMinutes) && show.showMinutes > 0)) errors.push(`극 중 길이 오류: ${show.showMinutes}분`)
   const { hour, minute } = show.startTime
@@ -310,6 +317,21 @@ export function validateShow(
   // 대상·조건 태그는 이 출연자 하나가 아니라 쇼 전체 출연자 태그의 합집합에서 찾는다.
   const knownTags = new Set(performers.flatMap((p) => p.tags))
   const knownCameraIds = new Set(show.cameras.map((c) => c.id))
+
+  const { autoCut } = show
+  if (autoCut.rotation.length === 0) errors.push('자동 컷 오류: rotation이 비어 있음')
+  const autoCutCameras: [string, string][] = [
+    ...autoCut.rotation.map((id): [string, string] => ['rotation', id]),
+    ['incidentCamera', autoCut.incidentCamera],
+    ['fallbackCamera', autoCut.fallbackCamera],
+  ]
+  for (const [field, id] of autoCutCameras) {
+    if (!knownCameraIds.has(id)) errors.push(`자동 컷 오류: ${field}에 없는 카메라 ${id}`)
+  }
+  const incident = show.cameras.find((camera) => camera.id === autoCut.incidentCamera)
+  if (incident !== undefined && incident.tracking !== true) {
+    errors.push(`자동 컷 오류: incidentCamera ${autoCut.incidentCamera}가 추적 카메라가 아님`)
+  }
 
   const checkTarget = (target: TargetSelector, owner: string) => {
     if (typeof target === 'object' && !knownTags.has(target.tag)) {

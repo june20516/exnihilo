@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { TunableDef } from '@/kit/tuning/tuning'
 import { COMMON_EMOTION_DEFS } from './emotions'
 import type {
   ActionDef,
@@ -70,6 +71,7 @@ const show: ShowDef = {
       fovDegrees: 60,
       range: 12,
       shotIntensity: 1,
+      tracking: true,
     },
   ],
   homeSpots: [
@@ -79,6 +81,7 @@ const show: ShowDef = {
   benchSpot: { x: 1, z: 6 },
   exit: { x: 16, z: 4 },
   audienceZone: { minX: 0, maxX: 16, minZ: 8, maxZ: 10 },
+  autoCut: { rotation: ['cam1'], incidentCamera: 'cam1', fallbackCamera: 'cam1' },
 }
 
 const equipment: EquipmentDef[] = [
@@ -105,6 +108,23 @@ describe('validateShow', () => {
 
   it('유효한 픽스처에는 빈 배열을 돌려준다', () => {
     expect(validateShow(show, performers, [makeStaff()], equipment)).toEqual([])
+  })
+
+  it('조정 항목 검증 오류가 콘텐츠 검증에 실린다', () => {
+    const badTunable: TunableDef = {
+      key: 'BAD',
+      group: '묶음',
+      label: '이름',
+      unit: '몸 초',
+      defaultValue: 10,
+      min: 0,
+      max: 5,
+      step: 1,
+      description: '설명',
+    }
+    expect(validateShow(show, performers, [makeStaff()], equipment, [badTunable])).toEqual([
+      '조정 항목 오류: 기본값이 범위 밖입니다: BAD',
+    ])
   })
 
   it('극 중 길이가 0 이하이거나 시작 시각이 범위 밖이면 오류', () => {
@@ -268,6 +288,21 @@ describe('validateShow', () => {
   it('장비 중복 id를 보고한다', () => {
     const errors = validateShow(show, performers, [makeStaff()], [equipment[0], equipment[0]])
     expect(errors.join('\n')).toContain('중복 id: 장비 light1')
+  })
+
+  it('자동 컷의 없는 카메라와 추적이 아닌 사고 카메라를 보고한다', () => {
+    const fixed = { ...show.cameras[0], id: 'cam2', tracking: false }
+    const bad = {
+      ...show,
+      cameras: [show.cameras[0], fixed],
+      autoCut: { rotation: ['cam1', 'nope'], incidentCamera: 'cam2', fallbackCamera: 'gone' },
+    }
+    const errors = validateShow(bad, performers, [makeStaff()], equipment)
+    expect(errors).toContain('자동 컷 오류: rotation에 없는 카메라 nope')
+    expect(errors).toContain('자동 컷 오류: fallbackCamera에 없는 카메라 gone')
+    expect(errors).toContain('자동 컷 오류: incidentCamera cam2가 추적 카메라가 아님')
+    const empty = { ...show, autoCut: { ...show.autoCut, rotation: [] } }
+    expect(validateShow(empty, performers, [makeStaff()], equipment)).toContain('자동 컷 오류: rotation이 비어 있음')
   })
 
   it('카메라 중복 id를 보고한다', () => {

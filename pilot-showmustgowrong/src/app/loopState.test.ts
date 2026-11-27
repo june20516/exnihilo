@@ -36,6 +36,7 @@ function actor(id: string, overrides: Partial<ActorView> = {}): ActorView {
     mood: null,
     emotions: [],
     misfireChance: 0,
+    takeover: null,
     ...overrides,
   }
 }

@@ -5,8 +5,8 @@
  * 자동 슬로모션이 걸리지만, 그 구간도 평상시 기준으로 잰다.
  */
 import { STEP_SECONDS } from '@/content/balance'
-import type { BroadcastSummary, LogLine } from './engineTypes'
-import type { BurstRecord } from './life'
+import type { BroadcastSummary, BroadcastView, LogLine } from './engineTypes'
+import type { BurstRecord, StageRecord } from './life'
 
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS)
 
@@ -23,7 +23,26 @@ export interface BroadcastMetrics {
   halted: boolean
   maxChainDepth: number
   lineCount: number
+  /** 렉스 주목 욕구가 1단계에 한 번이라도 닿았나. 렉스가 없는 방송이면 null */
+  rexAttentionReached: boolean | null
 }
+
+/** 방송 한 판을 재는 데 쓰는 기록 */
+export interface BroadcastMeasureInput {
+  lines: readonly LogLine[]
+  bursts: readonly BurstRecord[]
+  /** 엔진의 단계 진입 기록. 진입 줄은 쿨다운으로 생략될 수 있어 도달 판정은 줄이 아니라 이것으로 한다 */
+  stages: readonly StageRecord[]
+  summary: BroadcastSummary
+  halted: boolean
+  endStep: number
+  /** 무대에 선 렉스의 id. 렉스가 없는 방송이면 null */
+  rexId: string | null
+}
+
+/** 렉스 주목 욕구 게이트가 보는 출연자와 감정(spec Plan B1 4) */
+export const REX_ID = 'rex'
+const REX_ATTENTION_EMOTION = 'attention'
 
 export interface GateResult {
   name: string
@@ -44,6 +63,8 @@ const MAX_BIG_BURSTS_PER_ACTOR = 1
 const SMALL_BURSTS = { min: 4, max: 8 } as const
 const MIN_WARNING_BODY_SECONDS = 3
 const MIN_MEAN_WARNING_BODY_SECONDS = 8
+/** 렉스 주목 욕구 1단계 도달 비율 기준(spec Plan B1 4): 렉스가 있는 판의 40~60% */
+const REX_ATTENTION_RATIO = { min: 0.4, max: 0.6 } as const
 
 function stepsToSeconds(steps: number): number {
   return steps / STEPS_PER_SECOND
@@ -65,13 +86,21 @@ function warningDelay(record: BurstRecord): number {
   return stepsToSeconds(record.step - record.stage2Step)
 }
 
-export function measureBroadcast(
-  lines: readonly LogLine[],
-  bursts: readonly BurstRecord[],
-  summary: BroadcastSummary,
-  halted: boolean,
-  endStep: number,
-): BroadcastMetrics {
+function rexAttentionReached(stages: readonly StageRecord[], rexId: string | null): boolean | null {
+  if (rexId === null) return null
+  // 2단계 기록도 1단계를 지난 것이다(한 틱에 0에서 2로 오르면 2만 남는다)
+  return stages.some((record) => record.actorId === rexId && record.emotion === REX_ATTENTION_EMOTION)
+}
+
+export function measureBroadcast({
+  lines,
+  bursts,
+  stages,
+  summary,
+  halted,
+  endStep,
+  rexId,
+}: BroadcastMeasureInput): BroadcastMetrics {
   const big = bursts.filter((record) => record.size === 'big')
   const bigPerActor = new Map<string, number>()
   for (const record of big) {
@@ -88,7 +117,34 @@ export function measureBroadcast(
     halted,
     maxChainDepth: summary.maxChainDepth,
     lineCount: lines.length,
+    rexAttentionReached: rexAttentionReached(stages, rexId),
   }
+}
+
+/** 끝난 방송에서 재는 데 필요한 것만 본다(engine을 값으로 import하지 않으려고 구조로 받는다) */
+export interface FinishedBroadcast {
+  logLines(): LogLine[]
+  burstRecords(): BurstRecord[]
+  stageRecords(): StageRecord[]
+  summary(): BroadcastSummary
+  view(): BroadcastView
+  readonly currentStep: number
+}
+
+/** 끝난 방송 한 판을 잰다. performers는 무대에 선 출연자로, 렉스가 있는지 가린다 */
+export function measureFinishedBroadcast(
+  broadcast: FinishedBroadcast,
+  performers: readonly { id: string }[],
+): BroadcastMetrics {
+  return measureBroadcast({
+    lines: broadcast.logLines(),
+    bursts: broadcast.burstRecords(),
+    stages: broadcast.stageRecords(),
+    summary: broadcast.summary(),
+    halted: broadcast.view().haltedBy !== null,
+    endStep: broadcast.currentStep,
+    rexId: performers.some((performer) => performer.id === REX_ID) ? REX_ID : null,
+  })
 }
 
 /** 조건을 만족하는 시드가 비율 이상이면 통과 */
@@ -104,6 +160,21 @@ function ratioGate(
     name,
     pass: count >= runs.length * passRatio,
     detail: `${criterion}: ${count}/${runs.length} (기준 ${passRatio * 100}% 이상)`,
+  }
+}
+
+function rexAttentionGate(runs: readonly BroadcastMetrics[]): GateResult {
+  const name = '렉스 주목 욕구'
+  const withRex = runs.filter((run) => run.rexAttentionReached !== null)
+  if (withRex.length === 0) return { name, pass: false, detail: '렉스가 있는 방송이 없어 비율을 낼 수 없음' }
+  const reached = withRex.filter((run) => run.rexAttentionReached === true).length
+  const ratio = reached / withRex.length
+  return {
+    name,
+    pass: ratio >= REX_ATTENTION_RATIO.min && ratio <= REX_ATTENTION_RATIO.max,
+    detail:
+      `1단계 도달 ${reached}/${withRex.length} = ${(ratio * 100).toFixed(0)}%` +
+      `(기준 ${REX_ATTENTION_RATIO.min * 100}~${REX_ATTENTION_RATIO.max * 100}%)`,
   }
 }
 
@@ -172,5 +243,6 @@ export function evaluateGates(runs: readonly BroadcastMetrics[]): GateResult[] {
       `최대 깊이 ${MAX_CHAIN_DEPTH} 이하`,
     ),
     warningGate(runs),
+    rexAttentionGate(runs),
   ]
 }

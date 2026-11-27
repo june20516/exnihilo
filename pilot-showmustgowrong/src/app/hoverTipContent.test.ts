@@ -41,6 +41,7 @@ const REX_VIEW: ActorView = {
   mood: null,
   emotions: [],
   misfireChance: 0,
+  takeover: null,
 }
 
 const OPERATOR_VIEW: StaffView = {

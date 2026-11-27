@@ -1,6 +1,7 @@
 import { COMMON_HABITS, COMMON_SENSITIVITIES, SILENCE_BOREDOM_LABEL, withBurstTexts, withSensitivities } from '../commonMind'
 import { COMMON_EMOTION_DEFS } from '../emotions'
 import type { MindDef } from '../types'
+import { tuned } from '../tuning'
 
 /** 렉스: 화면에 안 잡히면 주목 욕구가 쌓여 카메라로 돌진한다. 비웃음엔 짜증 */
 export const REX_MIND: MindDef = {
@@ -20,15 +21,15 @@ export const REX_MIND: MindDef = {
       emotion: 'attention',
       on: 'situation',
       situation: { kind: 'offScreen' },
-      perShowMinute: 7,
-      fadePerShowMinute: 40,
+      perShowMinute: tuned('mind.rex.attention.offScreen.perShowMinute'),
+      fadePerShowMinute: tuned('mind.rex.attention.offScreen.fadePerShowMinute'),
       label: { noun: '무시', clause: '한참 화면에 안 잡힌' },
     },
     {
       emotion: 'boredom',
       on: 'situation',
       situation: { kind: 'silence' },
-      perShowMinute: 4,
+      perShowMinute: tuned('mind.rex.boredom.silence.perShowMinute'),
       label: SILENCE_BOREDOM_LABEL,
     },
   ]),

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { INTERVENTION_REAL_SECONDS } from '../../src/content/balance'
+import { TUNING_STORAGE_KEY } from '../../src/content/tuning'
 
 const SCREENSHOT_PATH = 'tests/screens/broadcast-1280x720.png'
 const INTERVENTION_SCREENSHOT_PATH = 'tests/screens/broadcast-intervention-1280x720.png'
@@ -39,7 +40,8 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
     'intervene-button',
     'ad-button',
     ...GAUGES.map((gauge) => `gauge-${gauge}`),
-    ...SWITCHERS.map((camera) => `switcher-${camera}`),
+    'program-monitor',
+    ...SWITCHERS.map((camera) => `switcher-slot-${camera}`),
   ]
   for (const id of ids) {
     await expect(page.getByTestId(id)).toBeVisible()
@@ -58,20 +60,39 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
 
 test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', async ({ page }) => {
   await openBroadcast(page)
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')
   await page.keyboard.press('2')
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'false')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'false')
+})
+
+test('송출이 바뀌어도 카메라 칸은 같은 자리에 있다', async ({ page }) => {
+  await openBroadcast(page)
+  const slotIndexes = async () =>
+    Promise.all(
+      SWITCHERS.map((camera) =>
+        page.getByTestId(`switcher-slot-${camera}`).getAttribute('data-slot-index'),
+      ),
+    )
+  await page.keyboard.press('2')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-slot-index', '1')
+  await page.keyboard.press('3')
+  const audienceSlot = page.getByTestId('switcher-slot-audienceCam')
+  await expect(audienceSlot).toHaveAttribute('data-on-air', 'true')
+  await expect(audienceSlot).toHaveAttribute('data-slot-index', '2')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-slot-index', '1')
+  expect(await slotIndexes()).toEqual(['0', '1', '2'])
 })
 
 test('미리보기를 누르면 그 카메라가 송출되고 ON AIR 이름표가 바뀐다', async ({ page }) => {
   await openBroadcast(page)
   const label = page.getByTestId('on-air-label')
   await expect(label).toContainText('CAM 1 무대 와이드')
-  await page.getByTestId('switcher-close').click()
+  await page.getByTestId('switcher-slot-close').click()
   await expect(label).toContainText('CAM 2 클로즈업')
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
-  await page.getByTestId('switcher-audienceCam').click()
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
+  await page.getByTestId('switcher-slot-audienceCam').click()
   await expect(label).toContainText('CAM 3 관객석')
 })
 
@@ -243,20 +264,20 @@ test('창 크기를 바꾼 뒤에도 클로즈업 카메라를 출연자에게 �
 
   // 클로즈업이 미리보기일 때도 끌기가 대상을 바꾸고 미리보기 이름표에 보인다.
   await page.keyboard.press('1')
-  const preview = page.getByTestId('switcher-close').getByTestId('preview-target')
+  const preview = page.getByTestId('switcher-slot-close').getByTestId('preview-target')
   await expect(preview).toContainText('대상 프리야')
   await dragCloseupTo(page, 'okafor')
   await expect(preview).toContainText('대상 오카포')
   await expect(page.getByTestId('intervention-panel')).toBeHidden()
   // 끌어 놓아도 미리보기 버튼의 카메라 전환은 일어나지 않는다.
-  await expect(page.getByTestId('switcher-wide')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')
 })
 
 test('클로즈업 미리보기 화면에서 출연자에게 끌어도 대상이 바뀌고, 그냥 누르면 전환된다', async ({
   page,
 }) => {
   await openBroadcast(page)
-  const previewButton = page.getByTestId('switcher-close')
+  const previewButton = page.getByTestId('switcher-slot-close')
   const previewTarget = previewButton.getByTestId('preview-target')
   await expect(previewTarget).toContainText('대상 렉스')
   const box = await previewButton.boundingBox()
@@ -265,7 +286,7 @@ test('클로즈업 미리보기 화면에서 출연자에게 끌어도 대상이
   await expect(previewTarget).toContainText('대상 모')
 
   await previewButton.click()
-  await expect(page.getByTestId('switcher-close')).toHaveAttribute('data-on-air', 'true')
+  await expect(page.getByTestId('switcher-slot-close')).toHaveAttribute('data-on-air', 'true')
 })
 
 test('출연자를 클릭하면 클로즈업은 그대로 두고 성향과 스탯 설명을 고정해 띄운다', async ({
@@ -277,7 +298,7 @@ test('출연자를 클릭하면 클로즈업은 그대로 두고 성향과 스�
   const tip = page.getByTestId('hover-tip')
   await expect(tip).toContainText('레슬러')
   await expect(tip).toContainText('존재감 2')
-  await expect(page.getByTestId('switcher-close').getByTestId('preview-target')).toContainText(
+  await expect(page.getByTestId('switcher-slot-close').getByTestId('preview-target')).toContainText(
     '대상 렉스',
   )
 })
@@ -302,4 +323,119 @@ test("'관객석 비춰 주세요' 뒤 이름표가 지시 고정을 알리고 �
   await dragCloseupTo(page, 'rex')
   await expect(label).toHaveAttribute('data-aim-mode', 'tracking')
   await expect(label).not.toContainText('지시로 고정')
+})
+
+/** 페이지 스크립트보다 먼저 localStorage에 조정값을 둔다. 새로고침 때마다 다시 쓰므로 새로고침 테스트에는 쓰지 않는다. */
+async function storeTuning(page: Page, json: string): Promise<void> {
+  await page.addInitScript(
+    ([key, value]) => window.localStorage.setItem(key, value),
+    [TUNING_STORAGE_KEY, json] as const,
+  )
+}
+
+const MTB_INPUT = '작은 터짐 평균 대기 숫자'
+
+test('저장된 조정값이 있으면 백틱으로 연 수치 조정에 그 값과 바뀜이 보인다', async ({ page }) => {
+  await storeTuning(page, '{"SMALL_BURST_MTB_SHOW_SECONDS": 60}')
+  await openBroadcast(page)
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await expect(dialog).toBeHidden()
+  await page.keyboard.press('`')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('60')
+  await expect(dialog.getByText('바뀜')).toHaveCount(1)
+  // 지금 방송이 이미 60으로 돌고 있으므로 다음 방송 안내는 없다
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
+})
+
+test('범위 밖 저장값은 버리고 알리며 게임은 기본값으로 정상 시작한다', async ({ page }) => {
+  await storeTuning(page, '{"SMALL_BURST_MTB_SHOW_SECONDS": 99999}')
+  await openBroadcast(page)
+  // 버린 값이 있으면 패널이 열린 채로 시작한다
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await expect(dialog).toContainText('저장값 1개를 쓰지 않았습니다')
+  await expect(dialog).toContainText('SMALL_BURST_MTB_SHOW_SECONDS: 범위 밖')
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('50')
+  await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
+  const startTime = await page.getByTestId('broadcast-time').textContent()
+  await expect(page.getByTestId('broadcast-time')).not.toHaveText(startTime ?? '', { timeout: 15_000 })
+})
+
+test('서로 어긋나는 저장값은 버리고 관계를 알리며 게임은 정상 시작한다', async ({ page }) => {
+  await storeTuning(page, '{"threshold.fall1": 60}')
+  await openBroadcast(page)
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await expect(dialog).toContainText('저장값 1개를 쓰지 않았습니다')
+  await expect(dialog).toContainText(
+    'threshold.fall1: 다른 값과 맞지 않음 (1단계 내림 문턱은 0보다 크고 1단계 진입 문턱보다 작아야 합니다)',
+  )
+  await expect(dialog.getByLabel('1단계 내림 문턱 숫자')).toHaveValue('40')
+  await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
+})
+
+test('패널에서 바꾼 값은 다음 방송부터 표시되고 새로고침 뒤 지금 값이 된다', async ({ page }) => {
+  await openBroadcast(page)
+  await page.keyboard.press('`')
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  const input = dialog.getByLabel(MTB_INPUT)
+  await input.fill('')
+  // 숫자를 키로 쳐서 게임의 1·2·3 카메라 단축키로 새지 않는지도 본다
+  await input.pressSequentially('120')
+  await expect(input).toHaveValue('120')
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(1)
+  await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')
+
+  await page.reload()
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+  await page.keyboard.press('`')
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('120')
+  await expect(dialog.getByText('바뀜')).toHaveCount(1)
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
+})
+
+/** 페이지에 표식을 둔다. 다시 불러오면 사라지므로 다시 하기가 페이지를 다시 불러왔는지 가린다 */
+async function markPage(page: Page): Promise<void> {
+  await page.evaluate(() => Reflect.set(window, '__beforeRestart', true))
+}
+
+async function pageWasKept(page: Page): Promise<boolean> {
+  return page.evaluate(() => Reflect.get(window, '__beforeRestart') === true)
+}
+
+async function restartFromResult(page: Page): Promise<void> {
+  // 방송 길이 실제 10초라 결과 화면은 실제 약 10초 뒤에 뜬다
+  await page.getByTestId('restart-button').click({ timeout: 20_000 })
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+}
+
+test('조정값이 같으면 다시 하기가 페이지를 유지하고, 바꿨으면 다시 불러와 바뀐 값으로 시작한다', async ({ page }) => {
+  test.setTimeout(60_000)
+  await openBroadcast(page)
+  // 방송을 실제 10초로 줄여 결과 화면까지 빨리 간다. storeTuning은 새로고침마다 덮어쓰므로 쓰지 않는다
+  await page.evaluate(
+    ([key]) => window.localStorage.setItem(key, JSON.stringify({ BROADCAST_REAL_SECONDS: 10 })),
+    [TUNING_STORAGE_KEY] as const,
+  )
+  await page.reload()
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+
+  // 바꾼 값이 없으면 같은 페이지에서 새 방송을 시작한다
+  await markPage(page)
+  await restartFromResult(page)
+  expect(await pageWasKept(page)).toBe(true)
+
+  // 방송 중 값을 바꾸면 다음 방송부터가 보이고, 다시 하기가 페이지를 다시 불러온다
+  await page.keyboard.press('`')
+  const dialog = page.getByRole('dialog', { name: '수치 조정' })
+  await dialog.getByLabel(MTB_INPUT).fill('120')
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await restartFromResult(page)
+  expect(await pageWasKept(page)).toBe(false)
+  expect(new URL(page.url()).searchParams.get('seed')).toBe('1')
+
+  await page.keyboard.press('`')
+  await expect(dialog.getByLabel(MTB_INPUT)).toHaveValue('120')
+  await expect(dialog.getByText('다음 방송부터')).toHaveCount(0)
 })

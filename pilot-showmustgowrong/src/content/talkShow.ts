@@ -63,4 +63,6 @@ export const TALK_SHOW: ShowDef = {
   benchSpot: { x: 15, z: 6 },
   exit: { x: 15.8, z: 4 },
   audienceZone: { minX: 0, maxX: 3, minZ: 1, maxZ: 7 },
+  // 평소엔 와이드, 클로즈업(출연자 차례), 와이드, 관객석 순으로 돈다. 출연자 사고는 클로즈업, 장비·관객 사고는 와이드로 본다.
+  autoCut: { rotation: ['wide', 'close', 'wide', 'audienceCam'], incidentCamera: 'close', fallbackCamera: 'wide' },
 }

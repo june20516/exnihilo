@@ -32,6 +32,16 @@ export interface BroadcastSetup {
   seed: number
 }
 
+/** 출연자 지시가 지금 이어받을 사고(spec Plan B1 3.3) */
+export interface TakeoverView {
+  /** 이어받을 사고 id */
+  eventId: number
+  /** 사고 로그와 같은 문구(describeEvent) */
+  text: string
+  /** 남은 몸 초(0 초과) */
+  remainingBodySeconds: number
+}
+
 export interface ActorView {
   id: string
   name: string
@@ -52,6 +62,8 @@ export interface ActorView {
   emotions: EmotionView[]
   /** 지금 지시하면 엇나갈 확률(0~1) */
   misfireChance: number
+  /** 지금 지시하면 이어받을 사고. 없거나 이탈했으면 null */
+  takeover: TakeoverView | null
 }
 
 export interface EquipmentView {
