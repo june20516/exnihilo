@@ -50,7 +50,8 @@ describe('TrendRecorder', () => {
   it('window(600, 3600)은 step 0~600 점만, all()은 전부', () => {
     const recorder = new TrendRecorder(['rex'])
     for (let step = 0; step <= 900; step += 30) recorder.record(view(step, 10))
-    expect(recorder.window(600, 3600)[0].points.at(-1)?.step).toBe(600)
+    expect(recorder.window(600, 3600)[0].points.at(-1)).toEqual({ step: 600, value: 10 })
+    expect(recorder.window(600, 3600)[0].points).toHaveLength(21)
     expect(recorder.window(600, 3600)[0].points[0].step).toBe(0)
     expect(recorder.window(600, 300)[0].points.map((p) => p.step)[0]).toBe(300)
     expect(recorder.all()[0].points).toHaveLength(31)

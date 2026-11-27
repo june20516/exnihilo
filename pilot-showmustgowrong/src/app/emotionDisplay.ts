@@ -6,12 +6,31 @@ import { reasonNoun } from '@/sim/narration'
 
 /**
  * 감정 값을 "다음 단계까지 얼마나 가까운가"(0~100)로 바꾼다.
- * 1단계 문턱(rise[0])까지는 0~50으로 늘려 비추고, 문턱을 넘으면 50에서 시작해 1:1로 오른다(100에서 멈춘다).
+ * 구간별 직선: [0,r1]→[0,50], [r1,r2]→[50,80], [r2,100]→[80,100].
+ * 입력과 결과는 0~100으로 자르고, 폭이 0 이하인 구간은 건너뛴다(0으로 나누지 않는다).
  */
 export function emotionProximity(value: number, rise: readonly [number, number]): number {
-  const [firstThreshold] = rise
-  if (value < firstThreshold) return (value / firstThreshold) * 50
-  return Math.min(100, 50 + (value - firstThreshold))
+  const clamped = clamp(value, 0, 100)
+  if (clamped === 100) return 100
+  const first = clamp(rise[0], 0, 100)
+  const second = clamp(rise[1], first, 100)
+  const knots: readonly (readonly [number, number])[] = [
+    [0, 0],
+    [first, 50],
+    [second, 80],
+    [100, 100],
+  ]
+  for (let index = 1; index < knots.length; index++) {
+    const [fromValue, fromScore] = knots[index - 1]
+    const [toValue, toScore] = knots[index]
+    if (toValue <= fromValue || clamped > toValue) continue
+    return clamp(fromScore + ((clamped - fromValue) / (toValue - fromValue)) * (toScore - fromScore), 0, 100)
+  }
+  return 100
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
 }
 
 /** 출연자의 근접도: 감정 중 가장 높은 값. 이탈했거나 감정이 없으면 null */

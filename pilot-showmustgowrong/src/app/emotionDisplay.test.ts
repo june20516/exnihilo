@@ -41,6 +41,25 @@ describe('emotionProximity', () => {
     expect(emotionProximity(30, [60, 90])).toBe(25)
     expect(emotionProximity(75, [60, 90])).toBe(65)
   })
+
+  it('2단계 문턱 위는 80에서 100까지 늘어난다', () => {
+    expect(emotionProximity(90, [60, 90])).toBe(80)
+    expect(emotionProximity(95, [60, 90])).toBe(90)
+    expect(emotionProximity(100, [60, 90])).toBe(100)
+  })
+
+  it('입력이 0~100 밖이면 자른다', () => {
+    expect(emotionProximity(-5, [50, 80])).toBe(0)
+    expect(emotionProximity(130, [50, 80])).toBe(100)
+  })
+
+  it('폭이 0 이하인 구간은 건너뛰고 NaN을 만들지 않는다', () => {
+    expect(emotionProximity(0, [0, 80])).toBe(50)
+    expect(emotionProximity(60, [70, 70])).toBeCloseTo(60 * (50 / 70))
+    expect(emotionProximity(70, [80, 60])).toBeCloseTo(70 * (50 / 80))
+    expect(emotionProximity(100, [50, 100])).toBe(100)
+    expect(emotionProximity(40, [50, 100])).toBe(40)
+  })
 })
 
 describe('actorProximity', () => {

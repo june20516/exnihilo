@@ -17,7 +17,10 @@ export class TrendRecorder {
     this.series = actorIds.map((actorId) => ({ actorId, points: [] }))
   }
 
-  /** 같은 표본 구간에서 여러 번 불려도 점은 하나. 구간을 건너뛰면 건너뛴 칸을 지금 값으로 채운다 */
+  /**
+   * 같은 표본 구간에서 여러 번 불려도 점은 하나. 구간을 건너뛰면 건너뛴 칸을 지금 값으로 채운다.
+   * 스텝이 되돌아가면 이미 기록한 구간이라 무시한다(새 방송은 새 인스턴스로 시작한다는 전제).
+   */
   record(view: BroadcastView): void {
     const sampleIndex = Math.floor(view.step / this.sampleEverySteps)
     if (sampleIndex <= this.lastSampleIndex) return
