@@ -3,6 +3,8 @@ import { GAUGE_KINDS, type GaugeKind, type ShowDef } from '@/content/types'
 import type { BroadcastView, LogLine } from '@/sim/engine'
 import { containsEvent, logIndent, logTextClass } from './logFormat'
 import { GAUGE_LABELS, formatShowClock, formatShowEnd, formatViewers } from './labels'
+import type { LayoutMode } from './layout'
+import { LayoutToggle } from './LayoutToggle'
 
 /** 사고 로그에 보여 주는 최근 줄 수 */
 const LOG_LINES_SHOWN = 14
@@ -15,20 +17,32 @@ const TREND_MARKS: Record<BroadcastView['viewersTrend'], { mark: string; classNa
   [-1]: { mark: '▼', className: 'text-red-400' },
 }
 
+/** 위 띠 높이(px). 모든 글이 한 줄이다 */
+export const TOP_BAND_HEIGHT = 52
+
 interface TopBandProps {
   view: BroadcastView
   show: ShowDef
   /** 자동 슬로모션 계기나 중단 원인이라 깜박일 게이지 */
   alertGauge: GaugeKind | null
+  layout: LayoutMode
+  onLayoutChange(mode: LayoutMode): void
 }
 
-/** 위 띠(spec 8.2 1단계): 수위 게이지 4개 | 시청자 수·추세·남은 시간 | 코너 */
-export function TopBand({ view, show, alertGauge }: TopBandProps) {
+/**
+ * 위 띠(spec 2절, 세 배치 공통): 수위 게이지 4개 | 시청자 수·추세 | 극 중 시각 | 코너 | 배치 버튼.
+ * 모든 글이 한 줄이다(whitespace-nowrap).
+ */
+export function TopBand({ view, show, alertGauge, layout, onLayoutChange }: TopBandProps) {
   const corner = show.corners[view.cornerIndex]
   const trend = TREND_MARKS[view.viewersTrend]
   return (
-    <header className="flex h-[96px] shrink-0 items-center gap-4 px-3">
-      <section className="flex gap-2 rounded-xl border-2 border-slate-700 bg-slate-900 p-1.5">
+    <header
+      data-testid="top-band"
+      className="flex shrink-0 items-center gap-2 whitespace-nowrap px-3"
+      style={{ height: TOP_BAND_HEIGHT }}
+    >
+      <section className="flex shrink-0 gap-1 rounded-lg border-2 border-slate-700 bg-slate-900 p-1">
         {GAUGE_KINDS.map((gauge) => (
           <GaugeMeter
             key={gauge}
@@ -39,37 +53,35 @@ export function TopBand({ view, show, alertGauge }: TopBandProps) {
           />
         ))}
       </section>
-      <section className="mx-auto flex items-center gap-4 rounded-xl border-2 border-slate-700 bg-slate-900 px-5 py-2">
-        <div className="flex flex-col leading-none">
-          <span className="text-[11px] text-slate-400">시청자 수</span>
-          <span className="flex items-baseline gap-1.5">
-            <span data-testid="viewers" className="text-3xl font-black tabular-nums text-slate-100">
-              {formatViewers(view.viewers)}
-            </span>
-            <span data-testid="viewers-trend" className={`text-xl font-bold ${trend.className}`}>
-              {trend.mark}
-            </span>
-          </span>
-        </div>
-        <div className="h-10 w-px bg-slate-700" />
-        <div className="flex flex-col leading-none">
-          <span className="text-[11px] text-slate-400">방송 시각</span>
-          <span
-            data-testid="broadcast-time"
-            className="flex items-center gap-1.5 text-3xl font-black tabular-nums text-amber-300"
-          >
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
-            {formatShowClock(view.step, show)}
-            <span className="text-base font-bold text-slate-400">/ {formatShowEnd(show)}</span>
-          </span>
-        </div>
+      <section className="ml-auto flex shrink-0 items-baseline gap-2 rounded-lg border-2 border-slate-700 bg-slate-900 px-3 py-1">
+        <span className="text-[11px] text-slate-400">시청자</span>
+        <span data-testid="viewers" className="text-xl font-black tabular-nums text-slate-100">
+          {formatViewers(view.viewers)}
+        </span>
+        <span data-testid="viewers-trend" className={`text-base font-bold ${trend.className}`}>
+          {trend.mark}
+        </span>
+      </section>
+      <section
+        aria-label="방송 시각"
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-slate-700 bg-slate-900 px-3 py-1"
+      >
+        <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+        <span
+          data-testid="broadcast-time"
+          className="flex items-baseline gap-1.5 text-xl font-black tabular-nums text-amber-300"
+        >
+          {formatShowClock(view.step, show)}
+          <span className="text-sm font-bold text-slate-400">/ {formatShowEnd(show)}</span>
+        </span>
       </section>
       <div
         data-testid="corner"
-        className="-rotate-2 rounded-lg border-2 border-amber-200 bg-amber-400 px-4 py-2 text-xl font-black text-slate-950 shadow-[3px_3px_0_#000]"
+        className="shrink-0 rounded-lg border-2 border-amber-200 bg-amber-400 px-3 py-1 text-base font-black text-slate-950 shadow-[2px_2px_0_#000]"
       >
         {corner.label} {view.cornerIndex + 1}/{show.corners.length}
       </div>
+      <LayoutToggle mode={layout} onSelect={onLayoutChange} />
     </header>
   )
 }
@@ -81,7 +93,7 @@ interface GaugeMeterProps {
   alert: boolean
 }
 
-/** 게이지 하나. 상한의 80% 이상이면 그 게이지만 빨간 테두리(spec 8.2 강조 규칙). */
+/** 게이지 하나(한 줄: 이름, 막대, 값). 상한의 80% 이상이면 그 게이지만 빨간 테두리(spec 8.2 강조 규칙). */
 function GaugeMeter({ gauge, value, limit, alert }: GaugeMeterProps) {
   const trackMax = limit * GAUGE_TRACK_SCALE
   const fillPercent = Math.min(100, (value / trackMax) * 100)
@@ -92,19 +104,16 @@ function GaugeMeter({ gauge, value, limit, alert }: GaugeMeterProps) {
     <div
       data-testid={`gauge-${gauge}`}
       data-highlighted={highlighted}
-      className={`flex w-[116px] flex-col gap-1 rounded-lg border-2 px-2 py-1.5 ${
+      className={`flex items-center gap-1.5 rounded-md border-2 px-1.5 py-1 ${
         highlighted ? 'border-red-500 bg-red-950/70' : 'border-transparent bg-slate-950'
       } ${alert ? 'animate-pulse' : ''}`}
     >
-      <div className="flex items-baseline justify-between">
-        <span className={`text-sm font-bold ${highlighted ? 'text-red-200' : 'text-slate-200'}`}>
-          {GAUGE_LABELS[gauge]}
-        </span>
-        <span className="text-[11px] tabular-nums text-slate-400">
-          {Math.round(value)}/{limit}
-        </span>
-      </div>
-      <div className="relative h-3 rounded-sm bg-slate-800">
+      <span
+        className={`w-9 text-xs font-bold ${highlighted ? 'text-red-200' : 'text-slate-200'}`}
+      >
+        {GAUGE_LABELS[gauge]}
+      </span>
+      <div className="relative h-2.5 w-10 rounded-sm bg-slate-800">
         {/* 자동 슬로모션 경계(상한의 80%)부터 상한까지의 빨간 구간 */}
         <div
           className="absolute inset-y-0 bg-red-900/70"
@@ -115,10 +124,13 @@ function GaugeMeter({ gauge, value, limit, alert }: GaugeMeterProps) {
           style={{ width: `${fillPercent}%` }}
         />
         <div
-          className="absolute -top-1 h-5 w-0.5 bg-red-400"
+          className="absolute -top-1 h-[18px] w-0.5 bg-red-400"
           style={{ left: `${limitPercent}%` }}
         />
       </div>
+      <span className="min-w-8 text-right text-[11px] tabular-nums text-slate-400">
+        {Math.round(value)}/{limit}
+      </span>
     </div>
   )
 }

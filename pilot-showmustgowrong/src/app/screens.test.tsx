@@ -1,4 +1,7 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render as mount, screen } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { vi, type MockInstance } from 'vitest'
 import { AUTO_SLOWMO_GAUGE_RATIO } from '@/content/balance'
 import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
@@ -6,6 +9,7 @@ import { Broadcast, type BroadcastSetup, type BroadcastView } from '@/sim/engine
 import { AdPanel } from './AdPanel'
 import { BroadcastStage, type BroadcastStageProps, type StageControls } from './BroadcastScreen'
 import { ErrorScreen } from './ErrorScreen'
+import { LAYOUT_STORAGE_KEY } from './layout'
 import {
   CHAIN_INDENT_MAX_LEVEL,
   CHAIN_INDENT_PX,
@@ -298,5 +302,115 @@ describe('BroadcastStage 생방송 화면', () => {
     })
     expect(adHtml).toContain('안에 광고 효과 선택')
     expect(adHtml).not.toContain('안에 지시')
+  })
+  describe('배치 전환', () => {
+    let getContextSpy: MockInstance<HTMLCanvasElement['getContext']>
+
+    beforeAll(() => {
+      // 캔버스 2D 컨텍스트가 없는 jsdom에서도 카메라 화면 그리기를 건너뛰게 한다.
+      getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    })
+    afterEach(() => {
+      cleanup()
+      localStorage.clear()
+    })
+    afterAll(() => getContextSpy.mockRestore())
+
+    function mountStage() {
+      return mount(
+        <BroadcastStage
+          view={baseView}
+          setup={SETUP}
+          controls={CONTROLS}
+          selectedTarget={null}
+          hoverTip={null}
+          onSelectTarget={noop}
+          onDirect={noop}
+          onBeginIntervention={noop}
+        />,
+      )
+    }
+
+    const layout = () => screen.getByRole('main').dataset.layout
+    const pressL = (init: KeyboardEventInit = {}) =>
+      fireEvent.keyDown(window, { key: 'l', code: 'KeyL', ...init })
+
+    it('L을 누르면 data-layout이 default→studio→onair→default로 바뀌고 저장된다', () => {
+      mountStage()
+      expect(layout()).toBe('default')
+      pressL()
+      expect(layout()).toBe('studio')
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('studio')
+      // Shift+L(대문자)도 받는다
+      pressL({ key: 'L', shiftKey: true })
+      expect(layout()).toBe('onair')
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('onair')
+      // 한글 자판에서는 같은 자리 키가 'ㅣ'라 자리(code)로 받는다
+      pressL({ key: 'ㅣ' })
+      expect(layout()).toBe('default')
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('default')
+    })
+
+    it('입력 칸에서 L은 무시된다', () => {
+      mountStage()
+      const input = document.createElement('input')
+      document.body.append(input)
+      fireEvent.keyDown(input, { key: 'l', code: 'KeyL' })
+      expect(layout()).toBe('default')
+      input.remove()
+    })
+
+    it('Ctrl·Meta·Alt와 함께 누른 L과 반복 입력은 무시된다', () => {
+      mountStage()
+      pressL({ ctrlKey: true })
+      pressL({ metaKey: true })
+      pressL({ altKey: true })
+      pressL({ repeat: true })
+      expect(layout()).toBe('default')
+    })
+
+    it('저장된 배치로 열고, 깨진 저장값이면 기본으로 연다', () => {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, 'onair')
+      mountStage()
+      expect(layout()).toBe('onair')
+      cleanup()
+      localStorage.setItem(LAYOUT_STORAGE_KEY, '{broken')
+      mountStage()
+      expect(layout()).toBe('default')
+    })
+
+    it('위 띠의 배치 버튼 3개는 그 배치로 바로 가고 현재 배치만 눌림 상태다', () => {
+      mountStage()
+      const button = (name: string) => screen.getByRole('button', { name })
+      expect(button('기본').getAttribute('aria-pressed')).toBe('true')
+      fireEvent.click(button('송출 화면 크게'))
+      expect(layout()).toBe('onair')
+      expect(button('송출 화면 크게').getAttribute('aria-pressed')).toBe('true')
+      expect(button('기본').getAttribute('aria-pressed')).toBe('false')
+      fireEvent.click(button('스튜디오 크게'))
+      expect(layout()).toBe('studio')
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('studio')
+    })
+
+    it('배치를 바꿔도 studio-host와 program-monitor 요소가 같은 DOM 노드로 남는다', () => {
+      mountStage()
+      const host = screen.getByTestId('studio-host')
+      const monitor = screen.getByTestId('program-monitor')
+      const canvases = Array.from(document.querySelectorAll('canvas'))
+      expect(canvases).toHaveLength(4)
+      const slotOrder = () =>
+        Array.from(screen.getByTestId('switcher-slots').children).map((slot) =>
+          slot.getAttribute('data-testid'),
+        )
+      const slots = slotOrder()
+      for (let index = 0; index < 3; index += 1) {
+        pressL()
+        expect(screen.getByTestId('studio-host')).toBe(host)
+        expect(screen.getByTestId('program-monitor')).toBe(monitor)
+        expect(Array.from(document.querySelectorAll('canvas'))).toEqual(canvases)
+        expect(slotOrder()).toEqual(slots)
+      }
+      expect(layout()).toBe('default')
+    })
   })
 })

@@ -58,6 +58,33 @@ test('1280×720 한 화면에 시청자 수, 게이지 4개, 스위처 3개가 �
   await saveScreenshot(page, SCREENSHOT_PATH)
 })
 
+test('L로 세 배치를 돌아도 위 띠는 한 줄로 넘치지 않고 주요 요소가 화면 안에 있으며 새로고침 뒤에도 배치가 남는다', async ({
+  page,
+}) => {
+  await openBroadcast(page)
+  const main = page.getByRole('main')
+  const host = await page.getByTestId('studio-host').elementHandle()
+  for (const layout of ['default', 'studio', 'onair'] as const) {
+    await expect(main).toHaveAttribute('data-layout', layout)
+    const band = await page.getByTestId('top-band').evaluate((element) => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+    }))
+    expect(band.scrollWidth, `${layout} 위 띠가 넘칩니다`).toBeLessThanOrEqual(band.clientWidth)
+    const ids = ['studio', 'program-monitor', 'event-log', 'intervene-button', 'ad-button', 'layout-toggle']
+    for (const id of [...ids, ...SWITCHERS.map((camera) => `switcher-slot-${camera}`)]) {
+      await expectInViewport(page, id)
+    }
+    // 렌더러를 다시 만들지 않는다: 처음 host 노드가 그대로 붙어 있고 캔버스는 하나다
+    expect(await host?.evaluate((node) => node.isConnected)).toBe(true)
+    await expect(page.getByTestId('studio').locator('canvas')).toHaveCount(1)
+    if (layout !== 'onair') await page.keyboard.press('l')
+  }
+  await page.reload()
+  await expect(page.getByTestId('viewers')).toBeVisible({ timeout: 15_000 })
+  await expect(main).toHaveAttribute('data-layout', 'onair')
+})
+
 test('키 2를 누르면 클로즈업 스위처가 송출 상태가 된다', async ({ page }) => {
   await openBroadcast(page)
   await expect(page.getByTestId('switcher-slot-wide')).toHaveAttribute('data-on-air', 'true')

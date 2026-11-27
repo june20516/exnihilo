@@ -19,9 +19,10 @@ import { AdPanel } from './AdPanel'
 import { ErrorScreen } from './ErrorScreen'
 import { HoverTip } from './HoverTip'
 import { resolveHoverTip, type HoverAnchor, type HoverTipState } from './hoverTipContent'
-import { EventLog, TopBand } from './Hud'
+import { EventLog, TOP_BAND_HEIGHT, TopBand } from './Hud'
 import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
+import { LAYOUT_GRIDS, layoutStorage, loadLayout, nextLayout, saveLayout, type LayoutMode } from './layout'
 import { GAUGE_LABELS, SWITCHER_KEYS } from './labels'
 import type { Slowmo } from './loopState'
 import { OnAirColumn } from './OnAirColumn'
@@ -29,6 +30,7 @@ import { ResultScreen } from './ResultScreen'
 import { useStudioClick, type StudioClickState } from './studioClick'
 import { useAimDrag } from './useAimDrag'
 import { useBroadcastLoop, type BroadcastLoopControls } from './useBroadcastLoop'
+import { useLayoutHotkey } from './useLayoutHotkey'
 
 interface BroadcastScreenProps {
   setup: BroadcastSetup
@@ -393,10 +395,14 @@ export interface BroadcastStageProps {
   studio?: StudioBindings
 }
 
+/** 송출 쪽 grid 행: 모니터(위), 미리보기, 조작 안내(남는 높이), 개입·광고 버튼(아래) */
+const STAGE_GRID_ROWS = 'auto auto minmax(0, 1fr) auto'
+
 /**
- * 생방송 화면 배치(1280×720, spec 8.2). 위 띠 96px(게이지 | 시청자·시간 | 코너), 아래 줄은
- * 왼쪽 260px(사고 로그, 개입 중에는 판단 카드) | 가운데 스튜디오 | 오른쪽 300px(ON AIR 모니터,
- * 미리보기 2개, 개입·광고 버튼). 스튜디오 캔버스는 렌더러가 붙이므로 여기서는 자리만 둔다.
+ * 생방송 화면 배치(1280×720, spec 2절). 위 띠(세 배치 공통, 한 줄) 아래에 grid로 왼쪽 260px(사고 로그,
+ * 개입 중에는 판단 카드), 스튜디오, 송출 쪽 칸들을 놓는다. 배치(기본·스튜디오 크게·송출 화면 크게)는
+ * grid 열 너비와 영역만 바꾸므로 스튜디오 host와 카메라 화면 캔버스는 같은 DOM 노드로 남는다(렌더러와
+ * 캔버스를 다시 만들지 않는다). 스튜디오 캔버스는 렌더러가 붙이므로 여기서는 자리만 둔다.
  */
 export function BroadcastStage({
   view,
@@ -418,18 +424,40 @@ export function BroadcastStage({
       ),
     [setup],
   )
+  const [layoutStore] = useState(layoutStorage)
+  const [layout, setLayout] = useState<LayoutMode>(() => loadLayout(layoutStore))
+  useEffect(() => saveLayout(layoutStore, layout), [layoutStore, layout])
+  useLayoutHotkey(() => setLayout(nextLayout))
+  const grid = LAYOUT_GRIDS[layout]
   const highlightedEventId = slowmo === 'auto' ? (view?.autoSlowmo?.eventId ?? null) : null
   const alertGauge = slowmo === 'auto' ? (view?.autoSlowmo?.gauge ?? null) : null
 
   return (
-    <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#0b1120] text-white">
+    <main
+      data-layout={layout}
+      className="flex h-screen w-screen flex-col overflow-hidden bg-[#0b1120] text-white"
+    >
       {view !== null ? (
-        <TopBand view={view} show={show} alertGauge={alertGauge} />
+        <TopBand
+          view={view}
+          show={show}
+          alertGauge={alertGauge}
+          layout={layout}
+          onLayoutChange={setLayout}
+        />
       ) : (
-        <div className="h-[96px] shrink-0" />
+        <div className="shrink-0" style={{ height: TOP_BAND_HEIGHT }} />
       )}
-      <div ref={studio?.rowRef} className="relative flex min-h-0 flex-1 gap-2 pb-3">
-        <div className="flex w-[260px] shrink-0 flex-col gap-2 py-1 pl-3">
+      <div
+        ref={studio?.rowRef}
+        className="relative grid min-h-0 flex-1 gap-2 px-3 pb-3"
+        style={{
+          gridTemplateColumns: grid.columns,
+          gridTemplateRows: STAGE_GRID_ROWS,
+          gridTemplateAreas: grid.areas,
+        }}
+      >
+        <div style={{ gridArea: 'log' }} className="flex min-h-0 flex-col gap-2">
           {view !== null &&
             (interventionOpen ? (
               <InterventionPanel
@@ -452,9 +480,13 @@ export function BroadcastStage({
               </>
             ))}
         </div>
+        {/* 송출 화면 크게에서는 오른쪽 위 작은 칸(16:9)이 된다. 호버 설명이 칸 밖으로 나갈 수 있게 자르기는 host가 한다 */}
         <div
           data-testid="studio"
-          className="relative min-w-0 flex-1 overflow-hidden rounded-xl border-2 border-slate-800 bg-[#14141c]"
+          style={{ gridArea: 'studio' }}
+          className={`relative min-h-0 min-w-0 rounded-xl border-2 border-slate-800 bg-[#14141c] ${
+            grid.mainArea === 'studio' ? '' : 'aspect-video'
+          }`}
         >
           <div
             ref={studio?.hostRef}
@@ -463,13 +495,38 @@ export function BroadcastStage({
             onMouseMove={studio?.onMouseMove}
             onMouseLeave={studio?.onMouseLeave}
             onPointerDown={studio?.onPointerDown}
-            className="studio-host absolute inset-0 cursor-pointer"
+            className="studio-host absolute inset-0 cursor-pointer overflow-hidden rounded-[10px]"
           />
           {view === null && (
-            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">
               스튜디오 준비 중…
             </div>
           )}
+          {hoverTip !== null && <HoverTip tip={hoverTip} />}
+        </div>
+        {view !== null && (
+          <OnAirColumn
+            view={view}
+            show={show}
+            performers={performers}
+            onSwitch={(cameraId) => controls.send({ type: 'switch', cameraId })}
+            onAimDragStart={studio?.onAimDragStart}
+            previews={grid.previews}
+            monitorFills={grid.mainArea === 'monitor'}
+            actions={
+              <BroadcastButtons
+                view={view}
+                controls={controls}
+                onBeginIntervention={onBeginIntervention}
+              />
+            }
+          />
+        )}
+        {/* 슬로모션 배지와 광고 화면은 크게 보이는 칸(스튜디오나 송출 모니터) 위에 띄운다 */}
+        <div
+          style={{ gridArea: grid.mainArea }}
+          className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-xl"
+        >
           {view !== null && slowmo === 'intervention' && !adBreak && (
             <InterventionBadge
               secondsLeft={
@@ -488,35 +545,20 @@ export function BroadcastStage({
             />
           )}
           {adBreak && <CommercialBreak secondsLeft={controls.adBreakSecondsLeft} />}
-          {hoverTip !== null && <HoverTip tip={hoverTip} />}
         </div>
-        {view !== null && (
-          <OnAirColumn
-            view={view}
-            show={show}
-            performers={performers}
-            onSwitch={(cameraId) => controls.send({ type: 'switch', cameraId })}
-            onAimDragStart={studio?.onAimDragStart}
-            actions={
-              <BroadcastButtons
-                view={view}
-                controls={controls}
-                onBeginIntervention={onBeginIntervention}
-              />
-            }
-            overlay={
-              adPanelOpen && (
-                <div className="absolute inset-x-0 top-1 z-10 pr-3">
-                  <AdPanel
-                    benchLeft={view.benchLeft}
-                    secondsLeft={controls.adPanelSecondsLeft}
-                    onConfirm={controls.endAd}
-                    onCancel={controls.cancelAd}
-                  />
-                </div>
-              )
-            }
-          />
+        {/* 광고 패널은 오른쪽 위 칸(기본·스튜디오 크게는 송출 모니터, 송출 화면 크게는 스튜디오 축소판)을 덮는다 */}
+        {view !== null && adPanelOpen && (
+          <div
+            style={{ gridArea: grid.mainArea === 'studio' ? 'monitor' : 'studio' }}
+            className="absolute inset-x-0 top-0 z-10"
+          >
+            <AdPanel
+              benchLeft={view.benchLeft}
+              secondsLeft={controls.adPanelSecondsLeft}
+              onConfirm={controls.endAd}
+              onCancel={controls.cancelAd}
+            />
+          </div>
         )}
         {/* 판단 카드와 스튜디오의 대상을 잇는 선. 좌표는 컨테이너가 매 프레임 직접 고친다. */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
@@ -608,7 +650,7 @@ function CommercialBreak({ secondsLeft }: { secondsLeft: number }) {
   return (
     <div
       data-testid="commercial-break"
-      className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/90"
+      className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/90"
     >
       <div className="rotate-[-4deg] rounded border-4 border-amber-400 px-8 py-4 text-5xl font-black tracking-widest text-amber-300">
         COMMERCIAL BREAK
