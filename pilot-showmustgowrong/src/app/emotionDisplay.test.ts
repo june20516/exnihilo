@@ -102,6 +102,17 @@ describe('topReasons', () => {
     expect(result[0].text).toBe("PD의 'c'")
   })
 
+  it('반올림하면 0인 이유(0.5 미만)는 "+0"으로 보이지 않게 뺀다', () => {
+    const result = topReasons(emotionWith([directive(0.4, 'tiny'), directive(12.2, 'big'), directive(0.49, 'tiny2')]), nameOf)
+    expect(result.map((r) => r.amount)).toEqual([12])
+    expect(result.map((r) => r.text)).toEqual(["PD의 'big'"])
+  })
+
+  it('0.5는 반올림하면 1이라 남고, 모두 0.5 미만이면 빈 배열(카드는 "아직 이유 없음")', () => {
+    expect(topReasons(emotionWith([directive(0.5, 'half')]), nameOf).map((r) => r.amount)).toEqual([1])
+    expect(topReasons(emotionWith([directive(0.2, 'a'), directive(0.3, 'b')]), nameOf)).toEqual([])
+  })
+
   it('relief만 있으면 빈 배열', () => {
     const relief: Reason = { emotion: 'irritation', source: { type: 'relief' }, amount: 30 }
     expect(topReasons(emotionWith([relief]), nameOf)).toEqual([])

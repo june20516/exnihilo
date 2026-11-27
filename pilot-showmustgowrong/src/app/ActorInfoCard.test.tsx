@@ -107,6 +107,14 @@ describe('ActorInfoCard', () => {
     ])
   })
 
+  it('이유가 모두 반올림하면 0이면 "+0" 줄 없이 "아직 이유 없음"', () => {
+    const tiny = { emotion: 'irritation', source: { type: 'directive', label: '살짝' }, amount: 0.4 } as const
+    renderCard({ emotions: EMOTIONS.map((item) => ({ ...item, reasons: [tiny] })) })
+    expect(screen.queryAllByTestId('card-reason')).toHaveLength(0)
+    expect(screen.getByText('아직 이유 없음')).not.toBeNull()
+    expect(screen.getByTestId('actor-card').textContent).not.toContain('+0')
+  })
+
   it('이유가 없으면 "아직 이유 없음"', () => {
     renderCard({ emotions: EMOTIONS.map((item) => ({ ...item, reasons: [] })) })
     expect(screen.queryAllByTestId('card-reason')).toHaveLength(0)

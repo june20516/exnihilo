@@ -1,5 +1,6 @@
 import type { ActorView, BroadcastView } from '@/sim/engineTypes'
-import { TrendRecorder } from './trendRecorder'
+import { STEP_SECONDS } from '@/content/balance'
+import { TREND_SAMPLE_STEPS, TrendRecorder } from './trendRecorder'
 
 function actor(id: string, value: number | null, walkedOut = false): ActorView {
   return {
@@ -27,6 +28,11 @@ function view(step: number, value: number, walkedOut = false): BroadcastView {
 }
 
 describe('TrendRecorder', () => {
+  it('기본 점 간격은 몸 0.5초를 STEP_SECONDS로 나눈 스텝(60스텝/초면 30)', () => {
+    expect(TREND_SAMPLE_STEPS * STEP_SECONDS).toBeCloseTo(0.5, 10)
+    expect(TREND_SAMPLE_STEPS).toBe(30)
+  })
+
   it('30스텝마다 한 점, 같은 구간 중복 호출은 무시', () => {
     const recorder = new TrendRecorder(['rex'])
     recorder.record(view(0, 10))

@@ -55,7 +55,7 @@ export function formatMoodShift(shift: MoodShift, emotionName: string): { text: 
   return { text: `${emotionName} ${rising ? '▲' : '▼'} ${shiftSize(shift.amount)}`, rising }
 }
 
-/** 감정을 키우는 이유 상위 몇 개. relief와 음수 이유는 건너뛴다 */
+/** 감정을 키우는 이유 상위 몇 개. relief와 음수 이유, 반올림하면 0인 이유("+0"으로 보인다)는 건너뛴다 */
 export function topReasons(
   emotion: EmotionView,
   nameOf: (id: string) => string,
@@ -64,8 +64,9 @@ export function topReasons(
   return emotion.reasons
     .filter((reason) => reason.source.type !== 'relief' && reason.amount > 0)
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, count)
     .map((reason) => ({ text: reasonNoun(reason, nameOf), amount: Math.round(reason.amount) }))
+    .filter((reason) => reason.amount > 0)
+    .slice(0, count)
 }
 
 /** 대표 감정 문구: "짜증 · 짜증 남". 단계 이름이 없거나 감정 이름과 같으면 감정 이름만. 감정이 없으면 null */

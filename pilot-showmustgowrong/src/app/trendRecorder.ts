@@ -1,5 +1,11 @@
+import { STEP_SECONDS } from '@/content/balance'
 import type { BroadcastView } from '@/sim/engineTypes'
 import { actorProximity } from './emotionDisplay'
+
+/** 추세 점 간격(몸 초). 60초 창에 120점이라 선이 매끄럽고 기록도 가볍다 */
+const TREND_SAMPLE_BODY_SECONDS = 0.5
+/** 추세 점 간격(스텝) */
+export const TREND_SAMPLE_STEPS = Math.round(TREND_SAMPLE_BODY_SECONDS / STEP_SECONDS)
 
 export interface TrendSeries {
   actorId: string
@@ -12,7 +18,7 @@ export class TrendRecorder {
   private readonly sampleEverySteps: number
   private lastSampleIndex = -1
 
-  constructor(actorIds: readonly string[], sampleEverySteps = 30) {
+  constructor(actorIds: readonly string[], sampleEverySteps = TREND_SAMPLE_STEPS) {
     this.sampleEverySteps = sampleEverySteps
     this.series = actorIds.map((actorId) => ({ actorId, points: [] }))
   }
