@@ -212,6 +212,25 @@ describe('whiteFringeRatio', () => {
   })
 })
 
+describe('whiteFringeRatio 알파 기준', () => {
+  function shapeWithEdgePixel(alpha: number): PNG {
+    const img = new PNG({ width: 10, height: 10 })
+    fillRect(img, 2, 2, 6, 6, RED)
+    setPixel(img, 2, 5, WHITE)
+    img.data[(5 * 10 + 2) * 4 + 3] = alpha
+    return img
+  }
+
+  it('알파가 낮은 연한 경계 픽셀은 세지 않는다', () => {
+    expect(whiteFringeRatio(shapeWithEdgePixel(127))).toBe(0)
+  })
+
+  it('알파가 높은 흰 경계 픽셀은 센다(경계 픽셀 전체 20개 대비)', () => {
+    expect(whiteFringeRatio(shapeWithEdgePixel(128))).toBeCloseTo(1 / 20)
+    expect(whiteFringeRatio(shapeWithEdgePixel(255))).toBeCloseTo(1 / 20)
+  })
+})
+
 describe('defringeLightEdge', () => {
   const GRAY: Rgb = [220, 220, 220]
   const BLACK: Rgb = [10, 10, 10]

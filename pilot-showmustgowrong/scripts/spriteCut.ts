@@ -9,6 +9,9 @@ export const BACKGROUND_THRESHOLD = 232
 /** 흰 테두리 자체 검사에서 "연한 색"으로 세는 RGB 하한. flood 임계값(232)보다 낮춰 남은 밝은 헤일로까지 잡는다. */
 export const FRINGE_LIGHT_THRESHOLD = 200
 
+/** 흰 테두리 검사에서 세는 최소 알파. 눈에 보이는 밝은 띠만 세려고 반투명(거의 안 보이는) 픽셀은 뺀다. */
+export const FRINGE_MIN_ALPHA = 128
+
 /** 경계 정리를 거듭하는 최대 겹 수. */
 export const DEFRINGE_MAX_PASSES = 2
 /** 경계 정리로 알파가 이 값 미만이 되면 사실상 안 보이므로 0(투명)으로 만들어 다음 겹이 안쪽을 보게 한다. */
@@ -309,10 +312,15 @@ export function cropScaled(img: PNG, box: Box, scale: number): PNG {
 }
 
 /**
- * 투명과 맞닿은 경계 픽셀(알파 > 0) 중 RGB가 모두 임계값 이상(연한 색)인 비율. 흰 테두리가 남았는지 보는 자체 검사다.
+ * 흰 테두리 자체 검사. 투명(알파 0)과 4방향으로 맞닿은 경계 픽셀 중 RGB가 모두 임계값 이상(연한 색)이고
+ * 알파가 minAlpha 이상(눈에 보임)인 픽셀의 비율을 경계 픽셀 전체 대비로 돌려준다.
  * 배경 제거 임계값(232)과 따로 FRINGE_LIGHT_THRESHOLD(200)를 기본으로 써서 자기참조 검사가 되지 않게 한다.
  */
-export function whiteFringeRatio(img: PNG, threshold: number = FRINGE_LIGHT_THRESHOLD): number {
+export function whiteFringeRatio(
+  img: PNG,
+  threshold: number = FRINGE_LIGHT_THRESHOLD,
+  minAlpha: number = FRINGE_MIN_ALPHA,
+): number {
   let edge = 0
   let white = 0
   for (let y = 0; y < img.height; y++) {
@@ -320,7 +328,7 @@ export function whiteFringeRatio(img: PNG, threshold: number = FRINGE_LIGHT_THRE
       if (alphaOrZero(img, x, y) === 0) continue
       if (!NEIGHBORS_4.some(([dx, dy]) => alphaOrZero(img, x + dx, y + dy) === 0)) continue
       edge++
-      if (isNearWhite(img, y * img.width + x, threshold)) white++
+      if (alphaOrZero(img, x, y) >= minAlpha && isNearWhite(img, y * img.width + x, threshold)) white++
     }
   }
   return edge === 0 ? 0 : white / edge
