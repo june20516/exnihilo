@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
+import { freshRunWithoutHowToPlay } from './howToPlay.js'
 import { expectInViewport } from './viewport.js'
 
 test.use({ viewport: { width: 1440, height: 900 } })
@@ -17,8 +18,7 @@ async function winFloorOne(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(RUN_URL)
-  await page.evaluate(() => window.localStorage.clear())
-  await page.reload()
+  await freshRunWithoutHowToPlay(page)
 })
 
 test('런 시작: 상단에 층·HP·화폐가 보이고 한 화면에 들어간다', async ({ page }) => {
