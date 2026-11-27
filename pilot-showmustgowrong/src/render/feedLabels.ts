@@ -1,4 +1,19 @@
 /** 이름표 하나를 놓을 요청. x는 가운데, bottom은 글자 아래쪽(몸 바로 위) 좌표다. */
+/** 이름표 글자 크기 = 피드 높이 × 이 비율(상한·하한 안에서) */
+export const NAME_FONT_RATIO = 0.05
+export const MIN_NAME_FONT_PX = 10
+/**
+ * 이름표 글자 크기 상한(px). 1280×720 기본 배치의 송출 모니터 피드(약 472×265)에서 0.05 비율로 나오는
+ * 약 13.3px를 올림한 값이다. 송출 화면 크게(피드 약 700×600)에서도 이보다 커지지 않아 이름표가
+ * 출연자 얼굴을 가리지 않는다.
+ */
+export const MAX_NAME_FONT_PX = 14
+
+/** 피드 높이(px)에 맞춘 이름표 글자 크기. 작은 미리보기는 하한, 큰 모니터는 상한에 걸린다 */
+export function feedNameFontSize(feedHeight: number): number {
+  return Math.min(MAX_NAME_FONT_PX, Math.max(MIN_NAME_FONT_PX, feedHeight * NAME_FONT_RATIO))
+}
+
 export interface FeedLabelRequest {
   x: number
   bottom: number

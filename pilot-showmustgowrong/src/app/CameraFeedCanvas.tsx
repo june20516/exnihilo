@@ -5,7 +5,7 @@ import { COLORS } from '@/render/colors'
 import { cameraFeed, type FeedItem, type FeedView } from '@/render/cameraFeed'
 import { blinkVisible, badgeLook, emotionStyle } from '@/render/emotionBadge'
 import { feedArtImage, isArtReady } from '@/render/feedArt'
-import { layoutFeedLabels } from '@/render/feedLabels'
+import { feedNameFontSize, layoutFeedLabels } from '@/render/feedLabels'
 
 /** 피드 픽셀 상수 */
 const HORIZON_RATIO = 0.35
@@ -13,8 +13,6 @@ const FLOOR_LINE_RATIO = 0.75
 const BODY_HEIGHT_RATIO = 0.3
 /** 그림이 없거나 아직 불러오는 중일 때 대신 그리는 사각형의 가로/세로 */
 const PLACEHOLDER_ASPECT = 0.4
-const NAME_FONT_RATIO = 0.05
-const MIN_FONT_PX = 10
 const HIGHLIGHT_WIDTH = 3
 const OUTLINE_WIDTH = 1.5
 const EQUIPMENT_SIZE_RATIO = 0.18
@@ -344,7 +342,7 @@ function drawLabels(
   height: number,
   realMs: number,
 ): void {
-  const fontSize = Math.max(MIN_FONT_PX, height * NAME_FONT_RATIO)
+  const fontSize = feedNameFontSize(height)
   const lineHeight = fontSize * LABEL_LINE_RATIO
   const iconDiameter = lineHeight - STAGE_ICON_INSET_PX
   const labelFont = `${fontSize}px ${FONT_FAMILY}`

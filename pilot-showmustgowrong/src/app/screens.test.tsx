@@ -7,7 +7,7 @@ import { LINEUP } from '@/content/lineup'
 import { TALK_SHOW } from '@/content/talkShow'
 import { Broadcast, type BroadcastSetup, type BroadcastView } from '@/sim/engine'
 import { AdPanel } from './AdPanel'
-import { BroadcastStage, type BroadcastStageProps, type StageControls } from './BroadcastScreen'
+import { BroadcastStage, type BroadcastStageProps, type StageControls } from './BroadcastStage'
 import { ErrorScreen } from './ErrorScreen'
 import { LAYOUT_STORAGE_KEY } from './layout'
 import {
@@ -294,6 +294,14 @@ describe('BroadcastStage 생방송 화면', () => {
     for (const directive of operator.directives) expect(html).toContain(directive.expect)
   })
 
+  it('광고 중 화면은 한국어로 알리고 영어 문구가 없다', () => {
+    const html = render({ controls: { ...CONTROLS, adBreak: true, adBreakSecondsLeft: 4.2 } })
+    expect(html).toMatch(/data-testid="commercial-break"/)
+    expect(html).toContain('광고 중')
+    expect(html).toContain('5초 뒤 방송으로 돌아갑니다')
+    expect(html).not.toContain('COMMERCIAL')
+  })
+
   it('개입 중에 연 광고 패널이면 배지가 광고 효과 선택 시간을 말한다', () => {
     const intervening = { ...CONTROLS, slowmo: 'intervention' as const }
     expect(render({ controls: { ...intervening, interventionOpen: true } })).toContain('안에 지시')
@@ -377,6 +385,17 @@ describe('BroadcastStage 생방송 화면', () => {
       localStorage.setItem(LAYOUT_STORAGE_KEY, '{broken')
       mountStage()
       expect(layout()).toBe('default')
+    })
+
+    it('열기만 해서는 저장소에 쓰지 않고, 배치를 바꿀 때만 저장한다', () => {
+      mountStage()
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull()
+      cleanup()
+      localStorage.setItem(LAYOUT_STORAGE_KEY, '{broken')
+      mountStage()
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('{broken')
+      pressL()
+      expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe('studio')
     })
 
     it('위 띠의 배치 버튼 3개는 그 배치로 바로 가고 현재 배치만 눌림 상태다', () => {

@@ -1,4 +1,10 @@
-import { layoutFeedLabels, type FeedLabelRequest } from './feedLabels'
+import {
+  feedNameFontSize,
+  layoutFeedLabels,
+  MAX_NAME_FONT_PX,
+  MIN_NAME_FONT_PX,
+  type FeedLabelRequest,
+} from './feedLabels'
 
 const CANVAS_WIDTH = 200
 const CANVAS_HEIGHT = 100
@@ -132,5 +138,20 @@ describe('layoutFeedLabels', () => {
     expect(layoutFeedLabels(requests, 84, 47, 12.5, 2)).toBe(
       layoutFeedLabels(requests, 84, 47, 12.5, 2),
     )
+  })
+})
+
+describe('feedNameFontSize', () => {
+  it('기본 배치 모니터 피드(높이 약 265px)에서는 높이의 5%다', () => {
+    expect(feedNameFontSize(265)).toBeCloseTo(13.25)
+  })
+
+  it('송출 화면 크게의 큰 모니터(높이 약 600px)에서는 상한에 걸린다', () => {
+    expect(feedNameFontSize(600)).toBe(MAX_NAME_FONT_PX)
+    expect(feedNameFontSize(10_000)).toBe(MAX_NAME_FONT_PX)
+  })
+
+  it('작은 미리보기에서는 하한에 걸린다', () => {
+    expect(feedNameFontSize(63)).toBe(MIN_NAME_FONT_PX)
   })
 })

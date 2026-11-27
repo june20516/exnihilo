@@ -42,6 +42,13 @@ const NAME_PADDING_X = 5
 const NAME_PADDING_Y = 1
 const NAME_BORDER_WIDTH = 1.5
 const NAME_BACK_ALPHA = 0.8
+/**
+ * 이름표를 그리는 최소 확대 비율(IsoTransform.scale, 1m당 px). 이보다 작게 그려지면 이름표(11px 글자,
+ * 폭 약 75px)가 출연자 간격보다 훨씬 넓어 서로 겹치므로 숨기고 머리 위 배지·이모트만 남긴다.
+ * 1280×720에서 송출 화면 크게의 스튜디오 축소판은 약 7.1, 기본 배치 스튜디오는 약 20.2, 스튜디오 크게는
+ * 약 30.4다. 12는 축소판에서는 숨기고, 기본 배치는 창이 1280×720의 약 60%로 줄어도 보이게 하는 중간값이다.
+ */
+export const MIN_NAME_TAG_SCALE = 12
 /** 송출 중인 출연자 이름 앞의 빨간 점 */
 const ON_AIR_DOT_RADIUS = 3
 const ON_AIR_DOT_GAP = 4
@@ -59,6 +66,11 @@ const CLOSEUP_DASH_STEPS = 4
 const CLOSEUP_LINE_WIDTH = 2.5
 const CLOSEUP_HELD_LINE_WIDTH = 1.5
 const CLOSEUP_HELD_ALPHA = 0.5
+
+/** 이 확대 비율(1m당 px)에서 출연자 이름표를 그리는가. 작게 그린 스튜디오에서는 숨긴다 */
+export function nameTagVisible(scale: number): boolean {
+  return scale >= MIN_NAME_TAG_SCALE
+}
 
 /** 그림 원본 1px을 화면 px로 바꾸는 배율. scale은 IsoTransform.scale(1m의 화면 px)이다 */
 export function artDisplayScale(scale: number): number {
@@ -268,6 +280,7 @@ export class ActorFigure {
     this.body.zIndex = depth
     const dim = context.unfocused ? UNFOCUSED_ALPHA : 1
     this.body.alpha = (actor.walkedOut ? WALKED_OUT_ALPHA : 1) * dim
+    this.nameTag.visible = nameTagVisible(context.scale)
     this.drawNameTag(actor.name, actor.onAir)
     this.nameTag.position.set(0, extentY + NAME_GAP)
 

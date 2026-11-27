@@ -4,9 +4,12 @@ import {
   artDisplayScale,
   artOrientation,
   figureLayout,
+  MIN_NAME_TAG_SCALE,
+  nameTagVisible,
   overheadLayout,
   type ArtOrientation,
 } from './actorFigure'
+import { fitIso } from './geometry'
 
 describe('artOrientation', () => {
   const MAX = Math.PI / 6
@@ -129,5 +132,23 @@ describe('overheadLayout', () => {
     expect(layout.badgeVisible).toBe(false)
     expect(layout.lift).toBe(4)
     expect(layout.emote).toEqual({ text: '🥱', x: 10, y: -10 })
+  })
+})
+
+describe('nameTagVisible', () => {
+  /** StudioRenderer의 fitIso 여백(px) */
+  const FIT_PADDING = 16
+  /** 1280×720에서 잰 스튜디오 host 크기(CSS px)의 확대 비율 */
+  const scaleOf = (width: number, height: number) => fitIso(width, height, FIT_PADDING).scale
+
+  it('송출 화면 크게의 스튜디오 축소판(256×142)에서는 이름표를 숨긴다', () => {
+    expect(nameTagVisible(scaleOf(256, 142))).toBe(false)
+    expect(nameTagVisible(MIN_NAME_TAG_SCALE - 0.01)).toBe(false)
+  })
+
+  it('기본 배치(486×652)와 스튜디오 크게(716×652)에서는 이름표를 그린다', () => {
+    expect(nameTagVisible(MIN_NAME_TAG_SCALE)).toBe(true)
+    expect(nameTagVisible(scaleOf(486, 652))).toBe(true)
+    expect(nameTagVisible(scaleOf(716, 652))).toBe(true)
   })
 })

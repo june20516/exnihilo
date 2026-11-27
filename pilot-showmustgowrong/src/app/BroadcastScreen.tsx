@@ -6,31 +6,21 @@ import {
   useRef,
   useState,
   type MouseEvent,
-  type PointerEvent,
-  type Ref,
 } from 'react'
-import { INTERVENTION_SPEED } from '@/content/balance'
-import type { PerformerDef } from '@/content/types'
 import { isTextEntry } from '@/kit/tuning'
 import { StudioRenderer, type StudioHit, type StudioMode } from '@/render/StudioRenderer'
 import { clientToCanvas } from '@/render/geometry'
 import type { BroadcastInput, BroadcastSetup, BroadcastView } from '@/sim/engine'
-import { AdPanel } from './AdPanel'
+import { BroadcastStage, type StudioBindings } from './BroadcastStage'
 import { ErrorScreen } from './ErrorScreen'
-import { HoverTip } from './HoverTip'
 import { resolveHoverTip, type HoverAnchor, type HoverTipState } from './hoverTipContent'
-import { EventLog, TOP_BAND_HEIGHT, TopBand } from './Hud'
-import { InterventionPanel } from './InterventionPanel'
 import type { InterventionTarget } from './interventionTargets'
-import { LAYOUT_GRIDS, layoutStorage, loadLayout, nextLayout, saveLayout, type LayoutMode } from './layout'
-import { GAUGE_LABELS, SWITCHER_KEYS } from './labels'
+import { SWITCHER_KEYS } from './labels'
 import type { Slowmo } from './loopState'
-import { OnAirColumn } from './OnAirColumn'
 import { ResultScreen } from './ResultScreen'
 import { useStudioClick, type StudioClickState } from './studioClick'
 import { useAimDrag } from './useAimDrag'
-import { useBroadcastLoop, type BroadcastLoopControls } from './useBroadcastLoop'
-import { useLayoutHotkey } from './useLayoutHotkey'
+import { useBroadcastLoop } from './useBroadcastLoop'
 
 interface BroadcastScreenProps {
   setup: BroadcastSetup
@@ -49,24 +39,6 @@ const STUDIO_MODES: Record<Slowmo, StudioMode> = {
 
 /** 판단 카드에서 선이 나가는 높이(카드 위에서, px) */
 const LINK_CARD_OFFSET_Y = 24
-
-/** 생방송 화면이 루프에서 쓰는 상태와 명령 */
-export type StageControls = Omit<BroadcastLoopControls, 'view' | 'error' | 'result'>
-
-/** 스튜디오 캔버스와 카드-대상 연결선을 위한 DOM 연결(정적 렌더 테스트에서는 없다) */
-export interface StudioBindings {
-  rowRef: Ref<HTMLDivElement>
-  hostRef: Ref<HTMLDivElement>
-  cardRef: Ref<HTMLElement>
-  linkRef: Ref<SVGGElement>
-  onClick(event: MouseEvent<HTMLDivElement>): void
-  onMouseMove(event: MouseEvent<HTMLDivElement>): void
-  onMouseLeave(): void
-  /** 스튜디오의 추적 카메라 표시를 누르면 끌어 조준하기를 시작한다. */
-  onPointerDown(event: PointerEvent<HTMLDivElement>): void
-  /** 오른쪽 열의 추적 카메라 화면에서 끌어 조준하기를 시작한다. */
-  onAimDragStart(cameraId: string, event: PointerEvent<HTMLElement>): void
-}
 
 /**
  * 생방송 화면 컨테이너. 방송 루프, 스튜디오 렌더러(생성·크기·그리기), 키보드, 스튜디오 클릭과 호버,
@@ -379,285 +351,5 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       onBeginIntervention={beginIntervention}
       studio={studio}
     />
-  )
-}
-
-export interface BroadcastStageProps {
-  /** 방송이 아직 만들어지지 않았으면 null(스튜디오만 "준비 중") */
-  view: BroadcastView | null
-  setup: BroadcastSetup
-  controls: StageControls
-  selectedTarget: InterventionTarget | null
-  hoverTip: HoverTipState | null
-  onSelectTarget(target: InterventionTarget): void
-  onDirect(input: BroadcastInput): void
-  onBeginIntervention(): void
-  studio?: StudioBindings
-}
-
-/** 송출 쪽 grid 행: 모니터(위), 미리보기, 조작 안내(남는 높이), 개입·광고 버튼(아래) */
-const STAGE_GRID_ROWS = 'auto auto minmax(0, 1fr) auto'
-
-/**
- * 생방송 화면 배치(1280×720, spec 2절). 위 띠(세 배치 공통, 한 줄) 아래에 grid로 왼쪽 260px(사고 로그,
- * 개입 중에는 판단 카드), 스튜디오, 송출 쪽 칸들을 놓는다. 배치(기본·스튜디오 크게·송출 화면 크게)는
- * grid 열 너비와 영역만 바꾸므로 스튜디오 host와 카메라 화면 캔버스는 같은 DOM 노드로 남는다(렌더러와
- * 캔버스를 다시 만들지 않는다). 스튜디오 캔버스는 렌더러가 붙이므로 여기서는 자리만 둔다.
- */
-export function BroadcastStage({
-  view,
-  setup,
-  controls,
-  selectedTarget,
-  hoverTip,
-  onSelectTarget,
-  onDirect,
-  onBeginIntervention,
-  studio,
-}: BroadcastStageProps) {
-  const { show } = setup
-  const { slowmo, interventionOpen, adPanelOpen, adBreak } = controls
-  const performers = useMemo(
-    () =>
-      new Map<string, PerformerDef>(
-        [...setup.performers, ...setup.bench].map((performer) => [performer.id, performer]),
-      ),
-    [setup],
-  )
-  const [layoutStore] = useState(layoutStorage)
-  const [layout, setLayout] = useState<LayoutMode>(() => loadLayout(layoutStore))
-  useEffect(() => saveLayout(layoutStore, layout), [layoutStore, layout])
-  useLayoutHotkey(() => setLayout(nextLayout))
-  const grid = LAYOUT_GRIDS[layout]
-  const highlightedEventId = slowmo === 'auto' ? (view?.autoSlowmo?.eventId ?? null) : null
-  const alertGauge = slowmo === 'auto' ? (view?.autoSlowmo?.gauge ?? null) : null
-
-  return (
-    <main
-      data-layout={layout}
-      className="flex h-screen w-screen flex-col overflow-hidden bg-[#0b1120] text-white"
-    >
-      {view !== null ? (
-        <TopBand
-          view={view}
-          show={show}
-          alertGauge={alertGauge}
-          layout={layout}
-          onLayoutChange={setLayout}
-        />
-      ) : (
-        <div className="shrink-0" style={{ height: TOP_BAND_HEIGHT }} />
-      )}
-      <div
-        ref={studio?.rowRef}
-        className="relative grid min-h-0 flex-1 gap-2 px-3 pb-3"
-        style={{
-          gridTemplateColumns: grid.columns,
-          gridTemplateRows: STAGE_GRID_ROWS,
-          gridTemplateAreas: grid.areas,
-        }}
-      >
-        <div style={{ gridArea: 'log' }} className="flex min-h-0 flex-col gap-2">
-          {view !== null &&
-            (interventionOpen ? (
-              <InterventionPanel
-                view={view}
-                performers={performers}
-                staff={setup.staff}
-                cameras={show.cameras}
-                selected={selectedTarget}
-                onSelect={onSelectTarget}
-                onDirect={onDirect}
-                onClose={controls.closeIntervention}
-                cardRef={studio?.cardRef}
-              />
-            ) : (
-              <>
-                <EventLog log={view.log} highlightedEventId={highlightedEventId} show={show} />
-                <p className="text-[11px] text-slate-500">
-                  누적 피로 {view.fatigue} · 시드 {setup.seed}
-                </p>
-              </>
-            ))}
-        </div>
-        {/* 송출 화면 크게에서는 오른쪽 위 작은 칸(16:9)이 된다. 호버 설명이 칸 밖으로 나갈 수 있게 자르기는 host가 한다 */}
-        <div
-          data-testid="studio"
-          style={{ gridArea: 'studio' }}
-          className={`relative min-h-0 min-w-0 rounded-xl border-2 border-slate-800 bg-[#14141c] ${
-            grid.mainArea === 'studio' ? '' : 'aspect-video'
-          }`}
-        >
-          <div
-            ref={studio?.hostRef}
-            data-testid="studio-host"
-            onClick={studio?.onClick}
-            onMouseMove={studio?.onMouseMove}
-            onMouseLeave={studio?.onMouseLeave}
-            onPointerDown={studio?.onPointerDown}
-            className="studio-host absolute inset-0 cursor-pointer overflow-hidden rounded-[10px]"
-          />
-          {view === null && (
-            <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-400">
-              스튜디오 준비 중…
-            </div>
-          )}
-          {hoverTip !== null && <HoverTip tip={hoverTip} />}
-        </div>
-        {view !== null && (
-          <OnAirColumn
-            view={view}
-            show={show}
-            performers={performers}
-            onSwitch={(cameraId) => controls.send({ type: 'switch', cameraId })}
-            onAimDragStart={studio?.onAimDragStart}
-            previews={grid.previews}
-            monitorFills={grid.mainArea === 'monitor'}
-            actions={
-              <BroadcastButtons
-                view={view}
-                controls={controls}
-                onBeginIntervention={onBeginIntervention}
-              />
-            }
-          />
-        )}
-        {/* 슬로모션 배지와 광고 화면은 크게 보이는 칸(스튜디오나 송출 모니터) 위에 띄운다 */}
-        <div
-          style={{ gridArea: grid.mainArea }}
-          className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-xl"
-        >
-          {view !== null && slowmo === 'intervention' && !adBreak && (
-            <InterventionBadge
-              secondsLeft={
-                adPanelOpen ? (controls.adPanelSecondsLeft ?? 0) : controls.interventionSecondsLeft
-              }
-              purpose={adPanelOpen ? '안에 광고 효과 선택' : '안에 지시'}
-            />
-          )}
-          {view !== null && slowmo === 'auto' && !adBreak && (
-            <AutoSlowmoBadge
-              text={
-                alertGauge !== null
-                  ? `자동 슬로모션 · ${GAUGE_LABELS[alertGauge]} 게이지 위험`
-                  : '자동 슬로모션 · 큰 사고'
-              }
-            />
-          )}
-          {adBreak && <CommercialBreak secondsLeft={controls.adBreakSecondsLeft} />}
-        </div>
-        {/* 광고 패널은 오른쪽 위 칸(기본·스튜디오 크게는 송출 모니터, 송출 화면 크게는 스튜디오 축소판)을 덮는다 */}
-        {view !== null && adPanelOpen && (
-          <div
-            style={{ gridArea: grid.mainArea === 'studio' ? 'monitor' : 'studio' }}
-            className="absolute inset-x-0 top-0 z-10"
-          >
-            <AdPanel
-              benchLeft={view.benchLeft}
-              secondsLeft={controls.adPanelSecondsLeft}
-              onConfirm={controls.endAd}
-              onCancel={controls.cancelAd}
-            />
-          </div>
-        )}
-        {/* 판단 카드와 스튜디오의 대상을 잇는 선. 좌표는 컨테이너가 매 프레임 직접 고친다. */}
-        <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
-          <g ref={studio?.linkRef} visibility="hidden">
-            <line stroke="#fcd34d" strokeWidth={2} strokeDasharray="6 4" />
-            <circle r={7} fill="none" stroke="#fcd34d" strokeWidth={2} />
-          </g>
-        </svg>
-      </div>
-    </main>
-  )
-}
-
-interface BroadcastButtonsProps {
-  view: BroadcastView
-  controls: StageControls
-  onBeginIntervention(): void
-}
-
-function BroadcastButtons({ view, controls, onBeginIntervention }: BroadcastButtonsProps) {
-  const { interventionOpen, adBreak, adPanelOpen } = controls
-  return (
-    <div className="flex gap-2">
-      <button
-        type="button"
-        data-testid="intervene-button"
-        aria-pressed={interventionOpen}
-        disabled={adBreak || adPanelOpen}
-        onClick={() => (interventionOpen ? controls.closeIntervention() : onBeginIntervention())}
-        className="flex h-16 flex-1 flex-col items-center justify-center rounded-xl border-2 border-red-300 bg-red-600 font-black shadow-[0_4px_0_#7f1d1d] hover:bg-red-500 active:translate-y-1 active:shadow-none disabled:opacity-40"
-      >
-        <span className="text-lg">{interventionOpen ? '개입 닫기' : '개입'}</span>
-        <kbd className="text-[11px] font-normal opacity-80">Space</kbd>
-      </button>
-      <button
-        type="button"
-        data-testid="ad-button"
-        data-ads-left={view.adsLeft}
-        disabled={view.adsLeft === 0 || adBreak || adPanelOpen}
-        onClick={controls.startAd}
-        className="flex h-16 flex-1 flex-col items-center justify-center rounded-xl border-2 border-amber-200 bg-amber-400 font-black text-slate-950 shadow-[0_4px_0_#92400e] hover:bg-amber-300 active:translate-y-1 active:shadow-none disabled:opacity-40"
-      >
-        <span className="text-lg">광고</span>
-        <span className="text-[11px] font-bold">남은 {view.adsLeft}회</span>
-      </button>
-    </div>
-  )
-}
-
-/** 개입 중 스튜디오 위: 느려진 배율과 남은 선택 시간을 크게(spec 8.2) */
-interface InterventionBadgeProps {
-  secondsLeft: number
-  /** 남은 시간 안에 할 일(개입 중 "안에 지시", 개입에서 연 광고 패널이면 "안에 광고 효과 선택") */
-  purpose: string
-}
-
-function InterventionBadge({ secondsLeft, purpose }: InterventionBadgeProps) {
-  return (
-    <div
-      data-testid="slowmo-badge"
-      className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 rounded-full border-[3px] border-amber-300 bg-slate-950/85 py-1 pl-1.5 pr-5"
-    >
-      <span className="rounded-full bg-red-600 px-3 py-1 text-lg font-black">
-        SLOW ×1/{Math.round(1 / INTERVENTION_SPEED)}
-      </span>
-      <span
-        data-testid="intervention-seconds"
-        className="text-3xl font-black tabular-nums text-amber-300"
-      >
-        {secondsLeft.toFixed(1)}초
-      </span>
-      <span className="text-xs text-slate-300">{purpose}</span>
-    </div>
-  )
-}
-
-function AutoSlowmoBadge({ text }: { text: string }) {
-  return (
-    <div
-      data-testid="slowmo-badge"
-      className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border-2 border-red-400 bg-slate-950/85 px-4 py-1 text-sm font-bold text-red-200"
-    >
-      {text}
-    </div>
-  )
-}
-
-function CommercialBreak({ secondsLeft }: { secondsLeft: number }) {
-  return (
-    <div
-      data-testid="commercial-break"
-      className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/90"
-    >
-      <div className="rotate-[-4deg] rounded border-4 border-amber-400 px-8 py-4 text-5xl font-black tracking-widest text-amber-300">
-        COMMERCIAL BREAK
-      </div>
-      <div className="tabular-nums text-slate-300">
-        광고 중 · {Math.ceil(secondsLeft)}초 뒤 방송으로 돌아갑니다
-      </div>
-    </div>
   )
 }

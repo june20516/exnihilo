@@ -205,6 +205,29 @@ test('Space를 누르면 개입 패널이 열리고 개입 시간이 지나면 �
   await expect(panel).toBeHidden({ timeout: durationMs + 1_000 - (Date.now() - pressedAt) })
 })
 
+test('송출 화면 크게에서도 광고 패널은 오른쪽 열의 버튼 위 칸 안에 놓인다', async ({ page }) => {
+  await openBroadcast(page)
+  await page.getByRole('button', { name: '송출 화면 크게' }).click()
+  await expect(page.getByRole('main')).toHaveAttribute('data-layout', 'onair')
+  await page.getByTestId('ad-button').click()
+  await expect(page.getByTestId('ad-panel')).toBeVisible()
+  await expectInViewport(page, 'ad-panel-cell')
+  const cell = await page.getByTestId('ad-panel-cell').boundingBox()
+  const slots = await page.getByTestId('switcher-slots').boundingBox()
+  const button = await page.getByTestId('intervene-button').boundingBox()
+  expect(cell).not.toBeNull()
+  expect(slots).not.toBeNull()
+  expect(button).not.toBeNull()
+  if (cell === null || slots === null || button === null) return
+  // 칸은 오른쪽 열 폭이고 개입·광고 버튼 위에서 끝난다
+  expect(cell.x).toBeCloseTo(slots.x, 0)
+  expect(cell.width).toBeCloseTo(slots.width, 0)
+  expect(cell.y + cell.height).toBeLessThanOrEqual(button.y)
+  // 패널 확정 버튼은 칸 안에서 닿을 수 있다
+  await page.getByTestId('ad-panel').getByTestId('ad-confirm').scrollIntoViewIfNeeded()
+  await expectInViewport(page, 'ad-confirm')
+})
+
 test('광고 효과 2개를 골라 확정하면 남은 광고가 0회가 된다', async ({ page }) => {
   await openBroadcast(page)
   const adButton = page.getByTestId('ad-button')
