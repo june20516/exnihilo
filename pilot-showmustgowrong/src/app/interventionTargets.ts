@@ -104,7 +104,7 @@ export function interventionTargets(
       presence: def.presence,
       toleranceLeft: actor.directivesLeft,
       weight: def.weight,
-      moodText: actor.walkedOut ? null : moodLabel(actor.mood),
+      moodText: moodLabel(actor.mood),
       emotions: actor.emotions,
       takeoverText: takeoverText(actor),
       misfireChance: actor.misfireChance,

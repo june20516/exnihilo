@@ -312,6 +312,16 @@ describe('BroadcastStage 생방송 화면', () => {
     expect(html).toMatch(/data-testid="intervene-button"[\s\S]*?개입 닫기[\s\S]*?Esc/)
   })
 
+  it('개입 중에는 위 띠와 오른쪽 열이 흐려지고 닫으면 필터가 없다', () => {
+    const open = render({ controls: { ...CONTROLS, slowmo: 'intervention', interventionOpen: true } })
+    const filter = 'filter:brightness(0.6) saturate(0.6)'
+    expect(count(open, /filter:brightness\(0\.6\) saturate\(0\.6\)/g)).toBe(4)
+    expect(open).toMatch(new RegExp(`<div class="shrink-0" style="${filter.replace(/[()]/g, '\\$&')}"><header data-testid="top-band"`))
+    expect(open).toMatch(/<section data-testid="program-monitor"[^>]*filter:brightness/)
+    expect(open).toMatch(/<div data-testid="switcher-slots"[^>]*filter:brightness/)
+    expect(render()).not.toContain('brightness')
+  })
+
   it('ON AIR 모니터는 버튼이 아니고, 카메라 칸 3개는 송출 중인 칸만 표시가 다르다', () => {
     const html = render()
     expect(html).toMatch(/<section[^>]*data-testid="program-monitor"[^>]*data-on-air="true"/)

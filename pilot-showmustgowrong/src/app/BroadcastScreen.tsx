@@ -21,6 +21,7 @@ import { SWITCHER_KEYS } from './labels'
 import type { Slowmo } from './loopState'
 import { TrendRecorder } from './trendRecorder'
 import { ResultScreen } from './ResultScreen'
+import { focusedActorId, liveSelectedTarget, useStudioFocus } from './studioFocus'
 import { useStudioClick, type StudioClickState } from './studioClick'
 import { useAimDrag } from './useAimDrag'
 import { useBroadcastLoop } from './useBroadcastLoop'
@@ -174,7 +175,9 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     if (view !== null) trend.record(view)
   }, [view, trend])
 
-  const linkedTarget = interventionOpen ? selectedTarget : null
+  // 고른 출연자가 개입 중 이탈하면 선택은 없는 것으로 친다(상태는 다음 개입 시작 때 비운다)
+  const liveTarget = liveSelectedTarget(selectedTarget, view?.actors)
+  const linkedTarget = interventionOpen ? liveTarget : null
   useEffect(() => {
     if (view === null) return
     rendererRef.current?.draw(view, STUDIO_MODES[slowmo])
@@ -182,11 +185,8 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
     publishActorAnchors(view)
   }, [view, slowmo, linkedTarget, updateLink, publishActorAnchors])
 
-  // 개입 중 고른 출연자만 스튜디오에서 밝게 남기고(스태프나 아무도 안 골랐으면 모두 또렷하게), 끝나면 되돌린다
-  const focusedActorId = interventionOpen && selectedTarget?.kind === 'performer' ? selectedTarget.id : null
-  useEffect(() => {
-    rendererRef.current?.setFocus(focusedActorId)
-  }, [focusedActorId])
+  // 개입 중 고른 출연자만 스튜디오에서 밝게 남긴다
+  useStudioFocus(rendererRef, focusedActorId(interventionOpen, liveTarget))
 
   const beginIntervention = useCallback(() => {
     setSelectedTarget(null)
@@ -386,7 +386,7 @@ export function BroadcastScreen({ setup, onRestart }: BroadcastScreenProps) {
       setup={setup}
       controls={loop}
       trend={trend}
-      selectedTarget={selectedTarget}
+      selectedTarget={liveTarget}
       hoverTip={hoverTip}
       actorCard={actorCard}
       onSelectTarget={setSelectedTarget}

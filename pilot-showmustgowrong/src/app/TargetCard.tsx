@@ -88,9 +88,9 @@ export function TargetCard({ option, onDirect, cardRef }: TargetCardProps) {
             <div className="text-xs text-sky-300">→ {directive.expect}</div>
             {directive.shifts.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
-                {directive.shifts.map((shift) => (
+                {directive.shifts.map((shift, shiftIndex) => (
                   <span
-                    key={shift.text}
+                    key={`${shiftIndex}:${shift.text}`}
                     data-testid="directive-chip"
                     data-rising={shift.rising}
                     className="rounded-full border px-1.5 py-px text-[11px] font-bold"

@@ -159,17 +159,27 @@ describe('interventionTargets', () => {
     expect(rising.some((shift) => shift.text.startsWith('짜증') && shift.color === '#EF4444')).toBe(true)
   })
 
-  it('moodShifts가 없는 지시는 shifts []이고 스태프 지시도 그렇다', () => {
-    const [rex, operator] = interventionTargets(
+  it('moodShifts가 없는 지시와 스태프 지시는 shifts []이다', () => {
+    const noShiftDef: PerformerDef = {
+      ...(PERFORMERS.get('rex') as PerformerDef),
+      directives: [
+        { id: 'plain', label: '가만히', expect: '아무 일 없음', action: { pose: 'idle', emits: [] } },
+      ],
+    }
+    const [fixture] = interventionTargets(
+      { actors: [actor('rex')], staff: [] },
+      new Map([['rex', noShiftDef]]),
+      [],
+      TALK_SHOW.cameras,
+    )
+    expect(fixture.directives[0].shifts).toEqual([])
+    const [, operator] = interventionTargets(
       { actors: [actor('rex')], staff: [staffView()] },
       PERFORMERS,
       LINEUP.staff,
       TALK_SHOW.cameras,
     )
     expect(operator.directives.every((directive) => directive.shifts.length === 0)).toBe(true)
-    expect(rex.directives.some((directive) => directive.shifts.length === 0)).toBe(
-      PERFORMERS.get('rex')?.directives.some((directive) => directive.moodShifts === undefined) ?? false,
-    )
   })
 
   it('색은 출연자만 갖고 스태프는 null이다', () => {
